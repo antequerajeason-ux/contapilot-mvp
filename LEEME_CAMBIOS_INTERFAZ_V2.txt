@@ -1,0 +1,28 @@
+CONTA PILOT MVP - CAMBIOS INTERFAZ V2
+
+Cambios realizados:
+1. Se quitó el botón "Subir XML/ZIP" de la pantalla principal.
+   La subida queda dentro de "Importar facturas DIAN".
+
+2. Empresas:
+   - Agregar empresa
+   - Editar empresa
+   - Eliminar empresa
+
+3. Bandeja de facturas:
+   - Se agregó un cuadro pequeño de selección al lado izquierdo de cada factura.
+   - Se agregó "Seleccionar todas" en el encabezado de la tabla.
+   - Se muestra cuántas facturas están seleccionadas.
+
+4. Botón principal:
+   - Antes: "Causar todas"
+   - Ahora: "Causar Factura"
+   - Solo causa las facturas seleccionadas.
+
+Archivos modificados:
+- src/worker.js
+- public/centro-facturas.html
+
+Subir a GitHub:
+Sube el contenido de esta carpeta al repositorio contapilot-mvp.
+Los archivos deben quedar en la raíz del repositorio.

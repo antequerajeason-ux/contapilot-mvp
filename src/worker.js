@@ -132,7 +132,34 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
   const user=await auth(env,request);
   if(p==='/companies' && request.method==='GET'){ const rows=(await env.DB.prepare('SELECT * FROM companies WHERE owner_user_id=? ORDER BY created_at DESC').bind(user.id).all()).results||[]; return json(rows); }
   if(p==='/companies' && request.method==='POST'){ const d=await request.json(); const companyId=id(); await env.DB.prepare('INSERT INTO companies VALUES (?,?,?,?,?)').bind(companyId,user.id,d.name,nitClean(d.nit),now()).run(); await env.DB.prepare('INSERT INTO accounting_settings (company_id) VALUES (?)').bind(companyId).run(); for(const r of [['supplier','CLARO','513535','Gasto telecomunicaciones','Administración',10],['supplier','CLASSIC JEANS','519525','Vestuario / dotación','Administración',35],['default','*','519595','Gastos diversos','Administración',999]]) await env.DB.prepare('INSERT INTO accounting_rules VALUES (?,?,?,?,?,?,?,?,?,?)').bind(id(),companyId,r[0],r[1],r[2],r[3],r[4],r[5],1,now()).run(); return json(await env.DB.prepare('SELECT * FROM companies WHERE id=?').bind(companyId).first()); }
-  let m=p.match(/^\/companies\/([^/]+)\/settings$/); if(m && request.method==='GET'){ await ensureCompany(env,user.id,m[1]); return json(await getSettings(env,m[1])); }
+  let m=p.match(/^\/companies\/([^/]+)$/); if(m && request.method==='PUT'){
+    await ensureCompany(env,user.id,m[1]);
+    const d=await request.json();
+    const name=String(d.name||'').trim();
+    const nit=nitClean(d.nit);
+    if(!name) throw new Error('El nombre de la empresa es obligatorio');
+    if(!nit) throw new Error('El NIT de la empresa es obligatorio');
+    const other=await env.DB.prepare('SELECT id FROM companies WHERE owner_user_id=? AND nit=? AND id<>?').bind(user.id,nit,m[1]).first();
+    if(other) throw new Error('Ya existe otra empresa con ese NIT');
+    await env.DB.prepare('UPDATE companies SET name=?, nit=? WHERE id=? AND owner_user_id=?').bind(name,nit,m[1],user.id).run();
+    return json(await env.DB.prepare('SELECT * FROM companies WHERE id=?').bind(m[1]).first());
+  }
+  m=p.match(/^\/companies\/([^/]+)$/); if(m && request.method==='DELETE'){
+    await ensureCompany(env,user.id,m[1]);
+    await env.DB.prepare('DELETE FROM accounting_entry_lines WHERE entry_id IN (SELECT e.id FROM accounting_entries e JOIN invoices i ON i.id=e.invoice_id WHERE i.company_id=?)').bind(m[1]).run();
+    await env.DB.prepare('DELETE FROM accounting_entries WHERE invoice_id IN (SELECT id FROM invoices WHERE company_id=?)').bind(m[1]).run();
+    await env.DB.prepare('DELETE FROM invoice_items WHERE invoice_id IN (SELECT id FROM invoices WHERE company_id=?)').bind(m[1]).run();
+    await env.DB.prepare('DELETE FROM invoices WHERE company_id=?').bind(m[1]).run();
+    await env.DB.prepare('DELETE FROM accounting_rules WHERE company_id=?').bind(m[1]).run();
+    await env.DB.prepare('DELETE FROM accounting_settings WHERE company_id=?').bind(m[1]).run();
+    await ensureExtraSchema(env);
+    await env.DB.prepare('DELETE FROM import_logs WHERE company_id=?').bind(m[1]).run();
+    await env.DB.prepare('DELETE FROM dian_sync_logs WHERE company_id=?').bind(m[1]).run();
+    await env.DB.prepare('DELETE FROM dian_connections WHERE company_id=?').bind(m[1]).run();
+    await env.DB.prepare('DELETE FROM companies WHERE id=? AND owner_user_id=?').bind(m[1],user.id).run();
+    return json({ok:true, deleted:m[1]});
+  }
+  m=p.match(/^\/companies\/([^/]+)\/settings$/); if(m && request.method==='GET'){ await ensureCompany(env,user.id,m[1]); return json(await getSettings(env,m[1])); }
   if(m && request.method==='PUT'){ await ensureCompany(env,user.id,m[1]); const d=await request.json(); await env.DB.prepare('UPDATE accounting_settings SET vat_account=?, vat_description=?, payable_account=?, payable_description=?, withholding_account=?, withholding_description=?, default_cost_center=?, default_expense_account=?, default_expense_description=? WHERE company_id=?').bind(d.vat_account,d.vat_description,d.payable_account,d.payable_description,d.withholding_account,d.withholding_description,d.default_cost_center,d.default_expense_account,d.default_expense_description,m[1]).run(); return json(await getSettings(env,m[1])); }
   m=p.match(/^\/companies\/([^/]+)\/rules$/); if(m && request.method==='GET'){ await ensureCompany(env,user.id,m[1]); return json((await env.DB.prepare('SELECT * FROM accounting_rules WHERE company_id=? ORDER BY priority').bind(m[1]).all()).results||[]); }
   if(m && request.method==='POST'){ await ensureCompany(env,user.id,m[1]); const d=await request.json(); const rid=id(); await env.DB.prepare('INSERT INTO accounting_rules VALUES (?,?,?,?,?,?,?,?,?,?)').bind(rid,m[1],d.match_type,d.match_value,d.account,d.description,d.cost_center||'',d.priority||100,1,now()).run(); return json(await env.DB.prepare('SELECT * FROM accounting_rules WHERE id=?').bind(rid).first()); }
@@ -287,6 +314,23 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     await ensureExtraSchema(env);
     const rows=(await env.DB.prepare('SELECT * FROM import_logs WHERE company_id=? ORDER BY created_at DESC LIMIT 100').bind(m[1]).all()).results||[];
     return json(rows);
+  }
+  m=p.match(/^\/companies\/([^/]+)\/cause-selected$/); if(m && request.method==='POST'){
+    await ensureCompany(env,user.id,m[1]);
+    const body=await request.json().catch(()=>({}));
+    const invoiceIds=Array.isArray(body.invoice_ids)?body.invoice_ids.map(String).filter(Boolean):[];
+    if(!invoiceIds.length) return json({ok:false, count:0, errors:[{error:'No seleccionaste facturas'}]},400);
+    let count=0, errors=[];
+    for(const invoiceId of invoiceIds){
+      try{
+        const inv=await env.DB.prepare('SELECT id,status FROM invoices WHERE id=? AND company_id=?').bind(invoiceId,m[1]).first();
+        if(!inv) throw new Error('La factura no pertenece a la empresa activa');
+        if(inv.status==='approved' || inv.status==='exported') throw new Error('La factura ya está aprobada/exportada y no se recausa');
+        await generateEntry(env, invoiceId);
+        count++;
+      }catch(e){ errors.push({id:invoiceId, error:e.message}); }
+    }
+    return json({ok:!errors.length || count>0, count, errors});
   }
   m=p.match(/^\/companies\/([^/]+)\/cause-all$/); if(m && request.method==='POST'){
     await ensureCompany(env,user.id,m[1]);

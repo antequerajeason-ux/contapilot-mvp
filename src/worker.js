@@ -21,11 +21,12 @@ async function inflateRaw(bytes){
   const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
-async function extractZipEntries(arrayBuffer){
+async function extractZipEntries(arrayBuffer, prefix='', depth=0, stats=null){
+  stats = stats || {files:0, xml_like:0, nested_zip:0, pdf:0, skipped:0, unsupported:0, max_depth_reached:0};
   const bytes = new Uint8Array(arrayBuffer);
   let eocd = -1;
   for(let i=bytes.length-22; i>=0 && i>bytes.length-66000; i--){ if(u32(bytes,i)===0x06054b50){ eocd=i; break; } }
-  if(eocd < 0) throw new Error('No pude leer el ZIP. Puede estar dañado o protegido.');
+  if(eocd < 0) throw new Error('No pude leer el ZIP. Puede estar dañado, protegido o no ser un ZIP válido.');
   const total = u16(bytes,eocd+10);
   let cdOffset = u32(bytes,eocd+16);
   const decoder = new TextDecoder('utf-8');
@@ -36,20 +37,54 @@ async function extractZipEntries(arrayBuffer){
     const name=decoder.decode(bytes.slice(cdOffset+46, cdOffset+46+nameLen));
     cdOffset += 46 + nameLen + extraLen + commentLen;
     if(name.endsWith('/')) continue;
+    stats.files++;
+    const fullName = prefix ? `${prefix}/${name}` : name;
     const lower=name.toLowerCase();
-    if(!lower.endsWith('.xml') && !lower.endsWith('.html') && !lower.endsWith('.htm') && !lower.endsWith('.txt')) continue;
-    if(u32(bytes,localOffset)!==0x04034b50) continue;
+    if(u32(bytes,localOffset)!==0x04034b50){ stats.skipped++; continue; }
     const ln=u16(bytes,localOffset+26), le=u16(bytes,localOffset+28);
     const dataStart=localOffset+30+ln+le;
     const compressed=bytes.slice(dataStart, dataStart+compSize);
     let contentBytes;
     if(method===0) contentBytes=compressed;
     else if(method===8) contentBytes=await inflateRaw(compressed);
-    else throw new Error(`El archivo ${name} usa compresión ZIP no soportada: ${method}`);
-    entries.push({name, text:decoder.decode(contentBytes)});
+    else { stats.unsupported++; continue; }
+
+    if(lower.endsWith('.zip')){
+      stats.nested_zip++;
+      if(depth < 4){
+        try{
+          const buf=contentBytes.buffer.slice(contentBytes.byteOffset, contentBytes.byteOffset+contentBytes.byteLength);
+          const nested=await extractZipEntries(buf, fullName, depth+1, stats);
+          entries.push(...nested);
+        }catch(e){
+          stats.skipped++;
+          entries.push({name:fullName, text:'', _error:`ZIP interno no procesable: ${e.message}`});
+        }
+      }else{
+        stats.max_depth_reached++;
+      }
+      continue;
+    }
+    if(lower.endsWith('.pdf')){ stats.pdf++; continue; }
+    if(!lower.endsWith('.xml') && !lower.endsWith('.html') && !lower.endsWith('.htm') && !lower.endsWith('.txt')){ stats.skipped++; continue; }
+    stats.xml_like++;
+    entries.push({name:fullName, text:decoder.decode(contentBytes)});
   }
+  entries.stats=stats;
   return entries;
 }
+function zipStatsMessage(stats){
+  stats=stats||{};
+  const parts=[];
+  if(stats.files!=null) parts.push(`${stats.files} archivo(s) revisados`);
+  if(stats.xml_like) parts.push(`${stats.xml_like} XML/HTML/TXT encontrados`);
+  if(stats.nested_zip) parts.push(`${stats.nested_zip} ZIP interno(s) revisados`);
+  if(stats.pdf) parts.push(`${stats.pdf} PDF ignorado(s)`);
+  if(stats.unsupported) parts.push(`${stats.unsupported} archivo(s) con compresión no soportada`);
+  if(stats.max_depth_reached) parts.push(`${stats.max_depth_reached} ZIP interno(s) demasiado profundos`);
+  return parts.join(', ');
+}
+
 
 function party(xml, partyTag){ const re=new RegExp(`<(?:\\w+:)?${partyTag}\\b[\\s\\S]*?<\/(?:\\w+:)?${partyTag}>`,'i'); const block=(xml.match(re)||[''])[0]; let name=tagText(block,'RegistrationName') || tagText(block,'Name'); let nit=tagText(block,'CompanyID') || tagText(block,'ID'); return {name,nit}; }
 async function parseInvoice(input){ const xml=extractInvoiceXml(input); const root=(xml.match(/<(?:\w+:)?(Invoice|CreditNote|DebitNote)\b/i)||[])[1] || 'Invoice'; const supplier=party(xml,'AccountingSupplierParty'); const customer=party(xml,'AccountingCustomerParty'); const invoiceNumber=tagText(xml,'ID'); const cufe=tagText(xml,'UUID') || await sha256(xml); const issueDate=tagText(xml,'IssueDate'); const currency=tagText(xml,'DocumentCurrencyCode') || 'COP'; const monetary=(xml.match(/<(?:\w+:)?LegalMonetaryTotal\b[\s\S]*?<\/(?:\w+:)?LegalMonetaryTotal>/i)||[''])[0]; const subtotal=num(tagText(monetary,'TaxExclusiveAmount') || tagText(monetary,'LineExtensionAmount')); const payable=num(tagText(monetary,'PayableAmount') || tagText(monetary,'TaxInclusiveAmount')) || subtotal; let tax=0; for(const m of xml.matchAll(/<(?:\w+:)?TaxTotal\b[\s\S]*?<\/(?:\w+:)?TaxTotal>/gi)){ tax += num(tagText(m[0],'TaxAmount')); } let withholding=0; for(const m of xml.matchAll(/<(?:\w+:)?WithholdingTaxTotal\b[\s\S]*?<\/(?:\w+:)?WithholdingTaxTotal>/gi)){ withholding += num(tagText(m[0],'TaxAmount')); } const lineTag=root==='CreditNote'?'CreditNoteLine':root==='DebitNote'?'DebitNoteLine':'InvoiceLine'; const qtyTag=root==='CreditNote'?'CreditedQuantity':root==='DebitNote'?'DebitedQuantity':'InvoicedQuantity'; const items=[]; const lineRe=new RegExp(`<(?:\\w+:)?${lineTag}\\b[\\s\\S]*?<\\/(?:\\w+:)?${lineTag}>`,'gi'); for(const m of xml.matchAll(lineRe)){ items.push({description:tagText(m[0],'Description'), quantity:num(tagText(m[0],qtyTag)), line_amount:num(tagText(m[0],'LineExtensionAmount'))}); } return {invoice_xml:xml, invoice_number:invoiceNumber, cufe, issue_date:issueDate, document_type:root==='Invoice'?'Factura compra':root==='CreditNote'?'Nota crédito':'Nota débito', supplier_name:supplier.name, supplier_nit:supplier.nit, customer_name:customer.name, customer_nit:customer.nit, currency, subtotal, tax_amount:tax, withholding_amount:withholding, payable_amount:payable, items}; }
@@ -185,8 +220,13 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
         const lower=(file.name||'').toLowerCase();
         if(lower.endsWith('.zip')){
           const entries=await extractZipEntries(await file.arrayBuffer());
-          if(!entries.length){ errors.push({file:file.name,error:'El ZIP no contiene XML/HTML/TXT procesable'}); continue; }
+          if(!entries.length){
+            const detail=zipStatsMessage(entries.stats);
+            errors.push({file:file.name,error: detail ? `El ZIP no contiene XML/HTML/TXT procesable. ${detail}. Si solo contiene PDF, descarga desde DIAN el XML de las facturas.` : 'El ZIP no contiene XML/HTML/TXT procesable'});
+            continue;
+          }
           for(const entry of entries){
+            if(entry._error){ errors.push({file:entry.name,error:entry._error}); continue; }
             try{ await processOne(entry.name, entry.text); }
             catch(e){ errors.push({file:entry.name,error:e.message}); }
           }
@@ -414,8 +454,9 @@ async function processIncomingEmail(message, env){
   for(const att of attachments){
     try{
       if(att.name.toLowerCase().endsWith('.zip')){
-        const entries=await extractZipEntries(att.bytes.buffer);
-        for(const entry of entries){ try{ imported.push(await saveParsedInvoiceForCompany(env, company, await parseInvoice(entry.text), entry.name)); }catch(e){ errors.push({file:entry.name,error:e.message}); } }
+        const buf=att.bytes.buffer.slice(att.bytes.byteOffset, att.bytes.byteOffset+att.bytes.byteLength);
+        const entries=await extractZipEntries(buf);
+        for(const entry of entries){ if(entry._error){ errors.push({file:entry.name,error:entry._error}); continue; } try{ imported.push(await saveParsedInvoiceForCompany(env, company, await parseInvoice(entry.text), entry.name)); }catch(e){ errors.push({file:entry.name,error:e.message}); } }
       }else imported.push(await saveParsedInvoiceForCompany(env, company, await parseInvoice(att.text), att.name));
     }catch(e){ errors.push({file:att.name,error:e.message}); }
   }

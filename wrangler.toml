@@ -1,0 +1,13 @@
+name = "contapilot-mvp"
+main = "src/worker.js"
+compatibility_date = "2025-01-01"
+account_id = "ef9a77199b72987abab0c8ef6aa4910c"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "contapilot_db"
+database_id = "3ac40bbe-c3a0-4a3d-92d0-cacab0769946"

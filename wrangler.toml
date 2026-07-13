@@ -1,27 +1,13 @@
-CONTA PILOT MVP - V8 LOGO TRANSPARENTE Y REDISEÑO
+name = "contapilot-mvp"
+main = "src/worker.js"
+compatibility_date = "2025-01-01"
+account_id = "ef9a77199b72987abab0c8ef6aa4910c"
 
-Este paquete completo incluye todas las carpetas necesarias.
+[assets]
+directory = "./public"
+binding = "ASSETS"
 
-Contiene:
-src/
-public/
-migrations/
-package.json
-wrangler.toml
-README.md
-
-Cambios principales:
-- Logo nuevo sin fondo: public/contapilot-symbol-transparent.png
-- Se reemplazó el logo anterior con fondo por el logo transparente.
-- El encabezado usa solo el símbolo, no el logo con letras.
-- Se mantiene el rediseño estructural tipo SaaS moderno.
-- Fondo gris claro casi blanco con grilla sutil.
-- Panel visual DIAN -> Causación -> Siigo.
-- Logo de Siigo Nube en exportación.
-
-IMPORTANTE:
-Sube el contenido de esta carpeta al repositorio contapilot-mvp.
-No subas la carpeta como carpeta interna.
-
-Después del deploy en Cloudflare:
-Presiona Ctrl + F5 para limpiar caché.
+[[d1_databases]]
+binding = "DB"
+database_name = "contapilot_db"
+database_id = "3ac40bbe-c3a0-4a3d-92d0-cacab0769946"

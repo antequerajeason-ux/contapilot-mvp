@@ -1,56 +1,40 @@
-# ContaPilot Worker
+CONTA PILOT MVP - DISEÑO V6 MODERNO
 
-Versión compatible con el flujo que Cloudflare te está mostrando: **Create a Worker**.
+Cambios visuales realizados:
 
-## Configuración Cloudflare
+1. Se agregó el nuevo logo de ContaPilot enviado por Jeason.
+   Archivos:
+   - public/contapilot-logo-full.jpg
+   - public/contapilot-logo-header.jpg
 
-- Build command: `npm install`
-- Deploy command: `npx wrangler deploy`
-- Root directory: `/`
+2. Se agregó el logo de Siigo Nube en la zona de exportación.
+   Archivo:
+   - public/siigo-nube-logo.png
 
-## D1
+3. Se modernizó la interfaz:
+   - Encabezado más limpio.
+   - Tarjetas más minimalistas.
+   - Botones con estilo moderno.
+   - Modal de exportación a Siigo Nube con logo.
+   - Pantalla de acceso/login renovada.
 
-1. Crea base D1 `contapilot_db`.
-2. Ejecuta el SQL de `migrations/0001_schema.sql` en la consola de D1.
-3. Copia el `database_id` de D1.
-4. Pégalo en `wrangler.toml` reemplazando `REPLACE_WITH_YOUR_D1_DATABASE_ID`.
+4. Se mantiene la funcionalidad anterior:
+   - Carga masiva fluida.
+   - Lectura de ZIP en navegador.
+   - Causación por lotes.
+   - Eliminación por lotes.
+   - Checks de selección.
 
-## Si falla por token
+Archivos principales modificados:
+- public/app.html
+- public/centro-facturas.html
+- public/contapilot-logo-full.jpg
+- public/contapilot-logo-header.jpg
+- public/siigo-nube-logo.png
 
-Crea un API Token en Cloudflare con permisos:
+Subir a GitHub:
+Sube el contenido de esta carpeta al repositorio contapilot-mvp.
+Los archivos src, public, migrations, package.json y wrangler.toml deben quedar en la raíz.
 
-- Account → Workers Scripts → Edit
-- Account → D1 → Edit
-- Account → Account Settings → Read
-- Zone → Workers Routes → Edit (opcional)
-
-Luego en el proyecto, variables de entorno:
-
-- `CLOUDFLARE_API_TOKEN` = token creado
-- `CLOUDFLARE_ACCOUNT_ID` = tu Account ID
-
-
-## Conectar microservicio DIAN Sync
-
-Después de desplegar `contapilot_dian_sync_service` en Render/Railway/VPS, agrega una variable de entorno al Worker:
-
-- Nombre: `DIAN_SYNC_SERVICE_URL`
-- Valor: `https://TU-SERVICIO-DIAN.onrender.com`
-
-En Cloudflare:
-
-`Workers & Pages → contapilot → Settings → Variables → Add variable`
-
-Luego redeploy.
-
-El botón **Importar información** en el modal DIAN llamará a:
-
-`POST {DIAN_SYNC_SERVICE_URL}/sync`
-
-y enviará:
-
-- URL token DIAN
-- NIT empresa
-- fecha inicial
-- URL callback `/api/companies/{id}/upload`
-- token del usuario para subir los ZIP/XML procesados
+Después del deploy:
+Abrir la página y presionar Ctrl + F5 para limpiar caché del navegador.

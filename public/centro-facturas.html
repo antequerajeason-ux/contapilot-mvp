@@ -21,9 +21,9 @@
     <div class="actions"><span class="user" id="userLabel">admin@contapilot.com</span><button class="btn btn-red" onclick="logout()">Salir</button></div>
   </nav>
 
-  <section class="hero"><div class="hero-inner"><div><h1>Centro de facturas</h1><p>Importa facturas DIAN, selecciona las que quieras causar y exporta a CSV.</p></div><div class="actions"><input id="fileInput" type="file" multiple accept=".xml,.zip,.html,.htm,.txt" style="display:none" onchange="upload()"><button class="btn btn-light" onclick="openDian()">Importar facturas DIAN</button><button class="btn btn-green" onclick="causeSelectedInvoices()">Causar Factura</button><button class="btn btn-blue" onclick="openExport()">Exportar</button></div></div><div class="stats"><div class="stat"><span>Facturas</span><strong id="mTotal">0</strong></div><div class="stat"><span>Recibidas</span><strong id="mReceived">0</strong></div><div class="stat"><span>Causadas</span><strong id="mAccounted">0</strong></div><div class="stat"><span>Aprobadas</span><strong id="mApproved">0</strong></div><div class="stat"><span>Exportadas</span><strong id="mExported">0</strong></div></div></section>
+  <section class="hero"><div class="hero-inner"><div><h1>Centro de facturas</h1><p>Importa facturas DIAN, selecciona las que quieras causar y exporta a CSV.</p></div><div class="actions"><input id="fileInput" type="file" multiple accept=".xml,.zip,.html,.htm,.txt" style="display:none" onchange="upload()"><button class="btn btn-light" onclick="openDian()">Importar facturas DIAN</button><button class="btn btn-blue" onclick="openExport()">Exportar</button></div></div><div class="stats"><div class="stat"><span>Facturas</span><strong id="mTotal">0</strong></div><div class="stat"><span>Recibidas</span><strong id="mReceived">0</strong></div><div class="stat"><span>Causadas</span><strong id="mAccounted">0</strong></div><div class="stat"><span>Aprobadas</span><strong id="mApproved">0</strong></div><div class="stat"><span>Exportadas</span><strong id="mExported">0</strong></div></div></section>
 
-  <section class="card"><div class="card-head"><div><h2>Bandeja de facturas</h2><p>Marca las facturas que quieres causar. Puedes seleccionar una, varias o todas.</p></div><button class="btn btn-light" onclick="loadInvoices()">Actualizar</button></div><div class="card-body"><div class="toolbar"><div class="search">⌕ <input id="search" oninput="renderInvoices()" placeholder="Buscar factura, proveedor, receptor o NIT"></div><select id="statusFilter" class="action-select" onchange="renderInvoices()"><option value="all">Todos los estados</option><option value="received">Recibidas</option><option value="accounted">Causadas</option><option value="approved">Aprobadas</option><option value="exported">Exportadas</option></select><span id="selectedCounter" class="selected-counter">0 seleccionadas</span><div class="actions"><button class="btn btn-green" onclick="causeSelectedInvoices()">Causar Factura</button><button class="btn btn-green" onclick="approveAll()">Aprobar todas</button></div></div><div class="table-wrap"><table><thead><tr><th class="check-cell"><label class="select-all-wrap"><input id="selectAllBox" class="mini-check" type="checkbox" onchange="toggleSelectAll(this.checked)"><span>Seleccionar todas</span></label></th><th>Factura</th><th>Fecha</th><th>Proveedor</th><th>Receptor</th><th>Total</th><th>Estado</th><th>Gestión</th></tr></thead><tbody id="rows"><tr><td colspan="8">Sin facturas</td></tr></tbody></table></div><div id="uploadErrors" style="display:none;margin-top:14px;background:#fff1f1;border:1px solid #fecaca;color:#991b1b;border-radius:18px;padding:14px;font-size:13px;font-weight:750"></div><div id="log" class="log-panel">Listo.</div></div></section>
+  <section class="card"><div class="card-head"><div><h2>Bandeja de facturas</h2><p>Marca las facturas que quieres causar. Puedes seleccionar una, varias o todas.</p></div><button class="btn btn-light" onclick="loadInvoices()">Actualizar</button></div><div class="card-body"><div class="toolbar"><div class="search">⌕ <input id="search" oninput="renderInvoices()" placeholder="Buscar factura, proveedor, receptor o NIT"></div><select id="statusFilter" class="action-select" onchange="renderInvoices()"><option value="all">Todos los estados</option><option value="received">Recibidas</option><option value="accounted">Causadas</option><option value="approved">Aprobadas</option><option value="exported">Exportadas</option></select><span id="selectedCounter" class="selected-counter">0 seleccionadas</span><div class="actions"><button class="btn btn-green" onclick="causeSelectedInvoices()">Causar Factura</button><button class="btn btn-danger-light" onclick="deleteSelectedInvoices()">Eliminar</button><button class="btn btn-green" onclick="approveAll()">Aprobar todas</button></div></div><div class="table-wrap"><table><thead><tr><th class="check-cell"><label class="select-all-wrap"><input id="selectAllBox" class="mini-check" type="checkbox" onchange="toggleSelectAll(this.checked)"><span>Seleccionar todas</span></label></th><th>Factura</th><th>Fecha</th><th>Proveedor</th><th>Receptor</th><th>Total</th><th>Estado</th><th>Gestión</th></tr></thead><tbody id="rows"><tr><td colspan="8">Sin facturas</td></tr></tbody></table></div><div id="uploadErrors" style="display:none;margin-top:14px;background:#fff1f1;border:1px solid #fecaca;color:#991b1b;border-radius:18px;padding:14px;font-size:13px;font-weight:750"></div><div id="log" class="log-panel">Listo.</div></div></section>
 </div>
 
 <div id="companyModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div><h3 id="companyModalTitle">Agregar empresa</h3><p id="companyModalText">El NIT debe coincidir con el receptor de las facturas.</p></div><button class="close" onclick="closeModal('companyModal')">×</button></div><div class="field"><label>Empresa</label><input id="companyName" value=""></div><div class="field"><label>NIT receptor</label><input id="companyNit" value=""></div><button id="companySaveButton" class="btn btn-green btn-full" onclick="saveCompany()">Guardar empresa</button></div></div>
@@ -100,6 +100,25 @@ async function viewEntry(id){
     }
     openModal('causacionModal');
   }catch(e){log('Error ver causación',{error:e.message});toast('No pude cargar la causación. Revisa el log.');}
+}
+async function deleteSelectedInvoices(){
+  try{
+    if(!cid())return toast('Selecciona empresa');
+    const ids=[...selectedInvoiceIds];
+    if(!ids.length)return toast('Selecciona primero una o varias facturas para eliminar.');
+    const ok=confirm(`¿Eliminar ${ids.length} factura(s) seleccionada(s)?
+
+Esto también borrará sus ítems y causaciones contables.`);
+    if(!ok)return;
+    const res=await api(`/api/companies/${cid()}/delete-invoices`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({invoice_ids:ids})});
+    log('Facturas eliminadas',res);
+    if(res.errors&&res.errors.length)toast(`Se eliminaron ${res.count} factura(s). Algunas tuvieron error.`);else toast(`Se eliminaron ${res.count} factura(s).`);
+    selectedInvoiceIds.clear();
+    await loadInvoices();
+  }catch(e){
+    log('Error eliminando facturas',{error:e.message});
+    toast(e.message||'Hubo un error al eliminar facturas.');
+  }
 }
 async function causeSelectedInvoices(){
   try{

@@ -315,6 +315,25 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     const rows=(await env.DB.prepare('SELECT * FROM import_logs WHERE company_id=? ORDER BY created_at DESC LIMIT 100').bind(m[1]).all()).results||[];
     return json(rows);
   }
+  m=p.match(/^\/companies\/([^/]+)\/delete-invoices$/); if(m && request.method==='POST'){
+    await ensureCompany(env,user.id,m[1]);
+    const body=await request.json().catch(()=>({}));
+    const invoiceIds=Array.isArray(body.invoice_ids)?body.invoice_ids.map(String).filter(Boolean):[];
+    if(!invoiceIds.length) return json({ok:false, count:0, errors:[{error:'No seleccionaste facturas para eliminar'}]},400);
+    let count=0, errors=[];
+    for(const invoiceId of invoiceIds){
+      try{
+        const inv=await env.DB.prepare('SELECT id, invoice_number FROM invoices WHERE id=? AND company_id=?').bind(invoiceId,m[1]).first();
+        if(!inv) throw new Error('La factura no pertenece a la empresa activa');
+        await env.DB.prepare('DELETE FROM accounting_entry_lines WHERE entry_id IN (SELECT id FROM accounting_entries WHERE invoice_id=?)').bind(invoiceId).run();
+        await env.DB.prepare('DELETE FROM accounting_entries WHERE invoice_id=?').bind(invoiceId).run();
+        await env.DB.prepare('DELETE FROM invoice_items WHERE invoice_id=?').bind(invoiceId).run();
+        await env.DB.prepare('DELETE FROM invoices WHERE id=? AND company_id=?').bind(invoiceId,m[1]).run();
+        count++;
+      }catch(e){ errors.push({id:invoiceId, error:e.message}); }
+    }
+    return json({ok:!errors.length || count>0, count, errors});
+  }
   m=p.match(/^\/companies\/([^/]+)\/cause-selected$/); if(m && request.method==='POST'){
     await ensureCompany(env,user.id,m[1]);
     const body=await request.json().catch(()=>({}));

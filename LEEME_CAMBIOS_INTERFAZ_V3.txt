@@ -1,0 +1,27 @@
+CONTA PILOT MVP - CAMBIOS INTERFAZ V3
+
+Cambios realizados:
+
+1. Se eliminó el botón repetido "Causar Factura" de la pantalla principal.
+   Queda un solo botón "Causar Factura" en la bandeja, junto a los checks.
+
+2. Se agregó botón "Eliminar" en la bandeja de facturas.
+   Funciona con los checks: seleccionas una o varias facturas y presionas Eliminar.
+
+3. Al eliminar facturas, el sistema también borra:
+   - Ítems de la factura
+   - Causación contable generada
+   - Líneas contables relacionadas
+
+4. Se revisó que siga activo:
+   - Subida de varios XML/ZIP
+   - Lectura de ZIP con múltiples XML
+   - Causación de facturas seleccionadas
+
+Archivos modificados:
+- src/worker.js
+- public/centro-facturas.html
+
+Subir a GitHub:
+Sube el contenido de esta carpeta al repositorio contapilot-mvp.
+Los archivos src, public, migrations, package.json y wrangler.toml deben quedar en la raíz.

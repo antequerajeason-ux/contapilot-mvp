@@ -14,6 +14,15 @@ function strip(s){ return String(s||'').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,'$
 function num(v){ const n=Number(String(v||'0').replace(/[^0-9.-]/g,'')); return Number.isFinite(n)?n:0; }
 function innerUbl(src){ for(const tag of ['Invoice','CreditNote','DebitNote']){ const re=new RegExp(`<(?:\\w+:)?${tag}\\b[\\s\\S]*?<\\/(?:\\w+:)?${tag}>`,'i'); const m=String(src||'').match(re); if(m) return m[0]; } return null; }
 function extractInvoiceXml(input){ let raw=String(input||'').trim(); if(!raw) throw new Error('Archivo vacío'); if(/^(<\?xml[\s\S]*?\?>\s*)?<(?:\w+:)?(Invoice|CreditNote|DebitNote)\b/i.test(raw)) return raw; raw=raw.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&'); const inner=innerUbl(raw); if(inner) return inner; throw new Error('No encontré Invoice/CreditNote/DebitNote dentro del archivo'); }
+function removeLineBlocks(xml){ return String(xml||'').replace(/<(?:\w+:)?InvoiceLine\b[\s\S]*?<\/(?:\w+:)?InvoiceLine>/gi,'').replace(/<(?:\w+:)?CreditNoteLine\b[\s\S]*?<\/(?:\w+:)?CreditNoteLine>/gi,'').replace(/<(?:\w+:)?DebitNoteLine\b[\s\S]*?<\/(?:\w+:)?DebitNoteLine>/gi,''); }
+function sumBlocks(xml, blockTag, amountTag='TaxAmount'){
+  let total=0;
+  const re=new RegExp(`<(?:\\w+:)?${blockTag}\\b[\\s\\S]*?<\\/(?:\\w+:)?${blockTag}>`,'gi');
+  for(const m of String(xml||'').matchAll(re)) total += num(tagText(m[0], amountTag));
+  return total;
+}
+function round2(n){ return Math.round((Number(n)||0)*100)/100; }
+
 function u16(bytes,pos){ return bytes[pos] | (bytes[pos+1] << 8); }
 function u32(bytes,pos){ return (bytes[pos] | (bytes[pos+1] << 8) | (bytes[pos+2] << 16) | (bytes[pos+3] << 24)) >>> 0; }
 async function inflateRaw(bytes){
@@ -87,10 +96,94 @@ function zipStatsMessage(stats){
 
 
 function party(xml, partyTag){ const re=new RegExp(`<(?:\\w+:)?${partyTag}\\b[\\s\\S]*?<\/(?:\\w+:)?${partyTag}>`,'i'); const block=(xml.match(re)||[''])[0]; let name=tagText(block,'RegistrationName') || tagText(block,'Name'); let nit=tagText(block,'CompanyID') || tagText(block,'ID'); return {name,nit}; }
-async function parseInvoice(input){ const xml=extractInvoiceXml(input); const root=(xml.match(/<(?:\w+:)?(Invoice|CreditNote|DebitNote)\b/i)||[])[1] || 'Invoice'; const supplier=party(xml,'AccountingSupplierParty'); const customer=party(xml,'AccountingCustomerParty'); const invoiceNumber=tagText(xml,'ID'); const cufe=tagText(xml,'UUID') || await sha256(xml); const issueDate=tagText(xml,'IssueDate'); const currency=tagText(xml,'DocumentCurrencyCode') || 'COP'; const monetary=(xml.match(/<(?:\w+:)?LegalMonetaryTotal\b[\s\S]*?<\/(?:\w+:)?LegalMonetaryTotal>/i)||[''])[0]; const subtotal=num(tagText(monetary,'TaxExclusiveAmount') || tagText(monetary,'LineExtensionAmount')); const payable=num(tagText(monetary,'PayableAmount') || tagText(monetary,'TaxInclusiveAmount')) || subtotal; let tax=0; for(const m of xml.matchAll(/<(?:\w+:)?TaxTotal\b[\s\S]*?<\/(?:\w+:)?TaxTotal>/gi)){ tax += num(tagText(m[0],'TaxAmount')); } let withholding=0; for(const m of xml.matchAll(/<(?:\w+:)?WithholdingTaxTotal\b[\s\S]*?<\/(?:\w+:)?WithholdingTaxTotal>/gi)){ withholding += num(tagText(m[0],'TaxAmount')); } const lineTag=root==='CreditNote'?'CreditNoteLine':root==='DebitNote'?'DebitNoteLine':'InvoiceLine'; const qtyTag=root==='CreditNote'?'CreditedQuantity':root==='DebitNote'?'DebitedQuantity':'InvoicedQuantity'; const items=[]; const lineRe=new RegExp(`<(?:\\w+:)?${lineTag}\\b[\\s\\S]*?<\\/(?:\\w+:)?${lineTag}>`,'gi'); for(const m of xml.matchAll(lineRe)){ items.push({description:tagText(m[0],'Description'), quantity:num(tagText(m[0],qtyTag)), line_amount:num(tagText(m[0],'LineExtensionAmount'))}); } return {invoice_xml:xml, invoice_number:invoiceNumber, cufe, issue_date:issueDate, document_type:root==='Invoice'?'Factura compra':root==='CreditNote'?'Nota crédito':'Nota débito', supplier_name:supplier.name, supplier_nit:supplier.nit, customer_name:customer.name, customer_nit:customer.nit, currency, subtotal, tax_amount:tax, withholding_amount:withholding, payable_amount:payable, items}; }
+
+function firstBlock(xml, tag){ const re=new RegExp(`<(?:\\w+:)?${tag}\\b[\\s\\S]*?<\\/(?:\\w+:)?${tag}>`,'i'); return (String(xml||'').match(re)||[''])[0]; }
+function attrText(block, tag, attr){ const re=new RegExp(`<(?:\\w+:)?${tag}\\b[^>]*\\s${attr}=["']([^"']+)["'][^>]*>`, 'i'); const m=String(block||'').match(re); return m?m[1]:''; }
+function partyDetailsFromXml(xml, partyTag='AccountingSupplierParty'){
+  const partyBlock=firstBlock(xml, partyTag);
+  const addressBlock=firstBlock(partyBlock,'RegistrationAddress') || firstBlock(partyBlock,'Address') || firstBlock(partyBlock,'PhysicalLocation');
+  const contactBlock=firstBlock(partyBlock,'Contact');
+  const nit=tagText(partyBlock,'CompanyID') || tagText(partyBlock,'ID');
+  const dv=attrText(partyBlock,'CompanyID','schemeID') || '';
+  const name=tagText(partyBlock,'RegistrationName') || tagText(partyBlock,'Name');
+  const tradeName=tagText(partyBlock,'Name');
+  const addressLine=tagText(addressBlock,'Line') || tagText(addressBlock,'AddressLine') || tagText(addressBlock,'StreetName');
+  const city=tagText(addressBlock,'CityName');
+  const department=tagText(addressBlock,'CountrySubentity');
+  const country=tagText(addressBlock,'IdentificationCode') || tagText(addressBlock,'Name');
+  const phone=tagText(contactBlock,'Telephone') || tagText(partyBlock,'Telephone');
+  const email=tagText(contactBlock,'ElectronicMail') || tagText(partyBlock,'ElectronicMail');
+  const postal=tagText(addressBlock,'PostalZone');
+  return {nit,dv,name,tradeName,address:addressLine,city,department,country,phone,email,postal};
+}
+function terceroObservacion(t){
+  const parts=[];
+  if(t.name) parts.push(`Tercero: ${t.name}`);
+  if(t.nit) parts.push(`NIT: ${t.nit}${t.dv?'-'+t.dv:''}`);
+  if(t.address) parts.push(`Dir: ${t.address}`);
+  if(t.city) parts.push(`Ciudad: ${t.city}`);
+  if(t.department) parts.push(`Depto: ${t.department}`);
+  if(t.phone) parts.push(`Tel: ${t.phone}`);
+  if(t.email) parts.push(`Email: ${t.email}`);
+  return parts.join(' | ');
+}
+function csvCell(v){ return `"${String(v??'').replace(/"/g,'""')}"`; }
+function moneyPlain(v){ const n=round2(Number(v||0)); return n ? String(n).replace('.', ',') : '0'; }
+function monthFromDate(d){ const m=String(d||'').match(/^(\d{4})-(\d{2})-/); return m?m[2]:''; }
+
+async function parseInvoice(input){
+  const xml=extractInvoiceXml(input);
+  const root=(xml.match(/<(?:\w+:)?(Invoice|CreditNote|DebitNote)\b/i)||[])[1] || (xml.match(/<(?:\w+:)?(Invoice|CreditNote|DebitNote)\b/i)||[])[1] || 'Invoice';
+  const supplier=party(xml,'AccountingSupplierParty');
+  const customer=party(xml,'AccountingCustomerParty');
+  const invoiceNumber=tagText(xml,'ID');
+  const cufe=tagText(xml,'UUID') || await sha256(xml);
+  const issueDate=tagText(xml,'IssueDate');
+  const currency=tagText(xml,'DocumentCurrencyCode') || 'COP';
+  const monetary=(xml.match(/<(?:\w+:)?LegalMonetaryTotal\b[\s\S]*?<\/(?:\w+:)?LegalMonetaryTotal>/i)||[''])[0];
+  const subtotal=round2(num(tagText(monetary,'TaxExclusiveAmount') || tagText(monetary,'LineExtensionAmount')));
+  const payable=round2(num(tagText(monetary,'PayableAmount') || tagText(monetary,'TaxInclusiveAmount')) || subtotal);
+
+  // IMPORTANTE: DIAN puede traer TaxTotal a nivel factura y también dentro de cada línea.
+  // Para no duplicar IVA, quitamos InvoiceLine/CreditNoteLine/DebitNoteLine antes de sumar impuestos globales.
+  const headerXml=removeLineBlocks(xml);
+  let tax=round2(sumBlocks(headerXml,'TaxTotal','TaxAmount'));
+  let withholding=round2(sumBlocks(headerXml,'WithholdingTaxTotal','TaxAmount'));
+
+  // Protección contable: si no viene retención explícita pero PayableAmount es menor que subtotal + IVA,
+  // inferimos la diferencia como retención/deducción para que el asiento cuadre.
+  const expectedGross=round2(subtotal + tax);
+  const impliedWithholding=round2(expectedGross - payable);
+  if(!withholding && impliedWithholding > 0.5) withholding = impliedWithholding;
+
+  const lineTag=root==='CreditNote'?'CreditNoteLine':root==='DebitNote'?'DebitNoteLine':'InvoiceLine';
+  const qtyTag=root==='CreditNote'?'CreditedQuantity':root==='DebitNote'?'DebitedQuantity':'InvoicedQuantity';
+  const items=[];
+  const lineRe=new RegExp(`<(?:\\w+:)?${lineTag}\\b[\\s\\S]*?<\\/(?:\\w+:)?${lineTag}>`,'gi');
+  for(const m of xml.matchAll(lineRe)){
+    items.push({description:tagText(m[0],'Description'), quantity:num(tagText(m[0],qtyTag)), line_amount:num(tagText(m[0],'LineExtensionAmount'))});
+  }
+  return {invoice_xml:xml, invoice_number:invoiceNumber, cufe, issue_date:issueDate, document_type:root==='Invoice'?'Factura compra':root==='CreditNote'?'Nota crédito':'Nota débito', supplier_name:supplier.name, supplier_nit:supplier.nit, customer_name:customer.name, customer_nit:customer.nit, currency, subtotal, tax_amount:tax, withholding_amount:withholding, payable_amount:payable, items};
+}
 async function auth(env, request){ const h=request.headers.get('authorization')||''; if(!h.toLowerCase().startsWith('bearer ')) throw new Response(JSON.stringify({detail:'Falta token Authorization: Bearer'}),{status:401}); const token=h.split(' ')[1]; const row=await env.DB.prepare('SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=?').bind(token).first(); if(!row) throw new Response(JSON.stringify({detail:'Sesión inválida'}),{status:401}); return row; }
 async function ensureCompany(env,userId,companyId){ const c=await env.DB.prepare('SELECT * FROM companies WHERE id=? AND owner_user_id=?').bind(companyId,userId).first(); if(!c) throw new Response(JSON.stringify({detail:'Empresa no encontrada'}),{status:404}); return c; }
-async function getSettings(env, companyId){ return await env.DB.prepare('SELECT * FROM accounting_settings WHERE company_id=?').bind(companyId).first(); }
+async function getSettings(env, companyId){ const s=await env.DB.prepare('SELECT * FROM accounting_settings WHERE company_id=?').bind(companyId).first(); return normalizeSettings(s||{}); }
+function normalizeSettings(s){
+  // Normalización basada en plan de cuentas DISTRIBUCIONES TORRES GARCIA SAS / Siigo.
+  // Evita usar cuentas padre y prefiere cuentas transaccionales.
+  const out={...s};
+  if(!out.vat_account || out.vat_account==='240805' || out.vat_account==='240810') out.vat_account='24081001';
+  if(!out.vat_description || out.vat_description==='IVA descontable') out.vat_description='Iva descontable por compras 19%';
+  if(!out.payable_account || out.payable_account==='220505') out.payable_account='22050501';
+  if(!out.payable_description || out.payable_description==='Proveedor por pagar') out.payable_description='Proveedores nacionales';
+  if(!out.withholding_account || out.withholding_account==='236540') out.withholding_account='23654001';
+  if(!out.withholding_description || out.withholding_description==='Retención en la fuente por pagar') out.withholding_description='Retención por compras 2,5%';
+  if(!out.default_expense_account || out.default_expense_account==='519595') out.default_expense_account='51959501';
+  if(!out.default_expense_description || out.default_expense_description==='Gastos diversos') out.default_expense_description='Otros';
+  if(!out.default_cost_center) out.default_cost_center='Administración';
+  return out;
+}
+
 async function ensureExtraSchema(env){
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS import_logs (
     id TEXT PRIMARY KEY,
@@ -151,14 +244,87 @@ async function testDianTokenUrl(url){
   return {ok, format_ok:true, status, final_url:finalUrl, message:ok?'Token DIAN respondió. La sincronización real requiere endpoints internos del portal.':'DIAN respondió con estado '+status, parsed:{pk:parsed.pk,rk:parsed.rk,token_last4:parsed.last4}};
 }
 async function chooseRule(env, companyId, inv){ const rules=(await env.DB.prepare('SELECT * FROM accounting_rules WHERE company_id=? AND active=1 ORDER BY priority').bind(companyId).all()).results || []; const text=((inv.supplier_name||'')+' '+(inv.descriptions||'')).toUpperCase(); let fallback=null; for(const r of rules){ if(r.match_type==='default'){fallback=r; continue;} if(text.includes(String(r.match_value||'').toUpperCase())) return r; } return fallback; }
-async function generateEntry(env, invoiceId){ const inv=await env.DB.prepare('SELECT * FROM invoices WHERE id=?').bind(invoiceId).first(); if(!inv) throw new Error('Factura no encontrada'); const settings=await getSettings(env, inv.company_id); const items=(await env.DB.prepare('SELECT * FROM invoice_items WHERE invoice_id=?').bind(invoiceId).all()).results||[]; inv.descriptions=items.map(i=>i.description||'').join(' '); const rule=await chooseRule(env, inv.company_id, inv); let entry=await env.DB.prepare('SELECT * FROM accounting_entries WHERE invoice_id=?').bind(invoiceId).first(); let entryId=entry?.id || id(); if(entry){ await env.DB.prepare('DELETE FROM accounting_entry_lines WHERE entry_id=?').bind(entryId).run(); await env.DB.prepare("UPDATE accounting_entries SET status='suggested', confidence=?, created_at=?, approved_at=NULL WHERE id=?").bind(.88, now(), entryId).run(); } else { await env.DB.prepare('INSERT INTO accounting_entries VALUES (?,?,?,?,?,?)').bind(entryId, invoiceId, 'suggested', .88, now(), null).run(); }
-  const add=(account,description,debit,credit,cost='')=>env.DB.prepare('INSERT INTO accounting_entry_lines VALUES (?,?,?,?,?,?,?)').bind(id(), entryId, account, description, Number(debit||0), Number(credit||0), cost).run();
-  await add(rule?.account || settings.default_expense_account, rule?.description || settings.default_expense_description, inv.subtotal, 0, rule?.cost_center || settings.default_cost_center);
-  if(inv.tax_amount) await add(settings.vat_account, settings.vat_description, inv.tax_amount, 0, '');
-  if(inv.withholding_amount) await add(settings.withholding_account, settings.withholding_description, 0, inv.withholding_amount, '');
-  await add(settings.payable_account, `${settings.payable_description} - ${inv.supplier_name||''}`, 0, inv.payable_amount, '');
+function normalizeAccountCode(account){
+  const a=String(account||'');
+  if(a==='240805'||a==='240810') return '24081001';
+  if(a==='220505') return '22050501';
+  if(a==='236540') return '23654001';
+  if(a==='519595') return '51959501';
+  if(a==='519525') return '51952501';
+  if(a==='513535') return '51353501';
+  return a;
+}
+
+async function generateEntry(env, invoiceId){
+  const inv=await env.DB.prepare('SELECT * FROM invoices WHERE id=?').bind(invoiceId).first();
+  if(!inv) throw new Error('Factura no encontrada');
+  // Si la factura ya estaba cargada antes de la corrección, recalculamos desde el XML guardado
+  // para evitar IVA duplicado u otros valores viejos en la base.
+  if(inv.raw_xml){
+    try{
+      const reparsed=await parseInvoice(inv.raw_xml);
+      inv.invoice_number=reparsed.invoice_number || inv.invoice_number;
+      inv.issue_date=reparsed.issue_date || inv.issue_date;
+      inv.document_type=reparsed.document_type || inv.document_type;
+      inv.supplier_name=reparsed.supplier_name || inv.supplier_name;
+      inv.supplier_nit=reparsed.supplier_nit || inv.supplier_nit;
+      inv.customer_name=reparsed.customer_name || inv.customer_name;
+      inv.customer_nit=reparsed.customer_nit || inv.customer_nit;
+      inv.currency=reparsed.currency || inv.currency;
+      inv.subtotal=reparsed.subtotal;
+      inv.tax_amount=reparsed.tax_amount;
+      inv.withholding_amount=reparsed.withholding_amount;
+      inv.payable_amount=reparsed.payable_amount;
+      await env.DB.prepare('UPDATE invoices SET invoice_number=?, issue_date=?, document_type=?, supplier_name=?, supplier_nit=?, customer_name=?, customer_nit=?, currency=?, subtotal=?, tax_amount=?, withholding_amount=?, payable_amount=?, updated_at=? WHERE id=?')
+        .bind(inv.invoice_number,inv.issue_date,inv.document_type,inv.supplier_name,inv.supplier_nit,inv.customer_name,inv.customer_nit,inv.currency,inv.subtotal,inv.tax_amount,inv.withholding_amount,inv.payable_amount,now(),invoiceId).run();
+    }catch(_){ /* Si falla el reparseo, usa valores guardados */ }
+  }
+  const settings=await getSettings(env, inv.company_id);
+  const items=(await env.DB.prepare('SELECT * FROM invoice_items WHERE invoice_id=?').bind(invoiceId).all()).results||[];
+  inv.descriptions=items.map(i=>i.description||'').join(' ');
+  const rule=await chooseRule(env, inv.company_id, inv);
+  let entry=await env.DB.prepare('SELECT * FROM accounting_entries WHERE invoice_id=?').bind(invoiceId).first();
+  let entryId=entry?.id || id();
+  if(entry){
+    await env.DB.prepare('DELETE FROM accounting_entry_lines WHERE entry_id=?').bind(entryId).run();
+    await env.DB.prepare("UPDATE accounting_entries SET status='suggested', confidence=?, created_at=?, approved_at=NULL WHERE id=?").bind(.88, now(), entryId).run();
+  } else {
+    await env.DB.prepare('INSERT INTO accounting_entries VALUES (?,?,?,?,?,?)').bind(entryId, invoiceId, 'suggested', .88, now(), null).run();
+  }
+
+  const linesToInsert=[];
+  const push=(account,description,debit,credit,cost='')=>{
+    linesToInsert.push({account:normalizeAccountCode(account),description,debit:round2(debit||0),credit:round2(credit||0),cost});
+  };
+
+  push(rule?.account || settings.default_expense_account, rule?.description || settings.default_expense_description, inv.subtotal, 0, rule?.cost_center || settings.default_cost_center);
+  if(inv.tax_amount) push(settings.vat_account, settings.vat_description, inv.tax_amount, 0, '');
+  if(inv.withholding_amount) push(settings.withholding_account, settings.withholding_description, 0, inv.withholding_amount, '');
+  push(settings.payable_account, `${settings.payable_description} - ${inv.supplier_name||''}`, 0, inv.payable_amount, '');
+
+  // Protección final: antes de guardar, cuadramos débitos y créditos para que el CSV no salga descuadrado.
+  const totalDebit=round2(linesToInsert.reduce((a,l)=>a+Number(l.debit||0),0));
+  const totalCredit=round2(linesToInsert.reduce((a,l)=>a+Number(l.credit||0),0));
+  const diff=round2(totalDebit-totalCredit);
+  if(Math.abs(diff) > 0.5){
+    if(diff > 0){
+      // Faltan créditos: normalmente es retención/deducción no marcada en el XML.
+      push(settings.withholding_account, `${settings.withholding_description} / diferencia automática`, 0, diff, '');
+    }else{
+      // Faltan débitos: normalmente es cargo/descuento no clasificado. Lo llevamos al gasto default para cuadrar.
+      push(settings.default_expense_account, `${settings.default_expense_description} / diferencia automática`, Math.abs(diff), 0, settings.default_cost_center||'');
+    }
+  }
+
+  for(const l of linesToInsert){
+    await env.DB.prepare('INSERT INTO accounting_entry_lines VALUES (?,?,?,?,?,?,?)').bind(id(), entryId, l.account, l.description, l.debit, l.credit, l.cost).run();
+  }
+
   await env.DB.prepare("UPDATE invoices SET status='accounted', updated_at=? WHERE id=?").bind(now(), invoiceId).run();
-  const lines=(await env.DB.prepare('SELECT * FROM accounting_entry_lines WHERE entry_id=?').bind(entryId).all()).results||[]; entry=await env.DB.prepare('SELECT * FROM accounting_entries WHERE id=?').bind(entryId).first(); return {entry,lines}; }
+  const lines=(await env.DB.prepare('SELECT * FROM accounting_entry_lines WHERE entry_id=?').bind(entryId).all()).results||[];
+  entry=await env.DB.prepare('SELECT * FROM accounting_entries WHERE id=?').bind(entryId).first();
+  return {entry,lines};
+}
 async function handleApi(request, env){ const url=new URL(request.url); const p=url.pathname.replace(/^\/api/,'') || '/'; try{
   if(request.method==='OPTIONS') return new Response(null,{status:204});
   if(p==='/health') return json({ok:true, service:'contapilot-cloudflare', time:now()});
@@ -166,7 +332,7 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
   if(p==='/auth/login' && request.method==='POST'){ const d=await request.json(); const u=await env.DB.prepare('SELECT * FROM users WHERE email=?').bind(String(d.email||'').toLowerCase()).first(); if(!u || !(await verifyPassword(d.password||'', u.password_hash))) return json({detail:'Correo o contraseña inválidos'},401); const token=id()+id(); await env.DB.prepare('INSERT INTO sessions VALUES (?,?,?)').bind(token,u.id,now()).run(); return json({token,user:{id:u.id,name:u.name,email:u.email}}); }
   const user=await auth(env,request);
   if(p==='/companies' && request.method==='GET'){ const rows=(await env.DB.prepare('SELECT * FROM companies WHERE owner_user_id=? ORDER BY created_at DESC').bind(user.id).all()).results||[]; return json(rows); }
-  if(p==='/companies' && request.method==='POST'){ const d=await request.json(); const companyId=id(); await env.DB.prepare('INSERT INTO companies VALUES (?,?,?,?,?)').bind(companyId,user.id,d.name,nitClean(d.nit),now()).run(); await env.DB.prepare('INSERT INTO accounting_settings (company_id) VALUES (?)').bind(companyId).run(); for(const r of [['supplier','CLARO','513535','Gasto telecomunicaciones','Administración',10],['supplier','CLASSIC JEANS','519525','Vestuario / dotación','Administración',35],['default','*','519595','Gastos diversos','Administración',999]]) await env.DB.prepare('INSERT INTO accounting_rules VALUES (?,?,?,?,?,?,?,?,?,?)').bind(id(),companyId,r[0],r[1],r[2],r[3],r[4],r[5],1,now()).run(); return json(await env.DB.prepare('SELECT * FROM companies WHERE id=?').bind(companyId).first()); }
+  if(p==='/companies' && request.method==='POST'){ const d=await request.json(); const companyId=id(); await env.DB.prepare('INSERT INTO companies VALUES (?,?,?,?,?)').bind(companyId,user.id,d.name,nitClean(d.nit),now()).run(); await env.DB.prepare('INSERT INTO accounting_settings (company_id) VALUES (?)').bind(companyId).run(); for(const r of [['supplier','CLARO','51353501','Servicios públicos - Teléfono','Administración',10],['supplier','CLASSIC JEANS','51952501','Elementos de aseo y cafetería','Administración',35],['default','*','51959501','Otros','Administración',999]]) await env.DB.prepare('INSERT INTO accounting_rules VALUES (?,?,?,?,?,?,?,?,?,?)').bind(id(),companyId,r[0],r[1],r[2],r[3],r[4],r[5],1,now()).run(); return json(await env.DB.prepare('SELECT * FROM companies WHERE id=?').bind(companyId).first()); }
   let m=p.match(/^\/companies\/([^/]+)$/); if(m && request.method==='PUT'){
     await ensureCompany(env,user.id,m[1]);
     const d=await request.json();
@@ -384,7 +550,7 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
       try{
         const inv=await env.DB.prepare('SELECT id,status FROM invoices WHERE id=? AND company_id=?').bind(invoiceId,m[1]).first();
         if(!inv) throw new Error('La factura no pertenece a la empresa activa');
-        if(inv.status==='approved' || inv.status==='exported') throw new Error('La factura ya está aprobada/exportada y no se recausa');
+        if(inv.status==='exported') throw new Error('La factura ya está exportada y no se recausa');
         await generateEntry(env, invoiceId);
         count++;
       }catch(e){ errors.push({id:invoiceId, error:e.message}); }
@@ -407,7 +573,34 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     const result=await env.DB.prepare("UPDATE invoices SET status='exported', updated_at=? WHERE company_id=? AND status IN ('approved','accounted')").bind(now(),m[1]).run();
     return json({ok:true, changed: result.meta?.changes || 0});
   }
-  m=p.match(/^\/companies\/([^/]+)\/export\.csv$/); if(m && request.method==='GET'){ await ensureCompany(env,user.id,m[1]); const rows=(await env.DB.prepare('SELECT i.*, l.account, l.description line_description, l.debit, l.credit, l.cost_center FROM invoices i LEFT JOIN accounting_entries e ON e.invoice_id=i.id LEFT JOIN accounting_entry_lines l ON l.entry_id=e.id WHERE i.company_id=? ORDER BY i.issue_date DESC').bind(m[1]).all()).results||[]; const csv=['factura;fecha;proveedor;nit;cufe;cuenta;descripcion;debito;credito;centro_costo;estado',...rows.filter(r=>r.account).map(r=>[r.invoice_number,r.issue_date,r.supplier_name,r.supplier_nit,r.cufe,r.account,r.line_description,r.debit,r.credit,r.cost_center,r.status].map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';'))].join('\n'); return text(csv,200,'text/csv; charset=utf-8'); }
+  m=p.match(/^\/companies\/([^/]+)\/export\.csv$/); if(m && request.method==='GET'){
+    await ensureCompany(env,user.id,m[1]);
+    const format=url.searchParams.get('format')||'general';
+    const rows=(await env.DB.prepare('SELECT i.*, l.account, l.description line_description, l.debit, l.credit, l.cost_center FROM invoices i LEFT JOIN accounting_entries e ON e.invoice_id=i.id LEFT JOIN accounting_entry_lines l ON l.entry_id=e.id WHERE i.company_id=? ORDER BY i.issue_date DESC, i.invoice_number, l.debit DESC').bind(m[1]).all()).results||[];
+    const lineRows=rows.filter(r=>r.account);
+    if(format==='siigo'){
+      const headers=[
+        'Tipo de comprobante','Código comprobante','Número de comprobante','Secuencia','Fecha de elaboración','Código cuenta contable','Identificación tercero','Sucursal','Nombre tercero','Dirección tercero','Teléfono tercero','Correo tercero','Ciudad tercero','Departamento tercero','País tercero','Número factura','Fecha factura','Vencimiento','Código activo fijo','Descripción','Código centro/subcentro de costos','Débito','Crédito','Observaciones','Base gravable libro compras/ventas','Base exenta libro compras/ventas','Mes de cierre'
+      ];
+      const terceroCache=new Map();
+      const out=[headers.map(csvCell).join(';')];
+      for(const r of lineRows){
+        let tercero=terceroCache.get(r.id);
+        if(!tercero){ tercero=partyDetailsFromXml(r.raw_xml||'', 'AccountingSupplierParty'); terceroCache.set(r.id, tercero); }
+        const obs=[`Factura ${r.invoice_number||''}`, `CUFE ${(r.cufe||'').slice(0,32)}`, terceroObservacion(tercero)].filter(Boolean).join(' | ');
+        const isDebit=Number(r.debit||0)>0;
+        const isVat=String(r.account||'')==='240805' || String(r.line_description||'').toUpperCase().includes('IVA');
+        const baseGravable=isDebit ? (isVat ? r.subtotal : r.subtotal) : 0;
+        const row=[
+          '', '', r.invoice_number||'', '', r.issue_date||'', r.account||'', tercero.nit||r.supplier_nit||'', '', tercero.name||r.supplier_name||'', tercero.address||'', tercero.phone||'', tercero.email||'', tercero.city||'', tercero.department||'', tercero.country||'', r.invoice_number||'', r.issue_date||'', '', '', r.line_description||'', r.cost_center||'', moneyPlain(r.debit), moneyPlain(r.credit), obs, moneyPlain(baseGravable), '0', monthFromDate(r.issue_date)
+        ];
+        out.push(row.map(csvCell).join(';'));
+      }
+      return text(out.join('\n'),200,'text/csv; charset=utf-8');
+    }
+    const csv=['factura;fecha;proveedor;nit;cufe;cuenta;descripcion;debito;credito;centro_costo;estado',...lineRows.map(r=>[r.invoice_number,r.issue_date,r.supplier_name,r.supplier_nit,r.cufe,r.account,r.line_description,r.debit,r.credit,r.cost_center,r.status].map(csvCell).join(';'))].join('\n');
+    return text(csv,200,'text/csv; charset=utf-8');
+  }
   return json({detail:'Ruta no encontrada'},404);
 }catch(e){ if(e instanceof Response) return e; return json({detail:e.message||String(e)},500); }}
 

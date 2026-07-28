@@ -1,32 +1,16 @@
-CONTA PILOT MVP - V17 SUBIR A SIIGO
+CONTA PILOT MVP - V18 ERROR DETALLADO SIIGO
 
-Esta versión agrega el flujo del video:
-Seleccionar facturas -> Subir a Siigo -> Crear factura de compra/gasto en Siigo.
+Esta versión no cambia el flujo. Mejora el diagnóstico cuando Siigo responde error 400.
 
-Incluye:
-- Botón "Subir a Siigo" en la bandeja.
-- Endpoint /api/companies/{id}/siigo-upload-selected.
-- Crea factura de compra/gasto usando POST /v1/purchases.
-- Intenta crear/validar proveedor como Supplier en Siigo.
-- Usa comprobante FC y forma de pago FC.
-- Si Siigo responde OK, marca la factura como exportada.
-- Mantiene IVA corregido y débito/crédito cuadrado.
+Ahora, si Siigo rechaza una factura, ContaPilot muestra:
+- Endpoint de Siigo que falló.
+- Respuesta completa de Siigo.
+- Payload enviado a Siigo, sin credenciales.
+- Número de factura, proveedor y NIT si están disponibles.
 
-Variables obligatorias ya configuradas:
-- SIIGO_USERNAME
-- SIIGO_ACCESS_KEY
+Objetivo:
+Saber exactamente qué campo está rechazando Siigo para corregir el payload real.
 
-Variables opcionales recomendadas en Cloudflare:
-- SIIGO_PARTNER_ID = ContaPilot
-- SIIGO_PURCHASE_DOCUMENT_ID = ID del comprobante FC que devuelva Siigo
-- SIIGO_PAYMENT_TYPE_ID = ID forma de pago FC que devuelva Siigo
-- SIIGO_IVA_19_TAX_ID = 892
-- SIIGO_DEFAULT_COUNTRY_CODE = CO
-- SIIGO_DEFAULT_STATE_CODE = 08
-- SIIGO_DEFAULT_CITY_CODE = 08001
-
-Recomendación:
-1. Subir esta versión.
-2. Consultar catálogos básicos.
-3. Si FC devuelve comprobantes y formas de pago, copiar los IDs a variables opcionales.
-4. Probar con UNA factura primero.
+Después de subir:
+1. Probar con UNA factura.
+2. Si falla, copiar completo el error mostrado en Observaciones/log.

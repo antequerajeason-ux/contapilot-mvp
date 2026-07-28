@@ -357,7 +357,11 @@ async function siigoRequest(env, path, options={}){
     }
   });
   const txt=await r.text(); let data; try{data=JSON.parse(txt)}catch(_){data={raw:txt}}
-  if(!r.ok) throw new Error(data.message || data.error || data.detail || ('Siigo API respondió '+r.status));
+  if(!r.ok){
+    const cleanBody=typeof data==='object'?JSON.stringify(data):String(data||txt);
+    const sentBody=options.body ? String(options.body).slice(0,2500) : '';
+    throw new Error(`Siigo API respondió ${r.status} en ${path}: ${cleanBody}${sentBody?` | Payload enviado: ${sentBody}`:''}`);
+  }
   return data;
 }
 
@@ -504,7 +508,10 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
         const result=await siigoRequest(env,'/purchases',{method:'POST',body:JSON.stringify(built.payload)});
         await env.DB.prepare("UPDATE invoices SET status='exported', updated_at=? WHERE id=?").bind(now(),invoiceId).run();
         uploaded.push({invoice_id:invoiceId, invoice_number:inv.invoice_number, siigo:result, supplier:built.supplier});
-      }catch(e){ errors.push({id:invoiceId,error:e.message}); }
+      }catch(e){
+        let invErr=null; try{ invErr=await env.DB.prepare('SELECT invoice_number, supplier_name, supplier_nit FROM invoices WHERE id=?').bind(invoiceId).first(); }catch(_){ }
+        errors.push({id:invoiceId, invoice_number:invErr?.invoice_number||'', supplier:invErr?.supplier_name||'', nit:invErr?.supplier_nit||'', error:e.message});
+      }
     }
     return json({ok:uploaded.length>0, count:uploaded.length, uploaded, errors});
   }}

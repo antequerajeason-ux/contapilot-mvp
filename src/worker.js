@@ -373,9 +373,19 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
   }
   if(p==='/siigo/catalogs' && request.method==='GET'){
     const result={ok:true,catalogs:{}};
-    try{ result.catalogs.document_types=await siigoRequest(env,'/document-types'); }catch(e){ result.catalogs.document_types_error=e.message; }
+    const docTypes={};
+    for(const type of ['FC','FV','DS','NC','RC']){
+      try{ docTypes[type]=await siigoRequest(env,`/document-types?type=${encodeURIComponent(type)}`); }
+      catch(e){ docTypes[type]={error:e.message}; }
+    }
+    result.catalogs.document_types=docTypes;
     try{ result.catalogs.taxes=await siigoRequest(env,'/taxes'); }catch(e){ result.catalogs.taxes_error=e.message; }
-    try{ result.catalogs.payment_types=await siigoRequest(env,'/payment-types'); }catch(e){ result.catalogs.payment_types_error=e.message; }
+    const paymentTypes={};
+    for(const type of ['FC','FV','DS','NC','RC']){
+      try{ paymentTypes[type]=await siigoRequest(env,`/payment-types?document_type=${encodeURIComponent(type)}`); }
+      catch(e){ paymentTypes[type]={error:e.message}; }
+    }
+    result.catalogs.payment_types=paymentTypes;
     return json(result);
   }
   if(p==='/companies' && request.method==='GET'){ const rows=(await env.DB.prepare('SELECT * FROM companies WHERE owner_user_id=? ORDER BY created_at DESC').bind(user.id).all()).results||[]; return json(rows); }

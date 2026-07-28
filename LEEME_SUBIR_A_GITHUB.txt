@@ -1,27 +1,13 @@
-CONTA PILOT MVP - V15 CONEXIÓN SIIGO NUBE
+CONTA PILOT MVP - V16 CATÁLOGOS SIIGO CORREGIDOS
 
-Incluye:
-- Botón Siigo Nube en Configuración.
-- Modal para probar conexión con Siigo.
-- Endpoint seguro /api/siigo/test.
-- Endpoint /api/siigo/catalogs para consultar catálogos básicos.
-- NO guarda credenciales dentro del código.
-- Mantiene exportación Base Siigo ajustada.
-- Mantiene IVA corregido y débitos/créditos cuadrados.
+Corrige la consulta de catálogos Siigo:
+- document-types ahora consulta con type=FC, FV, DS, NC, RC.
+- payment-types ahora consulta con document_type=FC, FV, DS, NC, RC.
+- taxes se mantiene.
 
-IMPORTANTE - CONFIGURAR EN CLOUDFLARE:
-Las credenciales de Siigo deben agregarse como variables/secretos del Worker:
-
-SIIGO_USERNAME
-SIIGO_ACCESS_KEY
-SIIGO_PARTNER_ID  (opcional, puede ser ContaPilot)
-
-No pegar credenciales en GitHub.
-No poner credenciales en wrangler.toml.
+Esto evita errores 400 por falta de parámetros.
 
 Después de subir:
-1. Esperar Success en Cloudflare.
-2. Ir a Cloudflare > contapilot-mvp > Settings o Variables and Secrets.
-3. Agregar SIIGO_USERNAME y SIIGO_ACCESS_KEY.
-4. Abrir ContaPilot > Configuración > Siigo Nube.
-5. Presionar Probar conexión Siigo.
+1. Probar conexión Siigo.
+2. Consultar catálogos básicos.
+3. Copiar o capturar el resultado de FC, DS y formas de pago para decidir cómo crear compras/comprobantes.

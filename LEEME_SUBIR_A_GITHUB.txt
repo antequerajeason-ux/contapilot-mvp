@@ -1,13 +1,32 @@
-CONTA PILOT MVP - V16 CATÁLOGOS SIIGO CORREGIDOS
+CONTA PILOT MVP - V17 SUBIR A SIIGO
 
-Corrige la consulta de catálogos Siigo:
-- document-types ahora consulta con type=FC, FV, DS, NC, RC.
-- payment-types ahora consulta con document_type=FC, FV, DS, NC, RC.
-- taxes se mantiene.
+Esta versión agrega el flujo del video:
+Seleccionar facturas -> Subir a Siigo -> Crear factura de compra/gasto en Siigo.
 
-Esto evita errores 400 por falta de parámetros.
+Incluye:
+- Botón "Subir a Siigo" en la bandeja.
+- Endpoint /api/companies/{id}/siigo-upload-selected.
+- Crea factura de compra/gasto usando POST /v1/purchases.
+- Intenta crear/validar proveedor como Supplier en Siigo.
+- Usa comprobante FC y forma de pago FC.
+- Si Siigo responde OK, marca la factura como exportada.
+- Mantiene IVA corregido y débito/crédito cuadrado.
 
-Después de subir:
-1. Probar conexión Siigo.
+Variables obligatorias ya configuradas:
+- SIIGO_USERNAME
+- SIIGO_ACCESS_KEY
+
+Variables opcionales recomendadas en Cloudflare:
+- SIIGO_PARTNER_ID = ContaPilot
+- SIIGO_PURCHASE_DOCUMENT_ID = ID del comprobante FC que devuelva Siigo
+- SIIGO_PAYMENT_TYPE_ID = ID forma de pago FC que devuelva Siigo
+- SIIGO_IVA_19_TAX_ID = 892
+- SIIGO_DEFAULT_COUNTRY_CODE = CO
+- SIIGO_DEFAULT_STATE_CODE = 08
+- SIIGO_DEFAULT_CITY_CODE = 08001
+
+Recomendación:
+1. Subir esta versión.
 2. Consultar catálogos básicos.
-3. Copiar o capturar el resultado de FC, DS y formas de pago para decidir cómo crear compras/comprobantes.
+3. Si FC devuelve comprobantes y formas de pago, copiar los IDs a variables opcionales.
+4. Probar con UNA factura primero.

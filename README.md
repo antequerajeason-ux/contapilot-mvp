@@ -1,3 +1,3 @@
 # ContaPilot MVP
 
-SaaS contable para procesar facturas DIAN y conectar con Siigo Nube.
+SaaS contable para procesar facturas DIAN, causar por lotes y subir a Siigo Nube.

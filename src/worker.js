@@ -361,6 +361,105 @@ async function siigoRequest(env, path, options={}){
   return data;
 }
 
+
+function invoicePrefixNumber(invoiceNumber){
+  const raw=String(invoiceNumber||'').trim();
+  const m=raw.match(/^([A-Za-z\-]*)(\d+)$/);
+  if(m) return {prefix:m[1]||'', number:m[2]};
+  const digits=(raw.match(/\d+/g)||[]).join('');
+  const prefix=raw.replace(/\d/g,'').slice(0,10);
+  return {prefix, number:digits||raw};
+}
+async function siigoGetPurchaseConfig(env){
+  const cfg={};
+  if(env.SIIGO_PURCHASE_DOCUMENT_ID) cfg.document_id=Number(env.SIIGO_PURCHASE_DOCUMENT_ID);
+  if(env.SIIGO_PAYMENT_TYPE_ID) cfg.payment_type_id=Number(env.SIIGO_PAYMENT_TYPE_ID);
+  if(env.SIIGO_IVA_19_TAX_ID) cfg.iva_19_tax_id=Number(env.SIIGO_IVA_19_TAX_ID);
+  if(!cfg.document_id){
+    const docs=await siigoRequest(env,'/document-types?type=FC');
+    const first=Array.isArray(docs)?docs.find(d=>d.active):null;
+    if(!first) throw new Error('No encontré tipo de comprobante FC activo en Siigo. Configura SIIGO_PURCHASE_DOCUMENT_ID.');
+    cfg.document_id=first.id;
+  }
+  if(!cfg.payment_type_id){
+    const pays=await siigoRequest(env,'/payment-types?document_type=FC');
+    const first=Array.isArray(pays)?pays.find(p=>p.active):null;
+    if(!first) throw new Error('No encontré forma de pago FC activa en Siigo. Configura SIIGO_PAYMENT_TYPE_ID.');
+    cfg.payment_type_id=first.id;
+  }
+  if(!cfg.iva_19_tax_id){
+    const taxes=await siigoRequest(env,'/taxes');
+    const iva=Array.isArray(taxes)?taxes.find(t=>t.active && String(t.type).toUpperCase()==='IVA' && Number(t.percentage)===19):null;
+    if(iva) cfg.iva_19_tax_id=iva.id;
+  }
+  return cfg;
+}
+function siigoDefaultCity(env){
+  return {
+    country_code: env.SIIGO_DEFAULT_COUNTRY_CODE || 'CO',
+    state_code: env.SIIGO_DEFAULT_STATE_CODE || '08',
+    city_code: env.SIIGO_DEFAULT_CITY_CODE || '08001'
+  };
+}
+async function siigoEnsureSupplier(env, invoice){
+  const tercero=partyDetailsFromXml(invoice.raw_xml||'', 'AccountingSupplierParty');
+  const nit=nitClean(tercero.nit || invoice.supplier_nit);
+  if(!nit) throw new Error('La factura no tiene NIT de proveedor para crear/usar proveedor en Siigo');
+  const name=tercero.name || invoice.supplier_name || `Proveedor ${nit}`;
+  const payload={
+    type:'Supplier',
+    person_type:'Company',
+    id_type:'31',
+    identification:nit,
+    name:[name],
+    commercial_name:tercero.tradeName || name,
+    branch_office:0,
+    active:true,
+    vat_responsible:true,
+    fiscal_responsibilities:[{code:'R-99-PN', name:'No Aplica - Otros'}],
+    address:{address:tercero.address || 'Sin direccion', city: siigoDefaultCity(env)},
+    phones: tercero.phone ? [{indicative:'57', number:nitClean(tercero.phone).slice(0,10)||'3000000000'}] : [],
+    contacts: tercero.email ? [{first_name:name.slice(0,50), last_name:'', email:tercero.email}] : [],
+    comments:'Creado/validado desde ContaPilot'
+  };
+  try{
+    await siigoRequest(env,'/customers',{method:'POST',body:JSON.stringify(payload)});
+    return {identification:nit, branch_office:0, created:true};
+  }catch(e){
+    const msg=String(e.message||'');
+    // Si ya existe, seguimos usando identificación + sucursal 0.
+    if(msg.toLowerCase().includes('exist') || msg.toLowerCase().includes('ya') || msg.toLowerCase().includes('identification')){
+      return {identification:nit, branch_office:0, created:false, note:'Proveedor ya existía o Siigo no permitió crearlo; se usará identificación existente'};
+    }
+    // No bloqueamos inmediatamente: en muchas cuentas el proveedor ya existe aunque la creación responda distinto.
+    return {identification:nit, branch_office:0, created:false, warning:msg};
+  }
+}
+async function buildSiigoPurchasePayload(env, invoice){
+  const cfg=await siigoGetPurchaseConfig(env);
+  const supplier=await siigoEnsureSupplier(env, invoice);
+  const pn=invoicePrefixNumber(invoice.invoice_number);
+  const settings=await getSettings(env, invoice.company_id);
+  const items=(await env.DB.prepare('SELECT * FROM invoice_items WHERE invoice_id=?').bind(invoice.id).all()).results||[];
+  const entry=await env.DB.prepare('SELECT * FROM accounting_entries WHERE invoice_id=?').bind(invoice.id).first();
+  const lines=entry?(await env.DB.prepare('SELECT * FROM accounting_entry_lines WHERE entry_id=?').bind(entry.id).all()).results||[]:[];
+  const expenseLine=lines.find(l=>Number(l.debit)>0 && !String(l.account).startsWith('2408')) || {account:settings.default_expense_account, description:settings.default_expense_description};
+  const description=(items[0]?.description || expenseLine.description || `Factura ${invoice.invoice_number}`).slice(0,250);
+  const item={type:'Account', code:normalizeAccountCode(expenseLine.account||settings.default_expense_account), description, quantity:1, price:round2(invoice.subtotal||0)};
+  if(Number(invoice.tax_amount||0)>0 && cfg.iva_19_tax_id) item.taxes=[{id:cfg.iva_19_tax_id}];
+  const payload={
+    document:{id:cfg.document_id},
+    date:invoice.issue_date || now().slice(0,10),
+    supplier:{identification:supplier.identification, branch_office:supplier.branch_office||0},
+    provider_invoice:{prefix:pn.prefix||'', number:String(pn.number||invoice.invoice_number||'').slice(0,20)},
+    tax_included:false,
+    observations:`Creado desde ContaPilot. Factura ${invoice.invoice_number||''}. CUFE ${(invoice.cufe||'').slice(0,64)}`,
+    items:[item],
+    payments:[{id:cfg.payment_type_id, value:round2(invoice.payable_amount||0), due_date:invoice.issue_date || now().slice(0,10)}]
+  };
+  return {payload,cfg,supplier};
+}
+
 async function handleApi(request, env){ const url=new URL(request.url); const p=url.pathname.replace(/^\/api/,'') || '/'; try{
   if(request.method==='OPTIONS') return new Response(null,{status:204});
   if(p==='/health') return json({ok:true, service:'contapilot-cloudflare', time:now()});
@@ -388,6 +487,27 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     result.catalogs.payment_types=paymentTypes;
     return json(result);
   }
+  { const mm=p.match(/^\/companies\/([^/]+)\/siigo-upload-selected$/); if(mm && request.method==='POST'){
+    await ensureCompany(env,user.id,mm[1]);
+    const body=await request.json().catch(()=>({}));
+    const invoiceIds=Array.isArray(body.invoice_ids)?body.invoice_ids.map(String).filter(Boolean):[];
+    if(!invoiceIds.length) return json({ok:false,count:0,errors:[{error:'No seleccionaste facturas para subir a Siigo'}]},400);
+    const uploaded=[], errors=[];
+    for(const invoiceId of invoiceIds){
+      try{
+        let inv=await env.DB.prepare('SELECT * FROM invoices WHERE id=? AND company_id=?').bind(invoiceId,mm[1]).first();
+        if(!inv) throw new Error('La factura no pertenece a la empresa activa');
+        if(inv.status==='exported') throw new Error('La factura ya está marcada como exportada/subida');
+        await generateEntry(env, invoiceId);
+        inv=await env.DB.prepare('SELECT * FROM invoices WHERE id=? AND company_id=?').bind(invoiceId,mm[1]).first();
+        const built=await buildSiigoPurchasePayload(env, inv);
+        const result=await siigoRequest(env,'/purchases',{method:'POST',body:JSON.stringify(built.payload)});
+        await env.DB.prepare("UPDATE invoices SET status='exported', updated_at=? WHERE id=?").bind(now(),invoiceId).run();
+        uploaded.push({invoice_id:invoiceId, invoice_number:inv.invoice_number, siigo:result, supplier:built.supplier});
+      }catch(e){ errors.push({id:invoiceId,error:e.message}); }
+    }
+    return json({ok:uploaded.length>0, count:uploaded.length, uploaded, errors});
+  }}
   if(p==='/companies' && request.method==='GET'){ const rows=(await env.DB.prepare('SELECT * FROM companies WHERE owner_user_id=? ORDER BY created_at DESC').bind(user.id).all()).results||[]; return json(rows); }
   if(p==='/companies' && request.method==='POST'){ const d=await request.json(); const companyId=id(); await env.DB.prepare('INSERT INTO companies VALUES (?,?,?,?,?)').bind(companyId,user.id,d.name,nitClean(d.nit),now()).run(); await env.DB.prepare('INSERT INTO accounting_settings (company_id) VALUES (?)').bind(companyId).run(); for(const r of [['supplier','CLARO','51353501','Servicios públicos - Teléfono','Administración',10],['supplier','CLASSIC JEANS','51952501','Elementos de aseo y cafetería','Administración',35],['default','*','51959501','Otros','Administración',999]]) await env.DB.prepare('INSERT INTO accounting_rules VALUES (?,?,?,?,?,?,?,?,?,?)').bind(id(),companyId,r[0],r[1],r[2],r[3],r[4],r[5],1,now()).run(); return json(await env.DB.prepare('SELECT * FROM companies WHERE id=?').bind(companyId).first()); }
   let m=p.match(/^\/companies\/([^/]+)$/); if(m && request.method==='PUT'){

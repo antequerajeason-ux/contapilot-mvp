@@ -325,12 +325,59 @@ async function generateEntry(env, invoiceId){
   entry=await env.DB.prepare('SELECT * FROM accounting_entries WHERE id=?').bind(entryId).first();
   return {entry,lines};
 }
+
+async function siigoAuth(env){
+  const username=env.SIIGO_USERNAME;
+  const accessKey=env.SIIGO_ACCESS_KEY;
+  const partnerId=env.SIIGO_PARTNER_ID || 'ContaPilot';
+  if(!username || !accessKey) throw new Error('Faltan variables seguras de Siigo: SIIGO_USERNAME y SIIGO_ACCESS_KEY');
+  const r=await fetch('https://api.siigo.com/auth',{
+    method:'POST',
+    headers:{
+      'content-type':'application/json',
+      'Partner-Id': partnerId
+    },
+    body:JSON.stringify({username, access_key:accessKey})
+  });
+  const txt=await r.text(); let data; try{data=JSON.parse(txt)}catch(_){data={raw:txt}}
+  if(!r.ok) throw new Error(data.message || data.error || data.detail || ('Siigo auth respondió '+r.status));
+  if(!data.access_token) throw new Error('Siigo no devolvió access_token');
+  return {access_token:data.access_token, expires_in:data.expires_in, token_type:data.token_type||'Bearer', scope:data.scope||''};
+}
+async function siigoRequest(env, path, options={}){
+  const auth=await siigoAuth(env);
+  const partnerId=env.SIIGO_PARTNER_ID || 'ContaPilot';
+  const r=await fetch(`https://api.siigo.com/v1${path}`,{
+    ...options,
+    headers:{
+      'authorization': `Bearer ${auth.access_token}`,
+      'content-type':'application/json',
+      'Partner-Id': partnerId,
+      ...(options.headers||{})
+    }
+  });
+  const txt=await r.text(); let data; try{data=JSON.parse(txt)}catch(_){data={raw:txt}}
+  if(!r.ok) throw new Error(data.message || data.error || data.detail || ('Siigo API respondió '+r.status));
+  return data;
+}
+
 async function handleApi(request, env){ const url=new URL(request.url); const p=url.pathname.replace(/^\/api/,'') || '/'; try{
   if(request.method==='OPTIONS') return new Response(null,{status:204});
   if(p==='/health') return json({ok:true, service:'contapilot-cloudflare', time:now()});
   if(p==='/auth/register' && request.method==='POST'){ const d=await request.json(); const userId=id(); const token=id()+id(); await env.DB.prepare('INSERT INTO users VALUES (?,?,?,?,?)').bind(userId,d.name||'Contador Demo',String(d.email||'').toLowerCase(),await hashPassword(d.password||''),now()).run(); await env.DB.prepare('INSERT INTO sessions VALUES (?,?,?)').bind(token,userId,now()).run(); return json({token,user:{id:userId,name:d.name||'Contador Demo',email:String(d.email||'').toLowerCase()}}); }
   if(p==='/auth/login' && request.method==='POST'){ const d=await request.json(); const u=await env.DB.prepare('SELECT * FROM users WHERE email=?').bind(String(d.email||'').toLowerCase()).first(); if(!u || !(await verifyPassword(d.password||'', u.password_hash))) return json({detail:'Correo o contraseña inválidos'},401); const token=id()+id(); await env.DB.prepare('INSERT INTO sessions VALUES (?,?,?)').bind(token,u.id,now()).run(); return json({token,user:{id:u.id,name:u.name,email:u.email}}); }
   const user=await auth(env,request);
+  if(p==='/siigo/test' && request.method==='POST'){
+    const authResult=await siigoAuth(env);
+    return json({ok:true, message:'Conexión con Siigo correcta', expires_in:authResult.expires_in, token_type:authResult.token_type, scope:authResult.scope});
+  }
+  if(p==='/siigo/catalogs' && request.method==='GET'){
+    const result={ok:true,catalogs:{}};
+    try{ result.catalogs.document_types=await siigoRequest(env,'/document-types'); }catch(e){ result.catalogs.document_types_error=e.message; }
+    try{ result.catalogs.taxes=await siigoRequest(env,'/taxes'); }catch(e){ result.catalogs.taxes_error=e.message; }
+    try{ result.catalogs.payment_types=await siigoRequest(env,'/payment-types'); }catch(e){ result.catalogs.payment_types_error=e.message; }
+    return json(result);
+  }
   if(p==='/companies' && request.method==='GET'){ const rows=(await env.DB.prepare('SELECT * FROM companies WHERE owner_user_id=? ORDER BY created_at DESC').bind(user.id).all()).results||[]; return json(rows); }
   if(p==='/companies' && request.method==='POST'){ const d=await request.json(); const companyId=id(); await env.DB.prepare('INSERT INTO companies VALUES (?,?,?,?,?)').bind(companyId,user.id,d.name,nitClean(d.nit),now()).run(); await env.DB.prepare('INSERT INTO accounting_settings (company_id) VALUES (?)').bind(companyId).run(); for(const r of [['supplier','CLARO','51353501','Servicios públicos - Teléfono','Administración',10],['supplier','CLASSIC JEANS','51952501','Elementos de aseo y cafetería','Administración',35],['default','*','51959501','Otros','Administración',999]]) await env.DB.prepare('INSERT INTO accounting_rules VALUES (?,?,?,?,?,?,?,?,?,?)').bind(id(),companyId,r[0],r[1],r[2],r[3],r[4],r[5],1,now()).run(); return json(await env.DB.prepare('SELECT * FROM companies WHERE id=?').bind(companyId).first()); }
   let m=p.match(/^\/companies\/([^/]+)$/); if(m && request.method==='PUT'){
@@ -579,20 +626,45 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     const rows=(await env.DB.prepare('SELECT i.*, l.account, l.description line_description, l.debit, l.credit, l.cost_center FROM invoices i LEFT JOIN accounting_entries e ON e.invoice_id=i.id LEFT JOIN accounting_entry_lines l ON l.entry_id=e.id WHERE i.company_id=? ORDER BY i.issue_date DESC, i.invoice_number, l.debit DESC').bind(m[1]).all()).results||[];
     const lineRows=rows.filter(r=>r.account);
     if(format==='siigo'){
+      // Plantilla Base Siigo según captura del contador.
+      // Como solo conocemos columnas S-AA, dejamos A-R como columnas vacías para conservar posiciones.
+      // S: Código activo fijo
+      // T: Descripción
+      // U: Código centro/subcentro de costos
+      // V: Débito
+      // W: Crédito
+      // X: Observaciones
+      // Y: Base gravable libro compras/ventas
+      // Z: Base exenta libro compras/ventas
+      // AA: Mes de cierre
       const headers=[
-        'Tipo de comprobante','Código comprobante','Número de comprobante','Secuencia','Fecha de elaboración','Código cuenta contable','Identificación tercero','Sucursal','Nombre tercero','Dirección tercero','Teléfono tercero','Correo tercero','Ciudad tercero','Departamento tercero','País tercero','Número factura','Fecha factura','Vencimiento','Código activo fijo','Descripción','Código centro/subcentro de costos','Débito','Crédito','Observaciones','Base gravable libro compras/ventas','Base exenta libro compras/ventas','Mes de cierre'
+        '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
+        'Código activo fijo','Descripción','Código centro/subcentro de costos','Débito','Crédito','Observaciones','Base gravable libro compras/ventas','Base exenta libro compras/ventas','Mes de cierre'
       ];
-      const terceroCache=new Map();
       const out=[headers.map(csvCell).join(';')];
       for(const r of lineRows){
-        let tercero=terceroCache.get(r.id);
-        if(!tercero){ tercero=partyDetailsFromXml(r.raw_xml||'', 'AccountingSupplierParty'); terceroCache.set(r.id, tercero); }
-        const obs=[`Factura ${r.invoice_number||''}`, `CUFE ${(r.cufe||'').slice(0,32)}`, terceroObservacion(tercero)].filter(Boolean).join(' | ');
-        const isDebit=Number(r.debit||0)>0;
-        const isVat=String(r.account||'')==='240805' || String(r.line_description||'').toUpperCase().includes('IVA');
-        const baseGravable=isDebit ? (isVat ? r.subtotal : r.subtotal) : 0;
+        const account=String(r.account||'');
+        const desc=String(r.line_description||'');
+        const upperDesc=desc.toUpperCase();
+        const isVat=account==='24081001' || account==='240805' || account==='240810' || upperDesc.includes('IVA');
+        const isWithholding=account.startsWith('2365') || upperDesc.includes('RETEN');
+        const hasTax=Number(r.tax_amount||0)>0;
+        let baseGravable=0;
+        let baseExenta=0;
+        if(isVat || isWithholding) baseGravable=Number(r.subtotal||0);
+        if(!hasTax && Number(r.debit||0)>0 && !isVat && !isWithholding) baseExenta=Number(r.subtotal||0);
+        const observacion=[`Factura ${r.invoice_number||''}`, r.issue_date?`Fecha ${r.issue_date}`:''].filter(Boolean).join(' | ');
         const row=[
-          '', '', r.invoice_number||'', '', r.issue_date||'', r.account||'', tercero.nit||r.supplier_nit||'', '', tercero.name||r.supplier_name||'', tercero.address||'', tercero.phone||'', tercero.email||'', tercero.city||'', tercero.department||'', tercero.country||'', r.invoice_number||'', r.issue_date||'', '', '', r.line_description||'', r.cost_center||'', moneyPlain(r.debit), moneyPlain(r.credit), obs, moneyPlain(baseGravable), '0', monthFromDate(r.issue_date)
+          '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
+          '',
+          desc,
+          r.cost_center||'',
+          moneyPlain(r.debit),
+          moneyPlain(r.credit),
+          observacion,
+          moneyPlain(baseGravable),
+          moneyPlain(baseExenta),
+          monthFromDate(r.issue_date)
         ];
         out.push(row.map(csvCell).join(';'));
       }

@@ -1,26 +1,27 @@
-CONTA PILOT MVP - V14 CUENTAS SIIGO DEL PDF
+CONTA PILOT MVP - V15 CONEXIÓN SIIGO NUBE
 
-Este paquete incluye todo lo anterior más la normalización de cuentas contables según el PDF enviado.
+Incluye:
+- Botón Siigo Nube en Configuración.
+- Modal para probar conexión con Siigo.
+- Endpoint seguro /api/siigo/test.
+- Endpoint /api/siigo/catalogs para consultar catálogos básicos.
+- NO guarda credenciales dentro del código.
+- Mantiene exportación Base Siigo ajustada.
+- Mantiene IVA corregido y débitos/créditos cuadrados.
 
-Cuentas base detectadas:
-- 24081001 Iva descontable por compras 19%
-- 22050501 Proveedores nacionales
-- 23654001 Retención por compras 2,5%
-- 51959501 Otros
-- 51353501 Servicios públicos - Teléfono
-- 51952501 Elementos de aseo y cafetería
+IMPORTANTE - CONFIGURAR EN CLOUDFLARE:
+Las credenciales de Siigo deben agregarse como variables/secretos del Worker:
 
-Qué corrige:
-- Evita usar cuentas padre como 240805, 220505, 236540, 519595.
-- Convierte cuentas padre a cuentas transaccionales al generar la causación.
-- Mantiene corrección de IVA duplicado.
-- Mantiene cuadre de débito y crédito.
-- Mantiene exportación Siigo con datos de tercero.
+SIIGO_USERNAME
+SIIGO_ACCESS_KEY
+SIIGO_PARTNER_ID  (opcional, puede ser ContaPilot)
 
-IMPORTANTE:
-Las credenciales de Siigo API no se guardaron dentro del código por seguridad.
-Más adelante se debe crear una pantalla segura para guardarlas como secreto/configuración.
+No pegar credenciales en GitHub.
+No poner credenciales en wrangler.toml.
 
 Después de subir:
-1. Recausar facturas ya cargadas con "Causar Factura".
-2. Exportar en formato Siigo Nube.
+1. Esperar Success en Cloudflare.
+2. Ir a Cloudflare > contapilot-mvp > Settings o Variables and Secrets.
+3. Agregar SIIGO_USERNAME y SIIGO_ACCESS_KEY.
+4. Abrir ContaPilot > Configuración > Siigo Nube.
+5. Presionar Probar conexión Siigo.

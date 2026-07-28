@@ -1,13 +1,16 @@
-name = "contapilot-mvp"
-main = "src/worker.js"
-compatibility_date = "2025-01-01"
-account_id = "ef9a77199b72987abab0c8ef6aa4910c"
+CONTA PILOT MVP - V18 ERROR DETALLADO SIIGO
 
-[assets]
-directory = "./public"
-binding = "ASSETS"
+Esta versión no cambia el flujo. Mejora el diagnóstico cuando Siigo responde error 400.
 
-[[d1_databases]]
-binding = "DB"
-database_name = "contapilot_db"
-database_id = "3ac40bbe-c3a0-4a3d-92d0-cacab0769946"
+Ahora, si Siigo rechaza una factura, ContaPilot muestra:
+- Endpoint de Siigo que falló.
+- Respuesta completa de Siigo.
+- Payload enviado a Siigo, sin credenciales.
+- Número de factura, proveedor y NIT si están disponibles.
+
+Objetivo:
+Saber exactamente qué campo está rechazando Siigo para corregir el payload real.
+
+Después de subir:
+1. Probar con UNA factura.
+2. Si falla, copiar completo el error mostrado en Observaciones/log.

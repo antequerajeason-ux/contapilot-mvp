@@ -1,18 +1,13 @@
-CONTA PILOT MVP - V19 CUENTA ACTIVA SIIGO
+name = "contapilot-mvp"
+main = "src/worker.js"
+compatibility_date = "2025-01-01"
+account_id = "ef9a77199b72987abab0c8ef6aa4910c"
 
-Corrige el error de Siigo:
-"The code is inactive: 51959501"
+[assets]
+directory = "./public"
+binding = "ASSETS"
 
-Cambios:
-- Ya no usa la cuenta inactiva 51959501.
-- 519595 o 51959501 se convierten a 52959505, que está activa en el PDF.
-- Para facturas de ferretería/materiales/pegante/Sodimac usa 14350101 Mercancías no fabricadas.
-- Mantiene IVA corregido.
-- Mantiene subida a Siigo por /purchases.
-
-Después de subir:
-1. Esperar Success.
-2. Seleccionar la misma factura.
-3. Presionar Causar Factura otra vez.
-4. Presionar Subir a Siigo.
-5. Si falla, copiar el nuevo error completo.
+[[d1_databases]]
+binding = "DB"
+database_name = "contapilot_db"
+database_id = "3ac40bbe-c3a0-4a3d-92d0-cacab0769946"

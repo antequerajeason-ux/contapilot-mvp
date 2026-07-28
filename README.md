@@ -178,8 +178,8 @@ function normalizeSettings(s){
   if(!out.payable_description || out.payable_description==='Proveedor por pagar') out.payable_description='Proveedores nacionales';
   if(!out.withholding_account || out.withholding_account==='236540') out.withholding_account='23654001';
   if(!out.withholding_description || out.withholding_description==='Retención en la fuente por pagar') out.withholding_description='Retención por compras 2,5%';
-  if(!out.default_expense_account || out.default_expense_account==='519595') out.default_expense_account='51959501';
-  if(!out.default_expense_description || out.default_expense_description==='Gastos diversos') out.default_expense_description='Otros';
+  if(!out.default_expense_account || out.default_expense_account==='519595') out.default_expense_account='52959505';
+  if(!out.default_expense_description || out.default_expense_description==='Gastos diversos') out.default_expense_description='Gastos diversos POS';
   if(!out.default_cost_center) out.default_cost_center='Administración';
   return out;
 }
@@ -249,10 +249,20 @@ function normalizeAccountCode(account){
   if(a==='240805'||a==='240810') return '24081001';
   if(a==='220505') return '22050501';
   if(a==='236540') return '23654001';
-  if(a==='519595') return '51959501';
+  if(a==='519595'||a==='51959501') return '52959505';
   if(a==='519525') return '51952501';
   if(a==='513535') return '51353501';
   return a;
+}
+
+
+function inferPurchaseAccount(inv, fallbackAccount){
+  const text=((inv.supplier_name||'')+' '+(inv.descriptions||'')+' '+(inv.invoice_number||'')).toUpperCase();
+  // Mercancías / ferretería / materiales para la venta o inventario
+  if(/FERRETER|SODIMAC|PEGANTE|CERAMIC|ALFAQUICK|MAX GRIS|CEMENTO|PINTURA|TORNILL|HERRAMIENT|MATERIAL/.test(text)) return '14350101';
+  // Aseo, cafetería y consumo interno
+  if(/ASEO|CAFETER|LIMPIEZA|DETERGENTE|JABON|SERVILLETA/.test(text)) return '51952501';
+  return normalizeAccountCode(fallbackAccount||'52959505');
 }
 
 async function generateEntry(env, invoiceId){
@@ -297,7 +307,9 @@ async function generateEntry(env, invoiceId){
     linesToInsert.push({account:normalizeAccountCode(account),description,debit:round2(debit||0),credit:round2(credit||0),cost});
   };
 
-  push(rule?.account || settings.default_expense_account, rule?.description || settings.default_expense_description, inv.subtotal, 0, rule?.cost_center || settings.default_cost_center);
+  const expenseAccount=inferPurchaseAccount(inv, rule?.account || settings.default_expense_account);
+  const expenseDescription=(expenseAccount==='14350101')?'Mercancías no fabricadas':(rule?.description || settings.default_expense_description);
+  push(expenseAccount, expenseDescription, inv.subtotal, 0, rule?.cost_center || settings.default_cost_center);
   if(inv.tax_amount) push(settings.vat_account, settings.vat_description, inv.tax_amount, 0, '');
   if(inv.withholding_amount) push(settings.withholding_account, settings.withholding_description, 0, inv.withholding_amount, '');
   push(settings.payable_account, `${settings.payable_description} - ${inv.supplier_name||''}`, 0, inv.payable_amount, '');
@@ -516,7 +528,7 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     return json({ok:uploaded.length>0, count:uploaded.length, uploaded, errors});
   }}
   if(p==='/companies' && request.method==='GET'){ const rows=(await env.DB.prepare('SELECT * FROM companies WHERE owner_user_id=? ORDER BY created_at DESC').bind(user.id).all()).results||[]; return json(rows); }
-  if(p==='/companies' && request.method==='POST'){ const d=await request.json(); const companyId=id(); await env.DB.prepare('INSERT INTO companies VALUES (?,?,?,?,?)').bind(companyId,user.id,d.name,nitClean(d.nit),now()).run(); await env.DB.prepare('INSERT INTO accounting_settings (company_id) VALUES (?)').bind(companyId).run(); for(const r of [['supplier','CLARO','51353501','Servicios públicos - Teléfono','Administración',10],['supplier','CLASSIC JEANS','51952501','Elementos de aseo y cafetería','Administración',35],['default','*','51959501','Otros','Administración',999]]) await env.DB.prepare('INSERT INTO accounting_rules VALUES (?,?,?,?,?,?,?,?,?,?)').bind(id(),companyId,r[0],r[1],r[2],r[3],r[4],r[5],1,now()).run(); return json(await env.DB.prepare('SELECT * FROM companies WHERE id=?').bind(companyId).first()); }
+  if(p==='/companies' && request.method==='POST'){ const d=await request.json(); const companyId=id(); await env.DB.prepare('INSERT INTO companies VALUES (?,?,?,?,?)').bind(companyId,user.id,d.name,nitClean(d.nit),now()).run(); await env.DB.prepare('INSERT INTO accounting_settings (company_id) VALUES (?)').bind(companyId).run(); for(const r of [['supplier','CLARO','51353501','Servicios públicos - Teléfono','Administración',10],['supplier','CLASSIC JEANS','51952501','Elementos de aseo y cafetería','Administración',35],['default','*','52959505','Gastos diversos POS','Administración',999]]) await env.DB.prepare('INSERT INTO accounting_rules VALUES (?,?,?,?,?,?,?,?,?,?)').bind(id(),companyId,r[0],r[1],r[2],r[3],r[4],r[5],1,now()).run(); return json(await env.DB.prepare('SELECT * FROM companies WHERE id=?').bind(companyId).first()); }
   let m=p.match(/^\/companies\/([^/]+)$/); if(m && request.method==='PUT'){
     await ensureCompany(env,user.id,m[1]);
     const d=await request.json();

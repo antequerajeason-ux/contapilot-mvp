@@ -1,16 +1,18 @@
-CONTA PILOT MVP - V18 ERROR DETALLADO SIIGO
+CONTA PILOT MVP - V19 CUENTA ACTIVA SIIGO
 
-Esta versión no cambia el flujo. Mejora el diagnóstico cuando Siigo responde error 400.
+Corrige el error de Siigo:
+"The code is inactive: 51959501"
 
-Ahora, si Siigo rechaza una factura, ContaPilot muestra:
-- Endpoint de Siigo que falló.
-- Respuesta completa de Siigo.
-- Payload enviado a Siigo, sin credenciales.
-- Número de factura, proveedor y NIT si están disponibles.
-
-Objetivo:
-Saber exactamente qué campo está rechazando Siigo para corregir el payload real.
+Cambios:
+- Ya no usa la cuenta inactiva 51959501.
+- 519595 o 51959501 se convierten a 52959505, que está activa en el PDF.
+- Para facturas de ferretería/materiales/pegante/Sodimac usa 14350101 Mercancías no fabricadas.
+- Mantiene IVA corregido.
+- Mantiene subida a Siigo por /purchases.
 
 Después de subir:
-1. Probar con UNA factura.
-2. Si falla, copiar completo el error mostrado en Observaciones/log.
+1. Esperar Success.
+2. Seleccionar la misma factura.
+3. Presionar Causar Factura otra vez.
+4. Presionar Subir a Siigo.
+5. Si falla, copiar el nuevo error completo.

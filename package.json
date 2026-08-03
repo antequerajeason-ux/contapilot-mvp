@@ -1,12 +1,10 @@
-{
-  "name": "contapilot-worker",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "deploy": "wrangler deploy",
-    "dev": "wrangler dev"
-  },
-  "devDependencies": {
-    "wrangler": "^4.0.0"
-  }
-}
+CREATE TABLE IF NOT EXISTS import_logs (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL,
+  file_name TEXT,
+  status TEXT NOT NULL,
+  imported_count INTEGER DEFAULT 0,
+  error_count INTEGER DEFAULT 0,
+  message TEXT,
+  created_at TEXT NOT NULL
+);

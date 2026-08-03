@@ -1,10 +1,10 @@
 name = "contapilot-mvp"
-main = "src/worker.js"
+main = "worker.js"
 compatibility_date = "2025-01-01"
 account_id = "ef9a77199b72987abab0c8ef6aa4910c"
 
 [assets]
-directory = "./public"
+directory = "./"
 binding = "ASSETS"
 
 [[d1_databases]]

@@ -1,0 +1,37 @@
+CONTA PILOT MVP - V4 LOTES Y CARGA MASIVA
+
+Problemas corregidos después de la prueba con el contador:
+
+1. ZIP mensual incompleto:
+   - Ahora ContaPilot revisa ZIPs internos dentro del ZIP principal.
+   - Esto ayuda cuando la carpeta mensual trae subcarpetas o paquetes por factura.
+   - Detecta PDF y muestra mensaje claro si no hay XML.
+
+2. Interfaz pegada al causar:
+   - La causación ya no se manda en un solo bloque gigante.
+   - Ahora se procesa por lotes de 10 facturas.
+   - La bandeja se actualiza automáticamente entre lotes.
+   - Se muestra avance en pantalla.
+
+3. Botón actualizar:
+   - Ya no debe ser necesario oprimir Actualizar a cada rato.
+   - Después de cargar, causar o eliminar, la bandeja se recarga sola.
+
+4. Errores más claros:
+   - El panel rojo ahora se llama Observaciones.
+   - Muestra si un ZIP tiene PDF pero no XML.
+   - Muestra errores de importación o causación.
+
+5. Eliminación:
+   - Mantiene el botón Eliminar para facturas seleccionadas.
+
+Importante:
+- ContaPilot causa desde XML, no desde PDF.
+- Si el ZIP contiene solamente PDF, se debe descargar desde DIAN el XML de las facturas.
+
+Archivos modificados:
+- src/worker.js
+- public/centro-facturas.html
+
+Subir a GitHub:
+Sube el contenido de esta carpeta al repositorio contapilot-mvp.

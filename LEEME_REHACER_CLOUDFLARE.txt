@@ -1,0 +1,27 @@
+CONTA PILOT - WORKER NUEVO LIMPIO
+
+Este paquete crea un Worker nuevo llamado:
+contapilot-mvp
+
+Objetivo:
+Evitar el Worker viejo "contapilot" que quedó con un binding DB dañado en Cloudflare.
+
+Cloudflare debe tener:
+1. D1 Database:
+   Nombre: contapilot_db
+   ID: 3ac40bbe-c3a0-4a3d-92d0-cacab0769946
+
+2. Worker nuevo:
+   Nombre: contapilot-mvp
+
+3. Binding automático desde wrangler.toml:
+   DB -> D1 -> contapilot_db
+   ASSETS -> ./public
+
+Build settings en Cloudflare:
+Build command: npm install
+Deploy command: npx wrangler deploy
+Root directory: /
+Branch: main
+
+No necesitas Render, Browserless ni automatización DIAN para este MVP.

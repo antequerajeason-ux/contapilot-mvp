@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ContaPilot | Centro de facturas</title>
+  <style>
+    :root{--bg:#f5f7fa;--surface:#fff;--ink:#101828;--muted:#66748e;--line:#e2e8f0;--primary:#0f6fb8;--primary-dark:#0a4a7a;--navy:#0b1524;--cyan:#1fb6c9;--green:#0f8f6c;--amber:#a8620c;--red:#b3261e;--radius:10px}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg)}
+    button,input,select{font-family:inherit}
+    .page{width:min(1280px,calc(100% - 32px));margin:0 auto;padding:24px 0 60px}
+
+    /* Topbar */
+    .nav{position:sticky;top:0;z-index:30;height:60px;border-radius:0;background:var(--navy);border:0;border-bottom:1px solid #1c2b40;box-shadow:none;display:flex;align-items:center;justify-content:space-between;padding:0 20px;margin:0 0 24px}
+    .page.app-shell{padding-top:0}
+    .brand,.brand-icon-only{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700;letter-spacing:0;color:#fff}
+    .brand-symbol{width:30px;height:30px;object-fit:contain}
+    .mark{width:30px;height:30px;border-radius:8px;background:var(--primary);position:relative;display:grid;place-items:center;color:#fff;font-size:13px;font-weight:800}
+    .mark:before{content:'CP';position:relative;z-index:2}
+    .mark:after{display:none}
+    .nav-center,.nav-center-modern{display:flex;align-items:center;gap:4px;position:static;transform:none}
+    .menu{position:relative}
+    .menu-btn{height:36px;border:0;border-radius:8px;background:transparent;padding:0 12px;font-weight:600;font-size:13.5px;cursor:pointer;transition:background .12s;color:rgba(255,255,255,.82)}
+    .menu-btn:hover,.menu.open .menu-btn{background:rgba(255,255,255,.10);color:#fff}
+    .dropdown{position:absolute;top:44px;right:0;width:300px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 12px 32px rgba(15,23,42,.16);padding:14px;display:none;z-index:50}
+    .menu.open .dropdown{display:block}
+    .dropdown.wide{width:360px}
+    .field{margin-bottom:12px}
+    .field label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px}
+    .field input,.field select{height:38px;width:100%;border:1px solid var(--line);border-radius:8px;padding:0 11px;background:#fff;outline:0;font-size:14px;color:var(--ink)}
+    .field input:focus,.field select:focus{border-color:var(--primary)}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}
+    .topbar-user{display:flex;align-items:center;gap:12px}
+    .user{font-size:13px;color:rgba(255,255,255,.75);font-weight:500;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+    /* Buttons */
+    .btn{height:38px;border:1px solid transparent;border-radius:8px;padding:0 14px;font-weight:600;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:background .12s,border-color .12s;white-space:nowrap}
+    .btn:hover{filter:brightness(1.04)}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .btn-primary{background:var(--primary);color:#fff}
+    .btn-green{background:var(--green);color:#fff}
+    .btn-blue{background:var(--primary);color:#fff}
+    .btn-red{background:var(--red);color:#fff}
+    .btn-light{background:#fff;border-color:var(--line);color:var(--ink)}
+    .btn-light:hover{background:#f8fafc}
+    .btn-danger-light{background:#fdf2f2;border-color:#f3c9c6;color:var(--red)}
+    .btn-full{width:100%}
+    .btn-siigo img{width:20px;height:20px;object-fit:contain;background:#fff;border-radius:5px;padding:1px}
+
+    /* Hero */
+    .hero,.product-hero{margin:0 0 20px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:none;overflow:hidden;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(300px,.7fr);gap:0;padding:0}
+    .hero-copy{padding:32px;display:flex;flex-direction:column;justify-content:center}
+    .eyebrow{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:6px;background:#eef6fc;color:var(--primary-dark);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;width:fit-content}
+    .hero h1,.product-hero h1{font-size:30px;line-height:1.15;letter-spacing:-.01em;margin:14px 0 8px;color:var(--ink);max-width:520px;font-weight:700}
+    .hero p,.product-hero p{margin:0;color:var(--muted);font-size:14.5px;line-height:1.55;max-width:480px}
+    .hero-actions{margin-top:20px}
+    .hero-main{border-color:var(--line)}
+    .workflow{display:flex;gap:18px;margin-top:20px}
+    .workflow div{font-size:12.5px;color:var(--muted)}
+    .workflow strong{display:block;color:var(--primary);font-size:13px;margin-bottom:2px}
+    .hero-visual{background:#fafbfd;border-left:1px solid var(--line);padding:24px;display:flex;align-items:center;justify-content:center}
+    .mini-dashboard{width:100%;max-width:380px;border-radius:8px;background:#fff;border:1px solid var(--line);padding:16px}
+    .mini-top{display:none}
+    .mini-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:12px}
+    .flow-row{display:grid;grid-template-columns:30px 1fr;gap:10px;align-items:center;background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:9px 0;margin-bottom:0}
+    .flow-row:last-of-type{border-bottom:0}
+    .flow-dot{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;background:var(--bg);color:var(--muted);font-weight:700;font-size:12px}
+    .flow-dot.active{background:var(--primary);color:#fff}
+    .flow-row strong{display:block;font-size:13px;font-weight:600}
+    .flow-row small{display:block;color:var(--muted);font-weight:500;margin-top:1px;font-size:12px}
+    .siigo-strip{margin-top:12px;display:flex;align-items:center;gap:8px;border-radius:8px;background:var(--bg);border:1px solid var(--line);padding:10px;color:var(--muted);font-weight:600;font-size:12.5px}
+    .siigo-strip img{width:22px;height:22px;object-fit:contain}
+
+    /* Stats */
+    .stats,.metrics-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;padding:0;margin-bottom:20px}
+    .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+    .stat span{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+    .stat strong{display:block;font-size:26px;margin-top:4px;font-weight:700;font-family:ui-monospace,Consolas,monospace}
+
+    /* Card / board */
+    .card,.invoice-board{margin-top:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:none;overflow:hidden}
+    .card-head,.board-head{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:14px}
+    .section-label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;color:var(--primary)}
+    .card-head h2,.board-head h2{margin:2px 0 2px;font-size:18px;font-weight:700;letter-spacing:0}
+    .card-head p,.board-head p{margin:0;color:var(--muted);font-size:13px}
+    .card-body{padding:18px 20px}
+    .toolbar,.board-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;background:transparent;border:0;padding:0}
+    .search{height:38px;border:1px solid var(--line);border-radius:8px;display:flex;align-items:center;gap:8px;padding:0 11px;flex:1;min-width:260px;background:#fff;color:var(--muted)}
+    .search input{border:0;outline:0;flex:1;font-size:14px;color:var(--ink)}
+    .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fff}
+    table{width:100%;border-collapse:collapse;min-width:1040px}
+    th{background:#fafbfd;text-align:left;padding:10px 13px;color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--line)}
+    td{padding:12px 13px;border-top:1px solid var(--line);font-size:13.5px;vertical-align:middle}
+    tbody tr:hover td{background:#fafbfd}
+    .supplier{font-weight:600}
+    .sub{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+    .mono{font-family:ui-monospace,Consolas,monospace}
+    td strong,.stat strong,.money-highlight{font-family:ui-monospace,Consolas,monospace}
+
+    /* Status pills */
+    .pill{display:inline-flex;border-radius:6px;padding:4px 9px;font-size:11.5px;font-weight:700}
+    .received{background:#fdf3e7;color:var(--amber)}
+    .accounted{background:#eaf3fb;color:var(--primary-dark)}
+    .approved{background:#e9f7f1;color:var(--green)}
+
+    /* Action select / checkboxes */
+    .action-select{height:36px;border:1px solid var(--line);border-radius:7px;background:#fff;padding:0 10px;font-weight:600;font-size:13px;color:var(--ink);cursor:pointer;min-width:140px}
+    .check-cell{width:44px;text-align:center}
+    .mini-check{width:15px;height:15px;accent-color:var(--primary);cursor:pointer}
+    .select-all-wrap{display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:12px;font-weight:600;color:var(--muted)}
+    .selected-counter{font-size:12.5px;color:var(--muted);font-weight:600;background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px 11px}
+    .progress-wide{display:none;margin:0 0 14px;background:#eaf3fb;border:1px solid #c7dff2;color:var(--primary-dark);border-radius:8px;padding:10px 12px;font-size:13px;font-weight:600}
+
+    /* Log / errors */
+    .log-panel{margin-top:14px;background:var(--navy);color:#cbd5e1;border-radius:8px;padding:12px;white-space:pre-wrap;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.5;display:none}
+    .log-panel.show{display:block}
+
+    /* Modals */
+    .modal-bg{position:fixed;inset:0;background:rgba(10,17,28,.5);display:none;align-items:center;justify-content:center;padding:20px;z-index:80}
+    .modal-bg.show{display:flex}
+    .modal{width:min(820px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:12px;box-shadow:0 24px 60px rgba(15,23,42,.22);padding:22px;animation:pop .14s ease}
+    .modal.small{width:min(480px,100%)}
+    @keyframes pop{from{transform:scale(.98);opacity:.6}to{transform:scale(1);opacity:1}}
+    .modal-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:16px}
+    .modal-head h3{margin:0 0 4px;font-size:18px;font-weight:700}
+    .modal-head p{margin:0;color:var(--muted);line-height:1.45;font-size:13px}
+    .close{width:32px;height:32px;border:0;border-radius:7px;background:var(--bg);font-size:18px;cursor:pointer;color:var(--muted)}
+    .close:hover{background:var(--line)}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .export-title{display:flex;align-items:center;gap:12px}
+    .export-title img{width:36px;height:36px;object-fit:contain;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px}
+
+    /* Toast */
+    .toast{position:fixed;right:20px;bottom:20px;background:var(--navy);color:#fff;border-radius:8px;padding:12px 15px;box-shadow:0 12px 32px rgba(15,23,42,.24);font-weight:600;font-size:13.5px;display:none;z-index:100;max-width:380px}
+    .toast.show{display:block}
+
+    /* Invoice / entry detail */
+    .invoice-hero{border-radius:8px;background:var(--bg);border:1px solid var(--line);color:var(--ink);padding:16px;margin-bottom:14px}
+    .invoice-hero h2{margin:0 0 4px;font-size:19px;font-weight:700}
+    .invoice-hero p{margin:0;color:var(--muted);font-size:13px}
+    .detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+    .detail-box{border:1px solid var(--line);border-radius:8px;background:#fff;padding:12px}
+    .detail-box.span2{grid-column:span 2}
+    .detail-box span{display:block;color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+    .detail-box strong{display:block;margin-top:5px;font-size:14px;line-height:1.35}
+    .money-highlight{font-size:18px!important;color:var(--green)}
+    .support-box{border:1px dashed var(--line);background:var(--bg);border-radius:8px;padding:12px;margin-top:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    .support-box p{margin:0;color:var(--muted);font-size:12.5px}
+    .xml-box{display:none}
+
+    @media(max-width:980px){
+      .nav{height:auto;padding:10px 14px;flex-wrap:wrap;gap:8px}
+      .hero,.product-hero{grid-template-columns:1fr}
+      .hero-visual{border-left:0;border-top:1px solid var(--line)}
+      .stats,.metrics-grid{grid-template-columns:repeat(2,1fr)}
+    }
+    @media(max-width:640px){
+      .page{width:min(100% - 20px,1280px)}
+      .stats,.metrics-grid,.grid2{grid-template-columns:1fr}
+      .btn{width:100%}
+      .toolbar,.board-toolbar{display:block}
+      .search{min-width:0;margin-bottom:8px}
+      .hero h1,.product-hero h1{font-size:24px}
+    }
+  </style>
+<script src="config.js"></script>
+</head>
+<body>
+<div class="page app-shell">
+  <nav class="nav topbar-modern">
+    <div class="brand brand-icon-only"><img class="brand-symbol" src="contapilot-symbol-transparent.png" alt="ContaPilot"></div>
+    <div class="nav-center nav-center-modern">
+      <div class="menu" id="companyMenu"><button class="menu-btn" onclick="toggleMenu('companyMenu')">Empresas ▾</button><div class="dropdown wide"><div class="field"><label>Empresa activa</label><select id="companySelect" onchange="onCompanyChange()"></select></div><div class="actions"><button class="btn btn-primary" onclick="openCompanyModal()">+ Agregar empresa</button><button class="btn btn-light" onclick="openEditCompanyModal()">Editar</button><button class="btn btn-danger-light" onclick="deleteCompany()">Eliminar</button><button class="btn btn-light" onclick="loadCompanies()">Actualizar</button></div><div class="sub" id="companyHint" style="margin-top:10px">Agrega una empresa para iniciar.</div></div></div>
+      <div class="menu" id="configMenu"><button class="menu-btn" onclick="toggleMenu('configMenu')">Configuración ▾</button><div class="dropdown"><button class="btn btn-light btn-full" onclick="openDian();closeMenus()">Importar facturas DIAN</button><button class="btn btn-light btn-full btn-siigo" onclick="openSiigoModal();closeMenus()" style="margin-top:8px"><img src="siigo-nube-logo.png" alt="Siigo">Siigo Nube</button><button class="btn btn-light btn-full" onclick="openSettings();closeMenus()" style="margin-top:8px">Config. contable</button><button class="btn btn-light btn-full" onclick="openRules();closeMenus()" style="margin-top:8px">Reglas contables</button><button class="btn btn-light btn-full" onclick="openChartModal();closeMenus()" style="margin-top:8px">Plan de cuentas</button><button class="btn btn-light btn-full" onclick="openImportHistory();closeMenus()" style="margin-top:8px">Historial de cargas</button><button class="btn btn-light btn-full" onclick="toggleLog()" style="margin-top:8px">Ver log</button></div></div>
+    </div>
+    <div class="topbar-user"><span class="user" id="userLabel">admin@contapilot.com</span><button class="btn btn-red" onclick="logout()">Salir</button></div>
+  </nav>
+
+  <section class="hero product-hero">
+    <div class="hero-copy">
+      <div class="eyebrow">DIAN → Causación → Siigo Nube</div>
+      <h1>Centro de facturas</h1>
+      <p>Procesa meses completos de facturas electrónicas, selecciona documentos, causa por lotes y exporta el resultado contable.</p>
+      <div class="actions hero-actions"><input id="fileInput" type="file" multiple accept=".xml,.zip,.html,.htm,.txt" style="display:none" onchange="upload()"><button class="btn btn-light hero-main" onclick="openDian()">Importar facturas DIAN</button><button class="btn btn-blue btn-siigo" onclick="openExport()"><img src="siigo-nube-logo.png" alt="Siigo Nube">Exportar</button></div>
+    </div>
+    <div class="hero-visual" aria-hidden="true">
+      <div class="mini-dashboard">
+        <div class="mini-top"><span></span><span></span><span></span></div>
+        <div class="mini-title">Flujo del mes</div>
+        <div class="flow-row"><div class="flow-dot active">1</div><div><strong>Importar XML/ZIP</strong><small>Lectura por lotes</small></div></div>
+        <div class="flow-row"><div class="flow-dot active">2</div><div><strong>Causar seleccionadas</strong><small>Motor contable automático</small></div></div>
+        <div class="flow-row"><div class="flow-dot">3</div><div><strong>Exportar</strong><small>CSV / Siigo Nube</small></div></div>
+        <div class="siigo-strip"><img src="siigo-nube-logo.png" alt="Siigo"><span>Salida preparada para Siigo Nube</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="stats metrics-grid"><div class="stat"><span>Facturas</span><strong id="mTotal">0</strong></div><div class="stat"><span>Recibidas</span><strong id="mReceived">0</strong></div><div class="stat"><span>Causadas</span><strong id="mAccounted">0</strong></div><div class="stat"><span>Aprobadas</span><strong id="mApproved">0</strong></div><div class="stat"><span>Exportadas</span><strong id="mExported">0</strong></div></section>
+
+  <section class="card invoice-board"><div class="card-head board-head"><div><span class="section-label">Operación</span><h2>Bandeja de facturas</h2><p>Marca las facturas que quieres causar. Puedes seleccionar una, varias o todas.</p></div><button class="btn btn-light" onclick="loadInvoices()">Actualizar</button></div><div class="card-body"><div class="toolbar board-toolbar"><div class="search">⌕ <input id="search" oninput="renderInvoices()" placeholder="Buscar factura, proveedor, receptor o NIT"></div><select id="statusFilter" class="action-select" onchange="renderInvoices()"><option value="all">Todos los estados</option><option value="received">Recibidas</option><option value="accounted">Causadas</option><option value="approved">Aprobadas</option><option value="exported">Exportadas</option></select><span id="selectedCounter" class="selected-counter">0 seleccionadas</span><span id="progressBox" class="selected-counter" style="display:none;background:#eef6ff;color:#0f5f9f">Listo</span><div class="actions"><button id="causeSelectedBtn" class="btn btn-green" onclick="causeSelectedInvoices()">Causar Factura</button><button id="deleteSelectedBtn" class="btn btn-danger-light" onclick="deleteSelectedInvoices()">Eliminar</button><button id="uploadSiigoBtn" class="btn btn-blue btn-siigo" onclick="uploadSelectedToSiigo()"><img src="siigo-nube-logo.png" alt="Siigo">Subir a Siigo</button><button class="btn btn-green" onclick="approveAll()">Aprobar todas</button></div></div><div id="wideProgress" class="progress-wide">Listo</div><div class="table-wrap"><table><thead><tr><th class="check-cell"><label class="select-all-wrap"><input id="selectAllBox" class="mini-check" type="checkbox" onchange="toggleSelectAll(this.checked)"><span>Seleccionar todas</span></label></th><th>Factura</th><th>Fecha</th><th>Proveedor</th><th>Receptor</th><th>Total</th><th>Estado</th><th>Gestión</th></tr></thead><tbody id="rows"><tr><td colspan="8">Sin facturas</td></tr></tbody></table></div><div id="uploadErrors" style="display:none;margin-top:14px;background:#fff1f1;border:1px solid #fecaca;color:#991b1b;border-radius:18px;padding:14px;font-size:13px;font-weight:750"></div><div id="log" class="log-panel">Listo.</div></div></section>
+</div>
+
+<div id="companyModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div><h3 id="companyModalTitle">Agregar empresa</h3><p id="companyModalText">El NIT debe coincidir con el receptor de las facturas.</p></div><button class="close" onclick="closeModal('companyModal')">×</button></div><div class="field"><label>Empresa</label><input id="companyName" value=""></div><div class="field"><label>NIT receptor</label><input id="companyNit" value=""></div><button id="companySaveButton" class="btn btn-green btn-full" onclick="saveCompany()">Guardar empresa</button></div></div>
+<div id="dianModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Importar facturas DIAN</h3><p>Flujo simple: descarga en DIAN, sube a ContaPilot y causa todas.</p></div><button class="close" onclick="closeModal('dianModal')">×</button></div><div style="background:#f8fafc;border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:14px">
+  <strong>Pasos para el contador</strong>
+  <ol style="margin:10px 0 0;padding-left:18px;line-height:1.65;color:#344054;font-size:14px">
+    <li>Entra al portal de la DIAN.</li>
+    <li>Busca <strong>Documentos recibidos</strong> y filtra el mes o los meses que quieres causar.</li>
+    <li>Descarga el archivo que entrega la DIAN: puede ser <strong>ZIP</strong> o <strong>XML</strong>.</li>
+    <li>Regresa a ContaPilot y presiona <strong>Subir ZIP/XML</strong>.</li>
+    <li>Cuando ContaPilot liste las facturas, selecciona una, varias o todas y presiona <strong>Causar Factura</strong>.</li>
+    <li>Finalmente exporta el resultado para Siigo Nube o CSV.</li>
+  </ol>
+  <div style="margin-top:12px;padding:12px;border-radius:14px;background:#ecfdf5;color:#047857;font-weight:850;font-size:13px">ContaPilot revisa el ZIP, localiza los XML de factura, valida el NIT receptor y prepara la causación masiva.</div>
+  <div style="margin-top:10px;padding:12px;border-radius:14px;background:#fff7ed;color:#c2410c;font-weight:850;font-size:13px">Sincronización automática DIAN: próximamente. Por ahora usamos el flujo estable recomendado por el contador.</div>
+  <div class="actions" style="margin-top:14px">
+    <button class="btn btn-light" onclick="openDianPortal()">Abrir portal DIAN</button>
+    <button class="btn btn-green" onclick="closeModal('dianModal'); fileInput.click()">Subir ZIP/XML</button>
+    <button class="btn btn-light" onclick="closeModal('dianModal'); openImportHistory()">Ver historial de cargas</button>
+  </div>
+</div></div></div>
+<div id="siigoModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div class="export-title"><img src="siigo-nube-logo.png" alt="Siigo Nube"><div><h3>Conexión Siigo Nube</h3><p>Primero probamos la conexión segura con las credenciales API configuradas en Cloudflare.</p></div></div><button class="close" onclick="closeModal('siigoModal')">×</button></div><div style="background:#f8fbff;border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:14px;color:#344054;font-size:13px;line-height:1.5"><strong>Importante:</strong> las credenciales de Siigo no se guardan en GitHub. Deben configurarse en Cloudflare como variables/secretos: <strong>SIIGO_USERNAME</strong>, <strong>SIIGO_ACCESS_KEY</strong> y opcional <strong>SIIGO_PARTNER_ID</strong>.</div><div class="actions"><button class="btn btn-blue btn-full btn-siigo" onclick="testSiigoConnection()"><img src="siigo-nube-logo.png" alt="Siigo">Probar conexión Siigo</button><button class="btn btn-light btn-full" onclick="loadSiigoCatalogs()" style="margin-top:8px">Consultar catálogos básicos</button></div><div id="siigoResult" style="margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:16px;padding:12px;font-size:13px;white-space:pre-wrap;display:none"></div></div></div>
+<div id="settingsModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Configuración contable</h3><p>Cuentas base de la empresa activa.</p></div><button class="close" onclick="closeModal('settingsModal')">×</button></div><div class="grid2"><div class="field"><label>IVA</label><input id="setVatAccount" list="accountsDatalist"></div><div class="field"><label>Descripción IVA</label><input id="setVatDescription"></div><div class="field"><label>Proveedores</label><input id="setPayableAccount" list="accountsDatalist"></div><div class="field"><label>Descripción proveedores</label><input id="setPayableDescription"></div><div class="field"><label>Retención</label><input id="setWithholdingAccount" list="accountsDatalist"></div><div class="field"><label>Descripción retención</label><input id="setWithholdingDescription"></div><div class="field"><label>Centro costo default</label><input id="setDefaultCostCenter"></div><div class="field"><label>Cuenta gasto default</label><input id="setDefaultExpenseAccount" list="accountsDatalist"></div></div><div class="field"><label>Descripción gasto default</label><input id="setDefaultExpenseDescription"></div><div class="actions" style="justify-content:flex-end"><button class="btn btn-green" onclick="saveSettings()">Guardar</button></div></div></div>
+<datalist id="accountsDatalist"></datalist>
+<div id="rulesModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Reglas contables</h3><p>Reglas por empresa: proveedor/descripcion → cuenta.</p></div><button class="close" onclick="closeModal('rulesModal')">×</button></div><div class="grid2"><div class="field"><label>Tipo</label><select id="ruleType"><option value="supplier">Proveedor contiene</option><option value="description">Descripción contiene</option><option value="default">Default</option></select></div><div class="field"><label>Texto</label><input id="ruleValue" placeholder="CLASSIC JEANS"></div><div class="field"><label>Cuenta</label><input id="ruleAccount" placeholder="519525" list="accountsDatalist"></div><div class="field"><label>Descripción</label><input id="ruleDescription" placeholder="Vestuario"></div><div class="field"><label>Centro costo</label><input id="ruleCostCenter" placeholder="Administración"></div><div class="field"><label>Prioridad</label><input id="rulePriority" type="number" value="50"></div></div><div class="actions" style="justify-content:flex-end"><button class="btn btn-green" onclick="createRule()">Crear regla</button></div><hr style="border:0;border-top:1px solid var(--line);margin:16px 0"><div class="table-wrap"><table style="min-width:700px"><thead><tr><th>Tipo</th><th>Texto</th><th>Cuenta</th><th>Descripción</th><th>Prioridad</th></tr></thead><tbody id="rulesRows"></tbody></table></div></div></div>
+<div id="chartModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Plan de cuentas</h3><p>Importa el CSV del plan de cuentas de Siigo Nube (columnas: codigo,nombre,categoria,clase,activo,nivel) para validar las cuentas que se usan en reglas y configuración contable.</p></div><button class="close" onclick="closeModal('chartModal')">×</button></div><div style="background:#f8fafc;border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:14px"><input id="chartFileInput" type="file" accept=".csv" style="display:none" onchange="uploadChartCsv()"><div class="actions"><button class="btn btn-green" onclick="chartFileInput.click()">Subir CSV plan de cuentas</button></div><div id="chartImportResult" style="margin-top:10px;font-size:13px;color:#344054;font-weight:750"></div></div><div class="field"><label>Buscar cuenta</label><input id="chartSearch" oninput="renderChartAccountsList()" placeholder="Código o nombre"></div><div class="table-wrap"><table style="min-width:600px"><thead><tr><th>Código</th><th>Nombre</th><th>Clase</th></tr></thead><tbody id="chartRows"><tr><td colspan="3">Sin cuentas importadas</td></tr></tbody></table></div></div></div>
+<div id="facturaModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3 id="facturaTitle">Detalle de factura</h3><p id="facturaSubtitle">Información extraída del XML.</p></div><button class="close" onclick="closeModal('facturaModal')">×</button></div><div class="invoice-hero"><h2 id="facturaHeroNumber">Factura</h2><p id="facturaHeroInfo">Proveedor → Receptor</p></div><div id="facturaDetail" class="detail-grid"></div><h3 style="margin:12px 0 8px">Ítems de la factura</h3><div class="table-wrap"><table style="min-width:680px"><thead><tr><th>Descripción</th><th>Cantidad</th><th>Valor línea</th></tr></thead><tbody id="facturaItems"><tr><td colspan="3">Sin ítems</td></tr></tbody></table></div><div class="support-box"><div><strong>Soporte XML original</strong><p>El XML se guarda como respaldo técnico. Puedes descargarlo si necesitas auditar la factura.</p></div><button class="btn btn-light" onclick="downloadCurrentXml()">Descargar XML</button></div><pre id="facturaXml" class="xml-box"></pre></div></div>
+<div id="causacionModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3 id="causacionTitle">Causación</h3><p id="causacionSubtitle">Asiento contable generado para la factura.</p></div><button class="close" onclick="closeModal('causacionModal')">×</button></div><div class="table-wrap"><table style="min-width:760px"><thead><tr><th>Cuenta</th><th>Descripción</th><th>Débito</th><th>Crédito</th><th>Centro costo</th></tr></thead><tbody id="causacionRows"><tr><td colspan="5">Sin causación</td></tr></tbody></table></div><div class="actions" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-light" onclick="closeModal('causacionModal')">Cerrar</button></div></div></div>
+<div id="historyModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Historial de importaciones</h3><p>Registro de cargas XML/ZIP realizadas para la empresa activa.</p></div><button class="close" onclick="closeModal('historyModal')">×</button></div><div class="table-wrap"><table style="min-width:780px"><thead><tr><th>Fecha</th><th>Archivos</th><th>Estado</th><th>Importadas</th><th>Errores</th><th>Detalle</th></tr></thead><tbody id="historyRows"><tr><td colspan="6">Sin historial</td></tr></tbody></table></div></div></div>
+<div id="exportModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div class="export-title"><img src="siigo-nube-logo.png" alt="Siigo Nube"><div><h3>Exportar a Siigo Nube</h3><p>Descarga las causaciones listas para revisión o carga en Siigo.</p></div></div><button class="close" onclick="closeModal('exportModal')">×</button></div><div class="field"><label>Formato</label><select id="exportFormat"><option value="siigo">Siigo Nube</option><option value="general">General contable</option><option value="invoices">Resumen facturas</option></select></div><button class="btn btn-blue btn-full btn-siigo" onclick="exportCsv()"><img src="siigo-nube-logo.png" alt="Siigo Nube">Descargar CSV para Siigo</button></div></div><div id="toast" class="toast"></div>
+<script>
+let token=localStorage.getItem('cp_token')||'';let invoices=[];let companies=[];let selectedInvoiceIds=new Set();let editingCompanyId='';let dianRemoteSessionId=localStorage.getItem('cp_dian_session_id')||'';let dianRemoteLiveUrl=localStorage.getItem('cp_dian_live_url')||'';if(!token)location.href='app.html';const user=JSON.parse(localStorage.getItem('cp_user')||'{}');userLabel.textContent=user.email||'admin@contapilot.com';function base(){return localStorage.getItem('cp_api_base')||window.CONTAPILOT_API_BASE||''}function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),4500)}function log(m,o){const el=document.getElementById('log');el.textContent=m+(o?'\n'+JSON.stringify(o,null,2):'')}function sleep(ms){return new Promise(r=>setTimeout(r,ms))}function setProgress(m){const p=document.getElementById('progressBox');if(p){p.style.display=m?'inline-flex':'none';p.textContent=m||''}const w=document.getElementById('wideProgress');if(w){w.style.display=m?'block':'none';w.textContent=m||''}}function setBusy(v){document.body.style.cursor=v?'progress':'';['causeSelectedBtn','deleteSelectedBtn','uploadSiigoBtn'].forEach(id=>{const b=document.getElementById(id);if(b)b.disabled=!!v});document.querySelectorAll('.action-select,.mini-check,#statusFilter,#search').forEach(el=>{el.disabled=!!v})}function chunks(arr,size){const out=[];for(let i=0;i<arr.length;i+=size)out.push(arr.slice(i,i+size));return out}
+function showUploadErrors(errors){const box=document.getElementById('uploadErrors'); if(!box)return; if(!errors||!errors.length){box.style.display='none';box.innerHTML='';return} box.style.display='block'; box.innerHTML='<strong>Observaciones:</strong><ul style="margin:8px 0 0;padding-left:18px">'+errors.map(e=>'<li><strong>'+String(e.file||'archivo')+':</strong> '+String(e.error||e)+'</li>').join('')+'</ul>';}function toggleLog(){document.getElementById('log').classList.toggle('show');closeMenus()}async function api(path,opts={}){const headers=opts.headers||{};headers.Authorization='Bearer '+token;const r=await fetch(base()+path,{...opts,headers});const ct=r.headers.get('content-type')||'';const data=ct.includes('json')?await r.json():await r.text();if(!r.ok){const d=typeof data==='string'?data:(data.detail||data.error||data);throw new Error(typeof d==='string'?d:JSON.stringify(d))}return data}function cid(){return companySelect.value}function openModal(id){closeMenus();document.getElementById(id).classList.add('show')}function closeModal(id){document.getElementById(id).classList.remove('show')}function closeMenus(){document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'))}function toggleMenu(id){document.querySelectorAll('.menu').forEach(m=>{if(m.id!==id)m.classList.remove('open')});document.getElementById(id).classList.toggle('open')}document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.modal-bg.show').forEach(m=>m.classList.remove('show'));closeMenus()}});document.addEventListener('click',e=>{if(!e.target.closest('.menu'))closeMenus()});document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('mousedown',e=>{if(e.target===bg)bg.classList.remove('show')}));function money(v){return new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP'}).format(v||0)}function statusClass(s){return s==='exported'?'approved':s==='approved'?'approved':s==='accounted'?'accounted':'received'}
+function u16c(bytes,pos){return bytes[pos]|(bytes[pos+1]<<8)}
+function u32c(bytes,pos){return (bytes[pos]|(bytes[pos+1]<<8)|(bytes[pos+2]<<16)|(bytes[pos+3]<<24))>>>0}
+async function inflateRawClient(bytes){
+  if(typeof DecompressionStream==='undefined')throw new Error('Tu navegador no soporta descompresión ZIP automática. Usa Chrome/Edge actualizado o sube XML sueltos.');
+  const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+async function extractZipEntriesClient(arrayBuffer,prefix='',depth=0,stats){
+  stats=stats||{files:0,xml_like:0,nested_zip:0,pdf:0,skipped:0,unsupported:0};
+  const bytes=new Uint8Array(arrayBuffer);let eocd=-1;
+  for(let i=bytes.length-22;i>=0&&i>bytes.length-66000;i--){if(u32c(bytes,i)===0x06054b50){eocd=i;break}}
+  if(eocd<0)throw new Error('No pude leer el ZIP. Puede estar dañado o protegido.');
+  const total=u16c(bytes,eocd+10);let cdOffset=u32c(bytes,eocd+16);const decoder=new TextDecoder('utf-8');const entries=[];
+  for(let n=0;n<total;n++){
+    if(u32c(bytes,cdOffset)!==0x02014b50)break;
+    const method=u16c(bytes,cdOffset+10),compSize=u32c(bytes,cdOffset+20),nameLen=u16c(bytes,cdOffset+28),extraLen=u16c(bytes,cdOffset+30),commentLen=u16c(bytes,cdOffset+32),localOffset=u32c(bytes,cdOffset+42);
+    const name=decoder.decode(bytes.slice(cdOffset+46,cdOffset+46+nameLen));cdOffset+=46+nameLen+extraLen+commentLen;
+    if(name.endsWith('/'))continue;stats.files++;const fullName=prefix?`${prefix}/${name}`:name;const lower=name.toLowerCase();
+    if(u32c(bytes,localOffset)!==0x04034b50){stats.skipped++;continue}
+    const ln=u16c(bytes,localOffset+26),le=u16c(bytes,localOffset+28);const dataStart=localOffset+30+ln+le;const compressed=bytes.slice(dataStart,dataStart+compSize);
+    let contentBytes;if(method===0)contentBytes=compressed;else if(method===8)contentBytes=await inflateRawClient(compressed);else{stats.unsupported++;continue}
+    if(lower.endsWith('.zip')){stats.nested_zip++;if(depth<4){const buf=contentBytes.buffer.slice(contentBytes.byteOffset,contentBytes.byteOffset+contentBytes.byteLength);const nested=await extractZipEntriesClient(buf,fullName,depth+1,stats);entries.push(...nested)}continue}
+    if(lower.endsWith('.pdf')){stats.pdf++;continue}
+    if(!lower.endsWith('.xml')&&!lower.endsWith('.html')&&!lower.endsWith('.htm')&&!lower.endsWith('.txt')){stats.skipped++;continue}
+    stats.xml_like++;entries.push({name:fullName,text:decoder.decode(contentBytes)});
+    if(n%10===0)await sleep(0);
+  }
+  entries.stats=stats;return entries;
+}
+function zipClientStatsMessage(stats){stats=stats||{};return `${stats.files||0} archivo(s) revisados, ${stats.xml_like||0} XML/HTML/TXT, ${stats.nested_zip||0} ZIP interno(s), ${stats.pdf||0} PDF ignorado(s)`}
+async function uploadTextAsFile(name,text){
+  const fd=new FormData();
+  fd.append('file',new File([text],name,{type:'text/xml;charset=utf-8'}));
+  return api(`/api/companies/${cid()}/upload`,{method:'POST',body:fd});
+}
+async function uploadRawFile(file){const fd=new FormData();fd.append('file',file);return api(`/api/companies/${cid()}/upload`,{method:'POST',body:fd})}
+function logout(){localStorage.removeItem('cp_token');location.href='app.html'}
+function openCompanyModal(){editingCompanyId='';companyModalTitle.textContent='Agregar empresa';companyModalText.textContent='El NIT debe coincidir con el receptor de las facturas.';companyName.value='';companyNit.value='';companySaveButton.textContent='Crear empresa';openModal('companyModal')}
+function openEditCompanyModal(){if(!cid())return toast('Selecciona empresa');const c=companies.find(x=>x.id===cid());if(!c)return toast('No encontré la empresa activa');editingCompanyId=c.id;companyModalTitle.textContent='Editar empresa';companyModalText.textContent='Actualiza el nombre o NIT receptor de la empresa.';companyName.value=c.name||'';companyNit.value=c.nit||'';companySaveButton.textContent='Guardar cambios';openModal('companyModal')}
+async function saveCompany(){try{const body={name:companyName.value,nit:companyNit.value};let c;if(editingCompanyId){c=await api(`/api/companies/${editingCompanyId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});toast('Empresa actualizada');}else{c=await api('/api/companies',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});toast('Empresa creada');}log('Empresa guardada',c);closeModal('companyModal');await loadCompanies(c.id)}catch(e){log('Error empresa',{error:e.message});toast(e.message)}}
+async function deleteCompany(){try{if(!cid())return toast('Selecciona empresa');const c=companies.find(x=>x.id===cid());if(!c)return toast('No encontré la empresa activa');const ok=confirm(`¿Eliminar la empresa "${c.name}"?
+
+Esto también eliminará sus facturas, causaciones, reglas e historial de cargas.`);if(!ok)return;await api(`/api/companies/${c.id}`,{method:'DELETE'});toast('Empresa eliminada');selectedInvoiceIds.clear();await loadCompanies()}catch(e){log('Error eliminar empresa',{error:e.message});toast(e.message)}}
+async function loadCompanies(preferId=''){try{const data=await api('/api/companies');companies=data||[];companySelect.innerHTML=companies.map(c=>`<option value="${c.id}">${c.name} · ${c.nit}</option>`).join('');if(preferId&&companies.some(c=>c.id===preferId))companySelect.value=preferId;log('Empresas cargadas',companies);await onCompanyChange()}catch(e){log('Error empresas',{error:e.message})}}
+async function onCompanyChange(){selectedInvoiceIds.clear();const opt=companySelect.options[companySelect.selectedIndex];companyHint.textContent=opt?('Empresa activa: '+opt.textContent):'Agrega una empresa para iniciar';await loadInvoices();await loadChartAccounts()}
+async function upload(){
+  let totalImported=0,totalErrors=0,allErrors=[];
+  try{
+    if(!cid())return toast('Selecciona empresa');
+    const files=[...fileInput.files];
+    if(!files.length)return;
+    setBusy(true);showUploadErrors([]);setProgress(`Preparando ${files.length} archivo(s)...`);
+    for(let fIndex=0; fIndex<files.length; fIndex++){
+      const f=files[fIndex];
+      const lower=(f.name||'').toLowerCase();
+      if(lower.endsWith('.zip')){
+        setProgress(`Leyendo ZIP ${fIndex+1}/${files.length}: ${f.name}`);
+        let entries=[];
+        try{ entries=await extractZipEntriesClient(await f.arrayBuffer()); }
+        catch(e){ allErrors.push({file:f.name,error:e.message}); showUploadErrors(allErrors); continue; }
+        if(!entries.length){
+          allErrors.push({file:f.name,error:`No encontré XML procesables. ${zipClientStatsMessage(entries.stats)}. Si el ZIP trae solo PDF, descarga el XML desde DIAN.`});
+          showUploadErrors(allErrors); continue;
+        }
+        log('ZIP leído',{archivo:f.name, resumen:zipClientStatsMessage(entries.stats), encontrados:entries.length});
+        for(let i=0;i<entries.length;i++){
+          const entry=entries[i];
+          setProgress(`Importando ${i+1}/${entries.length} de ${f.name}`);
+          try{
+            const res=await uploadTextAsFile(entry.name,entry.text);
+            totalImported += (res.imported||[]).length;
+            const errs=res.errors||[]; totalErrors += errs.length; allErrors.push(...errs);
+          }catch(e){totalErrors++;allErrors.push({file:entry.name,error:e.message});}
+          if(i%3===0){showUploadErrors(allErrors);await loadInvoices();await sleep(30)}
+        }
+      }else{
+        setProgress(`Importando archivo ${fIndex+1}/${files.length}: ${f.name}`);
+        try{
+          const res=await uploadRawFile(f);
+          totalImported += (res.imported||[]).length;
+          const errs=res.errors||[]; totalErrors += errs.length; allErrors.push(...errs);
+        }catch(e){totalErrors++;allErrors.push({file:f.name,error:e.message});}
+      }
+      showUploadErrors(allErrors);await loadInvoices();await sleep(50);
+    }
+    fileInput.value='';
+    setProgress('Actualizando bandeja final...');
+    await loadInvoices();
+    toast(`Carga terminada: ${totalImported} factura(s) importada(s), ${totalErrors} observación(es).`);
+  }catch(e){
+    allErrors.push({file:'carga',error:e.message});showUploadErrors(allErrors);log('Error carga',{error:e.message});toast('La carga tuvo observaciones. Revisa el panel rojo.');
+  }finally{
+    setBusy(false);setProgress('');
+  }
+}
+async function loadInvoices(){try{if(!cid())return;invoices=await api(`/api/companies/${cid()}/invoices`);selectedInvoiceIds=new Set([...selectedInvoiceIds].filter(id=>invoices.some(i=>i.id===id)));renderInvoices()}catch(e){log('Error facturas',{error:e.message})}}
+function filteredInvoices(){const q=(search.value||'').toLowerCase();const sf=(document.getElementById('statusFilter')?.value)||'all';return invoices.filter(i=>(sf==='all'||i.status===sf)&&(!q||`${i.invoice_number} ${i.supplier_name} ${i.customer_name} ${i.supplier_nit} ${i.customer_nit}`.toLowerCase().includes(q)))}
+function syncSelectedInfo(data=filteredInvoices()){const counter=document.getElementById('selectedCounter');if(counter)counter.textContent=`${selectedInvoiceIds.size} seleccionada${selectedInvoiceIds.size===1?'':'s'}`;const box=document.getElementById('selectAllBox');if(box){box.checked=data.length>0&&data.every(i=>selectedInvoiceIds.has(i.id));box.indeterminate=data.some(i=>selectedInvoiceIds.has(i.id))&&!box.checked;}}
+function onInvoiceCheck(id,checked){if(checked)selectedInvoiceIds.add(id);else selectedInvoiceIds.delete(id);syncSelectedInfo()}
+function toggleSelectAll(checked){const data=filteredInvoices();for(const i of data){if(checked)selectedInvoiceIds.add(i.id);else selectedInvoiceIds.delete(i.id)}renderInvoices()}
+function renderInvoices(){const data=filteredInvoices();mTotal.textContent=invoices.length;mReceived.textContent=invoices.filter(i=>i.status==='received').length;mAccounted.textContent=invoices.filter(i=>i.status==='accounted').length;mApproved.textContent=invoices.filter(i=>i.status==='approved').length;if(document.getElementById('mExported'))mExported.textContent=invoices.filter(i=>i.status==='exported').length;rows.innerHTML=data.map(i=>`<tr><td class="check-cell"><input class="mini-check" type="checkbox" ${selectedInvoiceIds.has(i.id)?'checked':''} onchange="onInvoiceCheck('${i.id}',this.checked)"></td><td><strong>${i.invoice_number}</strong><span class="sub mono">${(i.cufe||'').slice(0,22)}</span></td><td>${i.issue_date||''}</td><td><span class="supplier">${i.supplier_name||''}</span><span class="sub">NIT ${i.supplier_nit||''}</span></td><td><span class="supplier">${i.customer_name||''}</span><span class="sub">NIT ${i.customer_nit||''}</span></td><td><strong>${money(i.payable_amount)}</strong></td><td><span class="pill ${statusClass(i.status)}">${i.status}</span></td><td><select class="action-select" onchange="handleInvoiceAction(this,'${i.id}')"><option value="">Acción</option><option value="invoice">Ver factura</option><option value="cause">Causar</option><option value="entry">Ver causación</option><option value="approve">Aprobar</option></select></td></tr>`).join('')||'<tr><td colspan="8">Sin facturas</td></tr>';syncSelectedInfo(data)}
+function handleInvoiceAction(select,id){const value=select.value;select.value='';if(value==='invoice')return viewInvoice(id);if(value==='cause')return cause(id);if(value==='entry')return viewEntry(id);if(value==='approve')return approve(id)}async function cause(id){try{log('Causación',await api(`/api/invoices/${id}/generate-entry`,{method:'POST'}));await loadInvoices()}catch(e){log('Error causar',{error:e.message})}}async function approve(id){try{log('Aprobada',await api(`/api/invoices/${id}/approve`,{method:'POST'}));await loadInvoices()}catch(e){log('Error aprobar',{error:e.message})}}let currentXmlDownload={name:'factura.xml',xml:''};
+async function viewInvoice(id){
+  try{
+    const data=await api(`/api/invoices/${id}`);
+    const inv=data.invoice||{};
+    facturaTitle.textContent='Detalle de factura';
+    facturaSubtitle.textContent=`${inv.supplier_name||''} → ${inv.customer_name||''}`;
+    facturaHeroNumber.textContent=inv.invoice_number||'Factura';
+    facturaHeroInfo.textContent=`${inv.supplier_name||''} · NIT ${inv.supplier_nit||''}  →  ${inv.customer_name||''} · NIT ${inv.customer_nit||''}`;
+    const boxes=[['Fecha',inv.issue_date],['Tipo',inv.document_type],['Estado',inv.status],['Proveedor',`${inv.supplier_name||''} · NIT ${inv.supplier_nit||''}`,'span2'],['Receptor',`${inv.customer_name||''} · NIT ${inv.customer_nit||''}`],['Subtotal',money(inv.subtotal)],['IVA',money(inv.tax_amount)],['Total',money(inv.payable_amount),'money'],['CUFE',inv.cufe,'span2'],['Moneda',inv.currency||'COP']];
+    facturaDetail.innerHTML=boxes.map(b=>`<div class="detail-box ${b[2]==='span2'?'span2':''}"><span>${b[0]}</span><strong class="${b[2]==='money'?'money-highlight':''}">${b[1]||''}</strong></div>`).join('');
+    facturaItems.innerHTML=(data.items||[]).map(it=>`<tr><td>${it.description||''}</td><td>${it.quantity||0}</td><td>${money(it.line_amount||0)}</td></tr>`).join('')||'<tr><td colspan="3">Sin ítems</td></tr>';
+    facturaXml.textContent=inv.raw_xml||'';
+    currentXmlDownload={name:(inv.invoice_number||'factura')+'.xml',xml:inv.raw_xml||''};
+    openModal('facturaModal');
+  }catch(e){log('Error ver factura',{error:e.message});toast('No pude cargar el detalle de factura.');}
+}
+function downloadCurrentXml(){const blob=new Blob([currentXmlDownload.xml||''],{type:'text/xml;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=currentXmlDownload.name||'factura.xml';a.click();URL.revokeObjectURL(a.href);}
+async function viewEntry(id){
+  try{
+    const data=await api(`/api/invoices/${id}`);
+    const inv=data.invoice||{};
+    causacionTitle.textContent='Causación: '+(inv.invoice_number||'');
+    causacionSubtitle.textContent=`${inv.supplier_name||''} · Total ${money(inv.payable_amount||0)} · Estado ${inv.status||''}`;
+    if(!data.entry || !data.lines || !data.lines.length){
+      causacionRows.innerHTML='<tr><td colspan="5">Esta factura todavía no tiene causación. Presiona “Causar” primero.</td></tr>';
+    }else{
+      causacionRows.innerHTML=data.lines.map(l=>`<tr><td><strong>${l.account}</strong></td><td>${l.description}</td><td>${money(l.debit)}</td><td>${money(l.credit)}</td><td>${l.cost_center||''}</td></tr>`).join('');
+    }
+    openModal('causacionModal');
+  }catch(e){log('Error ver causación',{error:e.message});toast('No pude cargar la causación. Revisa el log.');}
+}
+async function deleteSelectedInvoices(){
+  try{
+    if(!cid())return toast('Selecciona empresa');
+    const ids=[...selectedInvoiceIds];
+    if(!ids.length)return toast('Selecciona primero una o varias facturas para eliminar.');
+    const ok=confirm(`¿Eliminar ${ids.length} factura(s) seleccionada(s)?\n\nEsto también borrará sus ítems y causaciones contables.`);
+    if(!ok)return;
+    setBusy(true);showUploadErrors([]);
+    const groups=chunks(ids,5);let deleted=0,allErrors=[];
+    for(let g=0;g<groups.length;g++){
+      setProgress(`Eliminando lote ${g+1}/${groups.length} · ${deleted}/${ids.length} factura(s)`);
+      const res=await api(`/api/companies/${cid()}/delete-invoices`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({invoice_ids:groups[g]})});
+      deleted += Number(res.count||0);allErrors.push(...(res.errors||[]));
+      log(`Lote eliminado ${g+1}/${groups.length}`,res);
+      await loadInvoices();await sleep(80);
+    }
+    selectedInvoiceIds.clear();await loadInvoices();
+    if(allErrors.length){showUploadErrors(allErrors.map(e=>({file:e.id||'factura',error:e.error||e})));toast(`Se eliminaron ${deleted} factura(s). ${allErrors.length} tuvieron error.`);}
+    else {showUploadErrors([]);toast(`Se eliminaron ${deleted} factura(s).`);}
+  }catch(e){
+    log('Error eliminando facturas',{error:e.message});toast(e.message||'Hubo un error al eliminar facturas.');
+  }finally{
+    setBusy(false);setProgress('');
+  }
+}
+async function causeSelectedInvoices(){
+  try{
+    if(!cid())return toast('Selecciona empresa');
+    const ids=[...selectedInvoiceIds];
+    if(!ids.length)return toast('Selecciona primero una o varias facturas.');
+    setBusy(true);showUploadErrors([]);
+    const groups=chunks(ids,3);
+    let done=0, caused=0, allErrors=[];
+    log('Iniciando causación por lotes...', {seleccionadas:ids.length, lotes:groups.length});
+    for(let g=0; g<groups.length; g++){
+      setProgress(`Causando lote ${g+1}/${groups.length} · ${done}/${ids.length} factura(s)`);
+      const res=await api(`/api/companies/${cid()}/cause-selected`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({invoice_ids:groups[g]})});
+      caused += Number(res.count||0);
+      allErrors.push(...(res.errors||[]));
+      done += groups[g].length;
+      log(`Lote ${g+1}/${groups.length} causado`,res);
+      await loadInvoices();
+      await sleep(80);
+    }
+    selectedInvoiceIds.clear();
+    await loadInvoices();
+    if(allErrors.length){showUploadErrors(allErrors.map(e=>({file:e.id||'factura',error:e.error||e})));toast(`Se causaron ${caused} factura(s). ${allErrors.length} tuvieron error.`);}
+    else {showUploadErrors([]);toast(`Se causaron ${caused} factura(s) con éxito.`);}
+  }catch(e){
+    log('Error al causar seleccionadas',{error:e.message});toast(e.message||'Hubo un error al causar las facturas.');
+  }finally{
+    setBusy(false);setProgress('');
+  }
+}
+async function causeAll(){return causeSelectedInvoices()}
+async function approveAll(){for(const i of invoices){if(i.status==='received')await cause(i.id);await approve(i.id)}toast('Aprobación masiva terminada')}
+function openDianPortal(){window.open('https://catalogo-vpfe.dian.gov.co/User/CompanyLogin','_blank','noopener')}
+function showDianResult(obj){dianResult.style.display='block';dianResult.textContent=typeof obj==='string'?obj:JSON.stringify(obj,null,2)}
+function openDian(){if(!cid())return toast('Selecciona empresa');openModal('dianModal')}
+async function saveDianConnection(){try{if(!cid())return toast('Selecciona empresa');if(!dianTokenUrl.value.startsWith('http'))return toast('Pega la URL completa del token DIAN');const body={person_type:dianPersonType.value,representative_id_type:dianRepType.value,representative_id:dianRepId.value,company_nit:dianCompanyNit.value,token_url:dianTokenUrl.value,start_date:dianStartDate.value};const res=await api(`/api/companies/${cid()}/dian-connection`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});showDianResult(res);toast('Conexión DIAN guardada')}catch(e){showDianResult({error:e.message});log('Error guardar DIAN',{error:e.message})}}
+async function testDianConnection(){try{const res=await api(`/api/companies/${cid()}/dian-test`,{method:'POST'});showDianResult(res)}catch(e){showDianResult({error:e.message});log('Error probar DIAN',{error:e.message})}}
+async function syncDian(){try{const res=await api(`/api/companies/${cid()}/dian-sync`,{method:'POST'});showDianResult(res);await loadDianLogs();toast('Solicitud DIAN procesada. Revisa resultado.')}catch(e){showDianResult({error:e.message});log('Error sync DIAN',{error:e.message})}}
+async function loadDianLogs(){try{const rows=await api(`/api/companies/${cid()}/dian-logs`);dianLogs.innerHTML=rows.map(r=>`<tr><td>${r.created_at}</td><td>${r.status}</td><td>${r.imported_count||0}</td><td>${r.error_count||0}</td><td>${r.message||''}</td></tr>`).join('')||'<tr><td colspan="5">Sin sincronizaciones</td></tr>'}catch(e){dianLogs.innerHTML='<tr><td colspan="5">Sin sincronizaciones</td></tr>'}}
+async function uploadSelectedToSiigo(){
+  try{
+    if(!cid())return toast('Selecciona empresa');
+    const ids=[...selectedInvoiceIds];
+    if(!ids.length)return toast('Selecciona primero una o varias facturas para subir a Siigo.');
+    const ok=confirm(`¿Subir ${ids.length} factura(s) seleccionada(s) a Siigo Nube?\n\nContaPilot intentará crear factura de compra/gasto en Siigo.`);
+    if(!ok)return;
+    setBusy(true);showUploadErrors([]);
+    const groups=chunks(ids,1);let uploaded=0,allErrors=[];
+    for(let g=0;g<groups.length;g++){
+      setProgress(`Subiendo a Siigo ${g+1}/${groups.length}`);
+      const res=await api(`/api/companies/${cid()}/siigo-upload-selected`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({invoice_ids:groups[g]})});
+      uploaded += Number(res.count||0);allErrors.push(...(res.errors||[]));
+      log(`Resultado Siigo ${g+1}/${groups.length}`,res);
+      await loadInvoices();await sleep(120);
+    }
+    selectedInvoiceIds.clear();await loadInvoices();
+    if(allErrors.length){showUploadErrors(allErrors.map(e=>({file:e.id||'factura',error:e.error||e})));toast(`Subidas a Siigo: ${uploaded}. Errores: ${allErrors.length}`);}
+    else {showUploadErrors([]);toast(`Se subieron ${uploaded} factura(s) a Siigo.`);}
+  }catch(e){log('Error subiendo a Siigo',{error:e.message});toast(e.message||'No pude subir a Siigo');}
+  finally{setBusy(false);setProgress('');}
+}
+function openSiigoModal(){openModal('siigoModal')}
+function showSiigoResult(obj){const el=document.getElementById('siigoResult');el.style.display='block';el.textContent=typeof obj==='string'?obj:JSON.stringify(obj,null,2)}
+async function testSiigoConnection(){try{showSiigoResult('Probando conexión con Siigo...');const res=await api('/api/siigo/test',{method:'POST'});showSiigoResult(res);toast('Conexión Siigo correcta')}catch(e){showSiigoResult({ok:false,error:e.message});toast('No se pudo conectar con Siigo')}}
+async function loadSiigoCatalogs(){try{showSiigoResult('Consultando catálogos básicos...');const res=await api('/api/siigo/catalogs');showSiigoResult(res);toast('Consulta Siigo terminada')}catch(e){showSiigoResult({ok:false,error:e.message});toast('No pude consultar catálogos Siigo')}}
+async function openSettings(){try{if(!cid())return toast('Selecciona empresa');const s=await api(`/api/companies/${cid()}/settings`);setVatAccount.value=s.vat_account;setVatDescription.value=s.vat_description;setPayableAccount.value=s.payable_account;setPayableDescription.value=s.payable_description;setWithholdingAccount.value=s.withholding_account;setWithholdingDescription.value=s.withholding_description;setDefaultCostCenter.value=s.default_cost_center;setDefaultExpenseAccount.value=s.default_expense_account;setDefaultExpenseDescription.value=s.default_expense_description;await loadChartAccounts();openModal('settingsModal')}catch(e){log('Error settings',{error:e.message})}}async function saveSettings(){try{const body={vat_account:setVatAccount.value,vat_description:setVatDescription.value,payable_account:setPayableAccount.value,payable_description:setPayableDescription.value,withholding_account:setWithholdingAccount.value,withholding_description:setWithholdingDescription.value,default_cost_center:setDefaultCostCenter.value,default_expense_account:setDefaultExpenseAccount.value,default_expense_description:setDefaultExpenseDescription.value};log('Config guardada',await api(`/api/companies/${cid()}/settings`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}));toast('Configuración guardada');closeModal('settingsModal')}catch(e){log('Error guardar config',{error:e.message});toast(e.message||'No pude guardar la configuración')}}async function openRules(){try{if(!cid())return toast('Selecciona empresa');const data=await api(`/api/companies/${cid()}/rules`);rulesRows.innerHTML=data.map(r=>`<tr><td>${r.match_type}</td><td>${r.match_value}</td><td>${r.account}</td><td>${r.description}</td><td>${r.priority}</td></tr>`).join('')||'<tr><td colspan="5">Sin reglas</td></tr>';await loadChartAccounts();openModal('rulesModal')}catch(e){log('Error reglas',{error:e.message})}}async function createRule(){try{const body={match_type:ruleType.value,match_value:ruleValue.value||'*',account:ruleAccount.value,description:ruleDescription.value,cost_center:ruleCostCenter.value,priority:Number(rulePriority.value||50)};log('Regla creada',await api(`/api/companies/${cid()}/rules`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}));toast('Regla creada');await openRules()}catch(e){log('Error crear regla',{error:e.message});toast(e.message||'No pude crear la regla')}}
+let chartAccounts=[];
+function openChartModal(){if(!cid())return toast('Selecciona empresa');chartImportResult.textContent='';loadChartAccounts();openModal('chartModal')}
+async function uploadChartCsv(){
+  try{
+    const f=chartFileInput.files[0]; if(!f)return;
+    const fd=new FormData(); fd.append('file',f);
+    const res=await api(`/api/companies/${cid()}/chart-of-accounts`,{method:'POST',body:fd});
+    chartImportResult.textContent=`Importadas ${res.imported} cuenta(s). Total en catálogo: ${res.total_accounts} (${res.active_accounts} activas).`;
+    toast('Plan de cuentas importado');
+    chartFileInput.value='';
+    await loadChartAccounts();
+  }catch(e){chartImportResult.textContent='Error: '+e.message;toast(e.message||'No pude importar el plan de cuentas')}
+}
+async function loadChartAccounts(){
+  try{
+    if(!cid())return;
+    chartAccounts=await api(`/api/companies/${cid()}/chart-of-accounts?active=1`);
+    renderChartAccountsList();
+    accountsDatalist.innerHTML=chartAccounts.map(a=>`<option value="${a.code}">${a.name}</option>`).join('');
+  }catch(e){log('Error plan de cuentas',{error:e.message})}
+}
+function renderChartAccountsList(){
+  const q=(document.getElementById('chartSearch')?.value||'').toLowerCase();
+  const data=chartAccounts.filter(a=>!q||`${a.code} ${a.name}`.toLowerCase().includes(q));
+  chartRows.innerHTML=data.slice(0,300).map(a=>`<tr><td class="mono">${a.code}</td><td>${a.name}</td><td>${a.clase||''}</td></tr>`).join('')||'<tr><td colspan="3">Sin cuentas importadas</td></tr>';
+}async function openImportHistory(){try{if(!cid())return toast('Selecciona empresa');const rows=await api(`/api/companies/${cid()}/import-logs`);historyRows.innerHTML=rows.map(r=>{let msg={};try{msg=JSON.parse(r.message||'{}')}catch(e){}const detail=(msg.errors||[]).map(e=>`${e.file}: ${e.error}`).join('<br>') || (msg.imported||[]).map(i=>i.invoice_number).join(', ');return `<tr><td>${r.created_at||''}</td><td>${r.file_name||''}</td><td><span class="pill ${r.status==='success'?'approved':r.status==='partial'?'accounted':'received'}">${r.status}</span></td><td>${r.imported_count||0}</td><td>${r.error_count||0}</td><td>${detail||''}</td></tr>`}).join('')||'<tr><td colspan="6">Sin historial</td></tr>';openModal('historyModal')}catch(e){log('Error historial',{error:e.message});toast('No pude cargar historial.')}}function openExport(){if(!cid())return toast('Selecciona empresa');openModal('exportModal')}async function exportCsv(){try{const txt=await api(`/api/companies/${cid()}/export.csv?format=${exportFormat.value}`);const blob=new Blob(['\ufeff'+txt],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='contapilot_'+exportFormat.value+'.csv';a.click();URL.revokeObjectURL(a.href);closeModal('exportModal');if(confirm('¿Marcar facturas causadas/aprobadas como exportadas?')){const res=await api(`/api/companies/${cid()}/mark-exported`,{method:'POST'});toast((res.changed||0)+' factura(s) marcadas como exportadas.');await loadInvoices();}}catch(e){log('Error exportar',{error:e.message})}}loadCompanies();
+</script>
+</body>
+</html>

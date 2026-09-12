@@ -1,0 +1,23 @@
+name = "contapilot-mvp"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+account_id = "ef9a77199b72987abab0c8ef6aa4910c"
+
+[vars]
+SIIGO_USERNAME = "distritoga2020@gmail.com"
+SIIGO_PARTNER_ID = "Contapilot"
+SIIGO_PURCHASE_DOCUMENT_ID = "1675"
+SIIGO_PAYMENT_TYPE_ID = "385"
+SIIGO_IVA_19_TAX_ID = "892"
+SIIGO_DEFAULT_COUNTRY_CODE = "CO"
+SIIGO_DEFAULT_STATE_CODE = "08"
+SIIGO_DEFAULT_CITY_CODE = "08001"
+
+[assets]
+directory = "./assets"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "contapilot_db"
+database_id = "3ac40bbe-c3a0-4a3d-92d0-cacab0769946"

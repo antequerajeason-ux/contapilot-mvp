@@ -702,6 +702,22 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     await env.DB.prepare('INSERT INTO users VALUES (?,?,?,?,?)').bind(userId,name,email,await hashPassword(password),now()).run();
     return json({ok:true,user:{id:userId,name,email},password});
   }
+  if(p==='/admin/accounts' && request.method==='GET'){
+    if(!isAdminUser(env,user)) return json({detail:'No autorizado'},403);
+    const rows=(await env.DB.prepare('SELECT u.id, u.name, u.email, u.created_at, (SELECT COUNT(*) FROM companies c WHERE c.owner_user_id=u.id) as company_count FROM users u ORDER BY u.created_at DESC').all()).results||[];
+    return json(rows);
+  }
+  { const mm=p.match(/^\/admin\/accounts\/([^/]+)\/reset-password$/); if(mm && request.method==='POST'){
+    if(!isAdminUser(env,user)) return json({detail:'No autorizado'},403);
+    const d=await request.json().catch(()=>({}));
+    const password=String(d.password||'');
+    if(!password) return json({detail:'La contraseña es obligatoria'},400);
+    const target=await env.DB.prepare('SELECT id,email FROM users WHERE id=?').bind(mm[1]).first();
+    if(!target) return json({detail:'Cuenta no encontrada'},404);
+    await env.DB.prepare('UPDATE users SET password_hash=? WHERE id=?').bind(await hashPassword(password), mm[1]).run();
+    await env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(mm[1]).run();
+    return json({ok:true,email:target.email,password});
+  }}
   { const mm=p.match(/^\/companies\/([^/]+)\/siigo-test$/); if(mm && request.method==='POST'){
     const company=await ensureCompany(env,user.id,mm[1]);
     const authResult=await siigoAuth(siigoEnvFor(env,company));

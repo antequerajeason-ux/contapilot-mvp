@@ -8,7 +8,7 @@
     :root{
       --bg:#05070c;--surface:rgba(255,255,255,.035);--surface-strong:rgba(255,255,255,.06);
       --ink:#f2f5f9;--muted:#8b96ab;--line:rgba(255,255,255,.10);--line-strong:rgba(255,255,255,.20);
-      --primary:#2f8fe0;--primary-dark:#1c6fb3;--primary-soft:rgba(47,143,224,.16);
+      --primary:#e0a72f;--primary-dark:#b8841c;--primary-soft:rgba(224,167,47,.16);
       --green:#1fb98a;--red:#f2555a;--radius:16px
     }
     *{box-sizing:border-box}
@@ -16,21 +16,23 @@
     body{
       margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);
       background:
-        radial-gradient(900px 480px at 50% -10%, rgba(47,143,224,.20), transparent 60%),
-        radial-gradient(700px 380px at 90% 10%, rgba(47,143,224,.08), transparent 60%),
+        radial-gradient(900px 480px at 50% -10%, rgba(224,167,47,.16), transparent 60%),
+        radial-gradient(700px 380px at 90% 10%, rgba(224,167,47,.06), transparent 60%),
         var(--bg);
-      min-height:100vh;display:flex;flex-direction:column
+      min-height:100vh
     }
     button,input{font-family:inherit}
-    .corner-brand{position:fixed;top:22px;left:24px;display:flex;align-items:center;gap:8px;z-index:5}
-    .corner-brand img{width:36px;height:36px;object-fit:contain}
-    .corner-brand span{color:var(--ink);font-weight:700;font-size:14.5px;letter-spacing:.01em}
-    .shell{flex:1;display:flex;align-items:center;justify-content:center;padding:90px 20px 40px}
-    .card{
-      width:min(440px,100%);background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
-      padding:26px;backdrop-filter:blur(18px);box-shadow:0 30px 60px -30px rgba(0,0,0,.6)
-    }
+    .topbar{height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;border-bottom:1px solid var(--line)}
+    .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14.5px}
+    .brand img{width:32px;height:32px;object-fit:contain}
+    .brand .tag{background:var(--primary-soft);color:var(--primary);border:1px solid rgba(224,167,47,.35);border-radius:6px;padding:2px 8px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-left:2px}
+    .btn-out{height:34px;padding:0 14px;border-radius:8px;background:var(--surface-strong);border:1px solid var(--line-strong);color:var(--ink);font-weight:600;font-size:12.5px;cursor:pointer}
+    .shell{width:min(760px,calc(100% - 32px));margin:0 auto;padding:40px 0 60px}
+    .center-shell{min-height:calc(100vh - 60px);display:flex;align-items:center;justify-content:center}
+    .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:26px;backdrop-filter:blur(18px)}
+    .card + .card{margin-top:18px}
     h1{font-size:18px;margin:0 0 4px}
+    h2{font-size:15px;margin:0 0 4px}
     .lead{margin:0 0 20px;color:var(--muted);font-size:13px;line-height:1.5}
     .field{margin-bottom:14px}
     .field label{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
@@ -38,57 +40,128 @@
     .field input:focus{border-color:var(--primary);background:rgba(255,255,255,.05)}
     .row{display:flex;gap:8px}
     .row input{flex:1}
-    .btn{height:42px;border:1px solid rgba(47,143,224,.55);border-radius:9px;background:linear-gradient(180deg,var(--primary),var(--primary-dark));color:#fff;font-weight:700;font-size:13.5px;cursor:pointer;padding:0 16px}
+    .btn{height:42px;border:1px solid rgba(224,167,47,.55);border-radius:9px;background:linear-gradient(180deg,var(--primary),var(--primary-dark));color:#1a1200;font-weight:700;font-size:13.5px;cursor:pointer;padding:0 16px}
     .btn:hover{filter:brightness(1.08)}
     .btn-full{width:100%;margin-top:4px}
     .btn-ghost{background:var(--surface-strong);border:1px solid var(--line-strong);color:var(--ink);box-shadow:none}
+    .btn-small{height:32px;padding:0 12px;font-size:12px;border-radius:7px}
     .result{margin-top:16px;border-radius:10px;padding:14px;font-size:13px;line-height:1.6;display:none}
     .result.ok{display:block;background:rgba(31,185,138,.12);border:1px solid rgba(31,185,138,.35);color:#bdf5e3}
     .result.err{display:block;background:rgba(242,85,90,.12);border:1px solid rgba(242,85,90,.35);color:#ffc7c9}
     .result strong{color:#fff}
     .cred-box{margin-top:8px;background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
     .unauthorized{text-align:center;color:var(--muted);font-size:14px;padding:40px 10px}
+    table{width:100%;border-collapse:collapse}
+    th{text-align:left;padding:9px 10px;color:var(--muted);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--line)}
+    td{padding:11px 10px;border-top:1px solid var(--line);font-size:13px;vertical-align:middle}
+    td.email{font-weight:600}
+    td.muted{color:var(--muted);font-size:12px}
+    [hidden]{display:none!important}
   </style>
 <script src="config.js"></script>
 </head>
 <body>
-  <div class="corner-brand"><img src="contapilot-symbol-transparent.png" alt="ContaPilot"><span>ContaPilot · Admin</span></div>
-  <main class="shell">
-    <section class="card" id="adminCard">
-      <h1>Crear cuenta de contador</h1>
-      <p class="lead">Crea el acceso para un cliente que ya pagó su suscripción. Copia el correo y la contraseña generados y compártelos con él por un canal seguro.</p>
-      <div class="field"><label>Nombre</label><input id="accName" placeholder="Nombre del contador o empresa"></div>
-      <div class="field"><label>Email</label><input id="accEmail" placeholder="cliente@empresa.com"></div>
-      <div class="field"><label>Contraseña</label>
-        <div class="row">
-          <input id="accPassword" placeholder="Contraseña temporal">
-          <button class="btn btn-ghost" onclick="generatePassword()">Generar</button>
+  <div id="loginView" class="center-shell">
+    <div class="card" style="width:min(380px,100%)">
+      <h1>Panel de administración</h1>
+      <p class="lead">Acceso exclusivo para el equipo de ContaPilot. Esta cuenta es distinta a la que usan tus clientes.</p>
+      <div class="field"><label>Email</label><input id="loginEmail" placeholder="tu@correo.com"></div>
+      <div class="field"><label>Contraseña</label><input id="loginPassword" type="password" placeholder="••••••••"></div>
+      <button class="btn btn-full" onclick="doLogin()">Entrar</button>
+      <div id="loginResult" class="result"></div>
+    </div>
+  </div>
+
+  <div id="adminView" hidden>
+    <div class="topbar">
+      <div class="brand"><img src="contapilot-symbol-transparent.png" alt="ContaPilot"><span>ContaPilot</span><span class="tag">Admin</span></div>
+      <button class="btn-out" onclick="logout()">Salir</button>
+    </div>
+    <main class="shell">
+      <div class="card">
+        <h2>Crear cuenta de contador</h2>
+        <p class="lead">Crea el acceso para un cliente que ya pagó su suscripción. Copia el correo y la contraseña generados y compártelos con él por un canal seguro.</p>
+        <div class="field"><label>Nombre</label><input id="accName" placeholder="Nombre del contador o empresa"></div>
+        <div class="field"><label>Email</label><input id="accEmail" placeholder="cliente@empresa.com"></div>
+        <div class="field"><label>Contraseña</label>
+          <div class="row">
+            <input id="accPassword" placeholder="Contraseña temporal">
+            <button class="btn btn-ghost" onclick="accPassword.value=genPass()">Generar</button>
+          </div>
         </div>
+        <button class="btn btn-full" onclick="createAccount()">Crear cuenta</button>
+        <div id="createResult" class="result"></div>
       </div>
-      <button class="btn btn-full" onclick="createAccount()">Crear cuenta</button>
-      <div id="result" class="result"></div>
-    </section>
-  </main>
+
+      <div class="card">
+        <h2>Cuentas existentes</h2>
+        <p class="lead">Todas las personas con acceso a ContaPilot.</p>
+        <div style="overflow:auto"><table>
+          <thead><tr><th>Nombre</th><th>Email</th><th>Empresas</th><th>Creada</th><th></th></tr></thead>
+          <tbody id="accountsRows"><tr><td colspan="5" class="muted">Cargando...</td></tr></tbody>
+        </table></div>
+        <div id="resetResult" class="result"></div>
+      </div>
+    </main>
+  </div>
+
 <script>
 function base(){return localStorage.getItem('cp_api_base')||window.CONTAPILOT_API_BASE||''}
-function token(){return localStorage.getItem('cp_token')||''}
+function token(){return localStorage.getItem('cp_admin_token')||''}
 async function api(path,opts={}){const headers=opts.headers||{};headers.Authorization='Bearer '+token();const r=await fetch(base()+path,{...opts,headers});const data=await r.json().catch(()=>({}));if(!r.ok){const d=data.detail||data.error||data;throw new Error(typeof d==='string'?d:JSON.stringify(d))}return data}
-function generatePassword(){const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';let out='';for(let i=0;i<10;i++)out+=chars[Math.floor(Math.random()*chars.length)];accPassword.value=out}
-function showResult(cls,html){const el=document.getElementById('result');el.className='result '+cls;el.innerHTML=html}
-async function createAccount(){
+function genPass(){const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';let out='';for(let i=0;i<10;i++)out+=chars[Math.floor(Math.random()*chars.length)];return out}
+function showResult(id,cls,html){const el=document.getElementById(id);el.className='result '+cls;el.innerHTML=html}
+function logout(){localStorage.removeItem('cp_admin_token');loginView.hidden=false;adminView.hidden=true}
+
+async function doLogin(){
   try{
-    if(!token()){location.href='app.html';return}
-    const name=accName.value.trim(), email=accEmail.value.trim(), password=accPassword.value;
-    if(!email||!password) return showResult('err','Completa el email y la contraseña.');
-    const res=await api('/api/admin/accounts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password})});
-    showResult('ok',`<strong>Cuenta creada.</strong> Comparte estos datos con el cliente:<div class="cred-box">Email: ${res.user.email}<br>Contraseña: ${res.password}<br>Ingreso: ${location.origin}/app.html</div>`);
-    accName.value='';accEmail.value='';accPassword.value='';
+    const r=await fetch(base()+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:loginEmail.value.trim(),password:loginPassword.value})});
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(data.detail||'Correo o contraseña inválidos');
+    localStorage.setItem('cp_admin_token',data.token);
+    await enterAdmin();
+  }catch(e){ showResult('loginResult','err', e.message||'No pude iniciar sesión'); }
+}
+
+async function enterAdmin(){
+  try{
+    await loadAccounts();
+    loginView.hidden=true; adminView.hidden=false;
   }catch(e){
-    if(String(e.message).includes('No autorizado')) document.getElementById('adminCard').innerHTML='<div class="unauthorized">No tienes permisos de administrador para ver esta página.</div>';
-    else showResult('err', e.message||'No pude crear la cuenta');
+    if(String(e.message).includes('No autorizado')){
+      loginView.hidden=true; adminView.hidden=false;
+      document.querySelector('#adminView .shell').innerHTML='<div class="card"><div class="unauthorized">Esta cuenta no tiene permisos de administrador.</div></div>';
+    } else {
+      showResult('loginResult','err', e.message||'No pude verificar la cuenta');
+    }
   }
 }
-if(!token()) location.href='app.html';
+
+async function createAccount(){
+  try{
+    const name=accName.value.trim(), email=accEmail.value.trim(), password=accPassword.value;
+    if(!email||!password) return showResult('createResult','err','Completa el email y la contraseña.');
+    const res=await api('/api/admin/accounts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password})});
+    showResult('createResult','ok',`<strong>Cuenta creada.</strong> Comparte estos datos con el cliente:<div class="cred-box">Email: ${res.user.email}<br>Contraseña: ${res.password}<br>Ingreso: ${location.origin}/app.html</div>`);
+    accName.value='';accEmail.value='';accPassword.value='';
+    await loadAccounts();
+  }catch(e){ showResult('createResult','err', e.message||'No pude crear la cuenta'); }
+}
+
+async function loadAccounts(){
+  const rows=await api('/api/admin/accounts');
+  accountsRows.innerHTML=rows.map(r=>`<tr><td>${r.name||''}</td><td class="email">${r.email}</td><td>${r.company_count}</td><td class="muted">${(r.created_at||'').slice(0,10)}</td><td><button class="btn btn-ghost btn-small" onclick="resetPassword('${r.id}','${r.email}')">Restablecer contraseña</button></td></tr>`).join('')||'<tr><td colspan="5" class="muted">Sin cuentas todavía</td></tr>';
+}
+
+async function resetPassword(userId,email){
+  try{
+    const password=genPass();
+    const res=await api(`/api/admin/accounts/${userId}/reset-password`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});
+    showResult('resetResult','ok',`<strong>Contraseña restablecida para ${res.email}.</strong><div class="cred-box">Contraseña nueva: ${res.password}</div>`);
+  }catch(e){ showResult('resetResult','err', e.message||'No pude restablecer la contraseña'); }
+}
+
+if(token()) enterAdmin();
 </script>
 </body>
 </html>

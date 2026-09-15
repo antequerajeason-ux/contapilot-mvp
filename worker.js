@@ -1,8 +1,12 @@
+// CORS abierto en /api: el "conector DIAN" corre como script en la consola del navegador
+// desde catalogo-vpfe.dian.gov.co y necesita poder llamar a /upload directamente. La API ya
+// exige el bearer token del contador en cada request, así que abrir el origen no expone nada.
+const corsHeaders = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET,POST,PUT,DELETE,OPTIONS', 'access-control-allow-headers': 'Authorization, Content-Type' };
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
-  headers: { 'content-type': 'application/json; charset=utf-8' }
+  headers: { 'content-type': 'application/json; charset=utf-8', ...corsHeaders }
 });
-const text = (data, status = 200, type = 'text/plain; charset=utf-8') => new Response(data, { status, headers: { 'content-type': type }});
+const text = (data, status = 200, type = 'text/plain; charset=utf-8') => new Response(data, { status, headers: { 'content-type': type, ...corsHeaders }});
 const now = () => new Date().toISOString();
 const id = () => crypto.randomUUID();
 const nitClean = (v) => String(v || '').replace(/\D/g, '');
@@ -22,6 +26,23 @@ function sumBlocks(xml, blockTag, amountTag='TaxAmount'){
   return total;
 }
 function round2(n){ return Math.round((Number(n)||0)*100)/100; }
+// Agrupa el IVA de TaxSubtotal por porcentaje (19%, 5%, etc.) en vez de sumarlo todo junto,
+// para poder llevar cada tarifa a su cuenta contable correspondiente.
+function sumTaxByPercent(xml){
+  const out={};
+  const totalRe=new RegExp(`<(?:\\w+:)?TaxTotal\\b[\\s\\S]*?<\\/(?:\\w+:)?TaxTotal>`,'gi');
+  for(const totalMatch of String(xml||'').matchAll(totalRe)){
+    const subRe=new RegExp(`<(?:\\w+:)?TaxSubtotal\\b[\\s\\S]*?<\\/(?:\\w+:)?TaxSubtotal>`,'gi');
+    for(const sub of totalMatch[0].matchAll(subRe)){
+      const amount=num(tagText(sub[0],'TaxAmount'));
+      if(!amount) continue;
+      const pctRaw=tagText(sub[0],'Percent');
+      const pct=String(Math.round(num(pctRaw)));
+      out[pct]=round2((out[pct]||0)+amount);
+    }
+  }
+  return out;
+}
 
 function u16(bytes,pos){ return bytes[pos] | (bytes[pos+1] << 8); }
 function u32(bytes,pos){ return (bytes[pos] | (bytes[pos+1] << 8) | (bytes[pos+2] << 16) | (bytes[pos+3] << 24)) >>> 0; }
@@ -148,6 +169,7 @@ async function parseInvoice(input){
   // Para no duplicar IVA, quitamos InvoiceLine/CreditNoteLine/DebitNoteLine antes de sumar impuestos globales.
   const headerXml=removeLineBlocks(xml);
   let tax=round2(sumBlocks(headerXml,'TaxTotal','TaxAmount'));
+  const taxBreakdown=sumTaxByPercent(headerXml);
   let withholding=round2(sumBlocks(headerXml,'WithholdingTaxTotal','TaxAmount'));
 
   // Protección contable: si no viene retención explícita pero PayableAmount es menor que subtotal + IVA,
@@ -163,10 +185,13 @@ async function parseInvoice(input){
   for(const m of xml.matchAll(lineRe)){
     items.push({description:tagText(m[0],'Description'), quantity:num(tagText(m[0],qtyTag)), line_amount:num(tagText(m[0],'LineExtensionAmount'))});
   }
-  return {invoice_xml:xml, invoice_number:invoiceNumber, cufe, issue_date:issueDate, document_type:root==='Invoice'?'Factura compra':root==='CreditNote'?'Nota crédito':'Nota débito', supplier_name:supplier.name, supplier_nit:supplier.nit, customer_name:customer.name, customer_nit:customer.nit, currency, subtotal, tax_amount:tax, withholding_amount:withholding, payable_amount:payable, items};
+  return {invoice_xml:xml, invoice_number:invoiceNumber, cufe, issue_date:issueDate, document_type:root==='Invoice'?'Factura compra':root==='CreditNote'?'Nota crédito':'Nota débito', supplier_name:supplier.name, supplier_nit:supplier.nit, customer_name:customer.name, customer_nit:customer.nit, currency, subtotal, tax_amount:tax, tax_breakdown:taxBreakdown, withholding_amount:withholding, payable_amount:payable, items};
 }
-async function auth(env, request){ const h=request.headers.get('authorization')||''; if(!h.toLowerCase().startsWith('bearer ')) throw new Response(JSON.stringify({detail:'Falta token Authorization: Bearer'}),{status:401}); const token=h.split(' ')[1]; const row=await env.DB.prepare('SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=?').bind(token).first(); if(!row) throw new Response(JSON.stringify({detail:'Sesión inválida'}),{status:401}); return row; }
-async function ensureCompany(env,userId,companyId){ const c=await env.DB.prepare('SELECT * FROM companies WHERE id=? AND owner_user_id=?').bind(companyId,userId).first(); if(!c) throw new Response(JSON.stringify({detail:'Empresa no encontrada'}),{status:404}); return c; }
+async function auth(env, request){ const h=request.headers.get('authorization')||''; if(!h.toLowerCase().startsWith('bearer ')) throw new Response(JSON.stringify({detail:'Falta token Authorization: Bearer'}),{status:401,headers:corsHeaders}); const token=h.split(' ')[1]; const row=await env.DB.prepare('SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=?').bind(token).first(); if(!row) throw new Response(JSON.stringify({detail:'Sesión inválida'}),{status:401,headers:corsHeaders}); return row; }
+async function ensureCompany(env,userId,companyId){ const c=await env.DB.prepare('SELECT * FROM companies WHERE id=? AND owner_user_id=?').bind(companyId,userId).first(); if(!c) throw new Response(JSON.stringify({detail:'Empresa no encontrada'}),{status:404,headers:corsHeaders}); return c; }
+function siigoEnvFor(env, company){ return {...env, SIIGO_USERNAME: (company&&company.siigo_username)||env.SIIGO_USERNAME, SIIGO_ACCESS_KEY: (company&&company.siigo_access_key)||env.SIIGO_ACCESS_KEY, SIIGO_PARTNER_ID: (company&&company.siigo_partner_id)||env.SIIGO_PARTNER_ID }; }
+function publicCompany(c){ if(!c) return c; const {siigo_access_key, ...rest}=c; return {...rest, siigo_configured: !!(c.siigo_username && c.siigo_access_key), siigo_key_last4: c.siigo_access_key ? String(c.siigo_access_key).slice(-4) : '' }; }
+function isAdminUser(env, user){ const list=String(env.ADMIN_EMAILS||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean); return list.includes(String(user.email||'').toLowerCase()); }
 async function getSettings(env, companyId){ const s=await env.DB.prepare('SELECT * FROM accounting_settings WHERE company_id=?').bind(companyId).first(); return normalizeSettings(s||{}); }
 function normalizeSettings(s){
   // Normalización basada en plan de cuentas DISTRIBUCIONES TORRES GARCIA SAS / Siigo.
@@ -174,6 +199,8 @@ function normalizeSettings(s){
   const out={...s};
   if(!out.vat_account || out.vat_account==='240805' || out.vat_account==='240810') out.vat_account='24081001';
   if(!out.vat_description || out.vat_description==='IVA descontable') out.vat_description='Iva descontable por compras 19%';
+  if(!out.vat5_account) out.vat5_account='24081003';
+  if(!out.vat5_description) out.vat5_description='Iva descontable por compras 5%';
   if(!out.payable_account || out.payable_account==='220505') out.payable_account='22050501';
   if(!out.payable_description || out.payable_description==='Proveedor por pagar') out.payable_description='Proveedores nacionales';
   if(!out.withholding_account || out.withholding_account==='236540') out.withholding_account='23654001';
@@ -304,6 +331,74 @@ async function testDianTokenUrl(url){
   }
   return {ok, format_ok:true, status, final_url:finalUrl, message:ok?'Token DIAN respondió. La sincronización real requiere endpoints internos del portal.':'DIAN respondió con estado '+status, parsed:{pk:parsed.pk,rk:parsed.rk,token_last4:parsed.last4}};
 }
+
+// Explorado con un token real contra catalogo-vpfe.dian.gov.co (portal de producción).
+// El buscador de "Documentos recibidos" (POST /Document/GetDocumentsPageToken) no tiene
+// captcha y se puede automatizar por completo. La DESCARGA del XML/ZIP de cada documento
+// (GET /Document/DownloadZipFiles?trackId=...) sí exige resolver un captcha de Cloudflare
+// Turnstile — eso no se automatiza (no evadimos protecciones anti-bot). Por eso esta función
+// solo trae el LISTADO (metadatos reales); la descarga la termina el contador con un clic
+// que lo lleva al portal de la DIAN ya autenticado.
+function collectSetCookies(response){
+  const cookies=[];
+  for(const [k,v] of response.headers.entries()){ if(k.toLowerCase()==='set-cookie') cookies.push(v.split(';')[0]); }
+  return cookies;
+}
+function dianDate(v){ const m=String(v||'').match(/\/Date\((\d+)\)\//); if(!m) return ''; return new Date(Number(m[1])).toISOString().slice(0,10); }
+async function dianAuthenticatedFetch(tokenUrl){
+  const parsed=parseDianAuthUrl(tokenUrl);
+  const jar=[];
+  let url=parsed.url, hops=0, html='';
+  while(hops++ < 6){
+    const res=await fetch(url,{redirect:'manual', headers:{'user-agent':'Mozilla/5.0 ContaPilot','cookie':jar.join('; ')}});
+    jar.push(...collectSetCookies(res));
+    const loc=res.headers.get('location');
+    if(loc && res.status>=300 && res.status<400){ url=new URL(loc, url).toString(); continue; }
+    html=await res.text();
+    break;
+  }
+  const tokenMatch=html.match(/name=["']__RequestVerificationToken["'][^>]*value=["']([^"']+)["']/i);
+  if(!tokenMatch) throw new Error('No pude iniciar sesión con ese token DIAN (o ya expiró). Solicita uno nuevo desde el portal.');
+  return {cookie:jar.join('; '), verificationToken:tokenMatch[1]};
+}
+function mapDianRow(row){
+  return {
+    id: row.Id,
+    document_type_id: row.DocumentTypeId,
+    document_type: row.DocumentTypeName,
+    serie_number: row.SerieAndNumber,
+    supplier_nit: row.SenderCode,
+    supplier_name: row.SenderName,
+    customer_nit: row.ReceiverCode,
+    customer_name: row.ReceiverName,
+    issue_date: dianDate(row.EmissionDate),
+    reception_date: dianDate(row.ReceptionDate),
+    total_amount: row.TotalAmount,
+    status: row.StatusName
+  };
+}
+async function fetchDianReceivedDocuments(tokenUrl, options){
+  const session=await dianAuthenticatedFetch(tokenUrl);
+  const baseBody={ draw:'1', start:'0', length:'100', DocumentKey:'', SerieAndNumber:'', SenderCode:'', ReceiverCode:'',
+    StartDate:'', EndDate:'', DocumentTypeId:'00', Status:'0', IsNextPage:'false', FilterType:'3', blockIndex:'0',
+    RadianStatus:'0', ContinuationToken:'', __RequestVerificationToken:session.verificationToken };
+  async function search(body){
+    const res=await fetch('https://catalogo-vpfe.dian.gov.co/Document/GetDocumentsPageToken',{
+      method:'POST',
+      headers:{'content-type':'application/x-www-form-urlencoded; charset=UTF-8','cookie':session.cookie,'user-agent':'Mozilla/5.0 ContaPilot'},
+      body:new URLSearchParams(body).toString()
+    });
+    if(!res.ok) throw new Error('DIAN respondió '+res.status+' al buscar documentos');
+    const json=await res.json();
+    return (json.data||[]).map(mapDianRow);
+  }
+  if(options.mode==='cufes'){
+    const out=[];
+    for(const cufe of options.cufes){ out.push(...await search({...baseBody, DocumentKey:cufe})); }
+    return out;
+  }
+  return await search({...baseBody, StartDate:options.start_date, EndDate:options.end_date});
+}
 async function chooseRule(env, companyId, inv){ const rules=(await env.DB.prepare('SELECT * FROM accounting_rules WHERE company_id=? AND active=1 ORDER BY priority').bind(companyId).all()).results || []; const text=((inv.supplier_name||'')+' '+(inv.descriptions||'')).toUpperCase(); let fallback=null; for(const r of rules){ if(r.match_type==='default'){fallback=r; continue;} if(text.includes(String(r.match_value||'').toUpperCase())) return r; } return fallback; }
 function normalizeAccountCode(account){
   const a=String(account||'');
@@ -344,10 +439,11 @@ async function generateEntry(env, invoiceId){
       inv.currency=reparsed.currency || inv.currency;
       inv.subtotal=reparsed.subtotal;
       inv.tax_amount=reparsed.tax_amount;
+      inv.tax_breakdown=JSON.stringify(reparsed.tax_breakdown||{});
       inv.withholding_amount=reparsed.withholding_amount;
       inv.payable_amount=reparsed.payable_amount;
-      await env.DB.prepare('UPDATE invoices SET invoice_number=?, issue_date=?, document_type=?, supplier_name=?, supplier_nit=?, customer_name=?, customer_nit=?, currency=?, subtotal=?, tax_amount=?, withholding_amount=?, payable_amount=?, updated_at=? WHERE id=?')
-        .bind(inv.invoice_number,inv.issue_date,inv.document_type,inv.supplier_name,inv.supplier_nit,inv.customer_name,inv.customer_nit,inv.currency,inv.subtotal,inv.tax_amount,inv.withholding_amount,inv.payable_amount,now(),invoiceId).run();
+      await env.DB.prepare('UPDATE invoices SET invoice_number=?, issue_date=?, document_type=?, supplier_name=?, supplier_nit=?, customer_name=?, customer_nit=?, currency=?, subtotal=?, tax_amount=?, withholding_amount=?, payable_amount=?, updated_at=?, tax_breakdown=? WHERE id=?')
+        .bind(inv.invoice_number,inv.issue_date,inv.document_type,inv.supplier_name,inv.supplier_nit,inv.customer_name,inv.customer_nit,inv.currency,inv.subtotal,inv.tax_amount,inv.withholding_amount,inv.payable_amount,now(),inv.tax_breakdown,invoiceId).run();
     }catch(_){ /* Si falla el reparseo, usa valores guardados */ }
   }
   const settings=await getSettings(env, inv.company_id);
@@ -371,7 +467,22 @@ async function generateEntry(env, invoiceId){
   const expenseAccount=inferPurchaseAccount(inv, rule?.account || settings.default_expense_account);
   const expenseDescription=(expenseAccount==='14350101')?'Mercancías no fabricadas':(rule?.description || settings.default_expense_description);
   push(expenseAccount, expenseDescription, inv.subtotal, 0, rule?.cost_center || settings.default_cost_center);
-  if(inv.tax_amount) push(settings.vat_account, settings.vat_description, inv.tax_amount, 0, '');
+  // IVA por tarifa: cada porcentaje va a su propia cuenta (19% y 5% tienen cuentas distintas en el
+  // plan de cuentas real). Si aparece una tarifa sin cuenta dedicada, se deja en la cuenta de IVA 19%
+  // por defecto y se anota el porcentaje real en la descripción para que el contador lo note.
+  let taxBreakdown={};
+  try{ taxBreakdown=JSON.parse(inv.tax_breakdown||'{}')||{}; }catch(_){ taxBreakdown={}; }
+  if(Object.keys(taxBreakdown).length){
+    for(const [pct, amount] of Object.entries(taxBreakdown)){
+      if(!amount) continue;
+      if(pct==='19') push(settings.vat_account, settings.vat_description, amount, 0, '');
+      else if(pct==='5') push(settings.vat5_account, settings.vat5_description, amount, 0, '');
+      else if(pct==='0') continue; // IVA 0% no genera IVA descontable
+      else push(settings.vat_account, `${settings.vat_description} (tarifa ${pct}% sin cuenta configurada)`, amount, 0, '');
+    }
+  } else if(inv.tax_amount){
+    push(settings.vat_account, settings.vat_description, inv.tax_amount, 0, '');
+  }
   if(inv.withholding_amount) push(settings.withholding_account, settings.withholding_description, 0, inv.withholding_amount, '');
   push(settings.payable_account, `${settings.payable_description} - ${inv.supplier_name||''}`, 0, inv.payable_amount, '');
 
@@ -452,6 +563,7 @@ async function siigoGetPurchaseConfig(env){
   if(env.SIIGO_PURCHASE_DOCUMENT_ID) cfg.document_id=Number(env.SIIGO_PURCHASE_DOCUMENT_ID);
   if(env.SIIGO_PAYMENT_TYPE_ID) cfg.payment_type_id=Number(env.SIIGO_PAYMENT_TYPE_ID);
   if(env.SIIGO_IVA_19_TAX_ID) cfg.iva_19_tax_id=Number(env.SIIGO_IVA_19_TAX_ID);
+  if(env.SIIGO_IVA_5_TAX_ID) cfg.iva_5_tax_id=Number(env.SIIGO_IVA_5_TAX_ID);
   if(!cfg.document_id){
     const docs=await siigoRequest(env,'/document-types?type=FC');
     const first=Array.isArray(docs)?docs.find(d=>d.active):null;
@@ -464,10 +576,16 @@ async function siigoGetPurchaseConfig(env){
     if(!first) throw new Error('No encontré forma de pago FC activa en Siigo. Configura SIIGO_PAYMENT_TYPE_ID.');
     cfg.payment_type_id=first.id;
   }
-  if(!cfg.iva_19_tax_id){
+  if(!cfg.iva_19_tax_id || !cfg.iva_5_tax_id){
     const taxes=await siigoRequest(env,'/taxes');
-    const iva=Array.isArray(taxes)?taxes.find(t=>t.active && String(t.type).toUpperCase()==='IVA' && Number(t.percentage)===19):null;
-    if(iva) cfg.iva_19_tax_id=iva.id;
+    if(!cfg.iva_19_tax_id){
+      const iva19=Array.isArray(taxes)?taxes.find(t=>t.active && String(t.type).toUpperCase()==='IVA' && Number(t.percentage)===19):null;
+      if(iva19) cfg.iva_19_tax_id=iva19.id;
+    }
+    if(!cfg.iva_5_tax_id){
+      const iva5=Array.isArray(taxes)?taxes.find(t=>t.active && String(t.type).toUpperCase()==='IVA' && Number(t.percentage)===5):null;
+      if(iva5) cfg.iva_5_tax_id=iva5.id;
+    }
   }
   return cfg;
 }
@@ -532,9 +650,23 @@ async function buildSiigoPurchasePayload(env, invoice){
   // Siigo recalcula el IVA como subtotal*porcentaje en vez de usar el valor exacto que trae la DIAN
   // (que suele venir redondeado a pesos enteros). Si el pago no coincide centavo a centavo con ese
   // cálculo, /purchases falla con "invalid_total_payments". Por eso el pago se calcula igual que Siigo,
-  // no con el payable_amount original de la factura.
+  // no con el payable_amount original de la factura. La tarifa se toma de la factura real (19% o 5%,
+  // no se asume siempre 19%) — si trae varias tarifas mezcladas, se usa la de mayor valor y se anota
+  // en las observaciones para que el contador lo revise (Siigo solo permite un impuesto por ítem aquí).
+  let taxBreakdown={}; try{ taxBreakdown=JSON.parse(invoice.tax_breakdown||'{}')||{}; }catch(_){}
+  const taxEntries=Object.entries(taxBreakdown).filter(([,amt])=>amt);
   let paymentValue=round2(invoice.payable_amount||0);
-  if(Number(invoice.tax_amount||0)>0 && cfg.iva_19_tax_id){
+  let mixedRatesNote='';
+  if(taxEntries.length){
+    taxEntries.sort((a,b)=>b[1]-a[1]);
+    const [dominantPct]=taxEntries[0];
+    const taxId = dominantPct==='19' ? cfg.iva_19_tax_id : dominantPct==='5' ? cfg.iva_5_tax_id : null;
+    if(taxId){
+      item.taxes=[{id:taxId}];
+      paymentValue=round2(Number(invoice.subtotal||0)*(1+Number(dominantPct)/100));
+    }
+    if(taxEntries.length>1) mixedRatesNote=` [Factura con varias tarifas de IVA: ${taxEntries.map(([p,a])=>`${p}%=${a}`).join(', ')} — se aplicó ${dominantPct}%, revisar manualmente]`;
+  } else if(Number(invoice.tax_amount||0)>0 && cfg.iva_19_tax_id){
     item.taxes=[{id:cfg.iva_19_tax_id}];
     paymentValue=round2(Number(invoice.subtotal||0)*1.19);
   }
@@ -544,7 +676,7 @@ async function buildSiigoPurchasePayload(env, invoice){
     supplier:{identification:supplier.identification, branch_office:supplier.branch_office||0},
     provider_invoice:{prefix:pn.prefix||'', number:String(pn.number||invoice.invoice_number||'').slice(0,20)},
     tax_included:false,
-    observations:`Creado desde ContaPilot. Factura ${invoice.invoice_number||''}. CUFE ${(invoice.cufe||'').slice(0,64)}`,
+    observations:`Creado desde ContaPilot. Factura ${invoice.invoice_number||''}. CUFE ${(invoice.cufe||'').slice(0,64)}${mixedRatesNote}`,
     items:[item],
     payments:[{id:cfg.payment_type_id, value:paymentValue, due_date:invoice.issue_date || now().slice(0,10)}]
   };
@@ -552,34 +684,60 @@ async function buildSiigoPurchasePayload(env, invoice){
 }
 
 async function handleApi(request, env){ const url=new URL(request.url); const p=url.pathname.replace(/^\/api/,'') || '/'; try{
-  if(request.method==='OPTIONS') return new Response(null,{status:204});
+  if(request.method==='OPTIONS') return new Response(null,{status:204, headers:corsHeaders});
   if(p==='/health') return json({ok:true, service:'contapilot-cloudflare', time:now()});
   if(p==='/auth/register' && request.method==='POST'){ const d=await request.json(); const userId=id(); const token=id()+id(); await env.DB.prepare('INSERT INTO users VALUES (?,?,?,?,?)').bind(userId,d.name||'Contador Demo',String(d.email||'').toLowerCase(),await hashPassword(d.password||''),now()).run(); await env.DB.prepare('INSERT INTO sessions VALUES (?,?,?)').bind(token,userId,now()).run(); return json({token,user:{id:userId,name:d.name||'Contador Demo',email:String(d.email||'').toLowerCase()}}); }
   if(p==='/auth/login' && request.method==='POST'){ const d=await request.json(); const u=await env.DB.prepare('SELECT * FROM users WHERE email=?').bind(String(d.email||'').toLowerCase()).first(); if(!u || !(await verifyPassword(d.password||'', u.password_hash))) return json({detail:'Correo o contraseña inválidos'},401); const token=id()+id(); await env.DB.prepare('INSERT INTO sessions VALUES (?,?,?)').bind(token,u.id,now()).run(); return json({token,user:{id:u.id,name:u.name,email:u.email}}); }
   const user=await auth(env,request);
-  if(p==='/siigo/test' && request.method==='POST'){
-    const authResult=await siigoAuth(env);
-    return json({ok:true, message:'Conexión con Siigo correcta', expires_in:authResult.expires_in, token_type:authResult.token_type, scope:authResult.scope});
+  if(p==='/admin/accounts' && request.method==='POST'){
+    if(!isAdminUser(env,user)) return json({detail:'No autorizado'},403);
+    const d=await request.json().catch(()=>({}));
+    const email=String(d.email||'').trim().toLowerCase();
+    const password=String(d.password||'');
+    const name=String(d.name||'').trim()||'Contador';
+    if(!email || !password) return json({detail:'Email y contraseña son obligatorios'},400);
+    const existing=await env.DB.prepare('SELECT id FROM users WHERE email=?').bind(email).first();
+    if(existing) return json({detail:'Ya existe una cuenta con ese correo'},409);
+    const userId=id();
+    await env.DB.prepare('INSERT INTO users VALUES (?,?,?,?,?)').bind(userId,name,email,await hashPassword(password),now()).run();
+    return json({ok:true,user:{id:userId,name,email},password});
   }
-  if(p==='/siigo/catalogs' && request.method==='GET'){
+  { const mm=p.match(/^\/companies\/([^/]+)\/siigo-test$/); if(mm && request.method==='POST'){
+    const company=await ensureCompany(env,user.id,mm[1]);
+    const authResult=await siigoAuth(siigoEnvFor(env,company));
+    return json({ok:true, message:'Conexión con Siigo correcta', expires_in:authResult.expires_in, token_type:authResult.token_type, scope:authResult.scope});
+  }}
+  { const mm=p.match(/^\/companies\/([^/]+)\/siigo-catalogs$/); if(mm && request.method==='GET'){
+    const company=await ensureCompany(env,user.id,mm[1]);
+    const senv=siigoEnvFor(env,company);
     const result={ok:true,catalogs:{}};
     const docTypes={};
     for(const type of ['FC','FV','DS','NC','RC']){
-      try{ docTypes[type]=await siigoRequest(env,`/document-types?type=${encodeURIComponent(type)}`); }
+      try{ docTypes[type]=await siigoRequest(senv,`/document-types?type=${encodeURIComponent(type)}`); }
       catch(e){ docTypes[type]={error:e.message}; }
     }
     result.catalogs.document_types=docTypes;
-    try{ result.catalogs.taxes=await siigoRequest(env,'/taxes'); }catch(e){ result.catalogs.taxes_error=e.message; }
+    try{ result.catalogs.taxes=await siigoRequest(senv,'/taxes'); }catch(e){ result.catalogs.taxes_error=e.message; }
     const paymentTypes={};
     for(const type of ['FC','FV','DS','NC','RC']){
-      try{ paymentTypes[type]=await siigoRequest(env,`/payment-types?document_type=${encodeURIComponent(type)}`); }
+      try{ paymentTypes[type]=await siigoRequest(senv,`/payment-types?document_type=${encodeURIComponent(type)}`); }
       catch(e){ paymentTypes[type]={error:e.message}; }
     }
     result.catalogs.payment_types=paymentTypes;
     return json(result);
-  }
+  }}
+  { const mm=p.match(/^\/companies\/([^/]+)\/siigo-credentials$/); if(mm && request.method==='PUT'){
+    const company=await ensureCompany(env,user.id,mm[1]);
+    const d=await request.json().catch(()=>({}));
+    const siigoUsername=String(d.siigo_username||'').trim();
+    const siigoAccessKey=String(d.siigo_access_key||'').trim();
+    await env.DB.prepare('UPDATE companies SET siigo_username=?, siigo_access_key=? WHERE id=?').bind(siigoUsername||null, siigoAccessKey||company.siigo_access_key||null, mm[1]).run();
+    const updated=await env.DB.prepare('SELECT * FROM companies WHERE id=?').bind(mm[1]).first();
+    return json(publicCompany(updated));
+  }}
   { const mm=p.match(/^\/companies\/([^/]+)\/siigo-upload-selected$/); if(mm && request.method==='POST'){
-    await ensureCompany(env,user.id,mm[1]);
+    const company=await ensureCompany(env,user.id,mm[1]);
+    const senv=siigoEnvFor(env,company);
     const body=await request.json().catch(()=>({}));
     const invoiceIds=Array.isArray(body.invoice_ids)?body.invoice_ids.map(String).filter(Boolean):[];
     if(!invoiceIds.length) return json({ok:false,count:0,errors:[{error:'No seleccionaste facturas para subir a Siigo'}]},400);
@@ -591,8 +749,8 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
         if(inv.status==='exported') throw new Error('La factura ya está marcada como exportada/subida');
         await generateEntry(env, invoiceId);
         inv=await env.DB.prepare('SELECT * FROM invoices WHERE id=? AND company_id=?').bind(invoiceId,mm[1]).first();
-        const built=await buildSiigoPurchasePayload(env, inv);
-        const result=await siigoRequest(env,'/purchases',{method:'POST',body:JSON.stringify(built.payload)});
+        const built=await buildSiigoPurchasePayload(senv, inv);
+        const result=await siigoRequest(senv,'/purchases',{method:'POST',body:JSON.stringify(built.payload)});
         await env.DB.prepare("UPDATE invoices SET status='exported', updated_at=? WHERE id=?").bind(now(),invoiceId).run();
         uploaded.push({invoice_id:invoiceId, invoice_number:inv.invoice_number, siigo:result, supplier:built.supplier});
       }catch(e){
@@ -602,8 +760,8 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     }
     return json({ok:uploaded.length>0, count:uploaded.length, uploaded, errors});
   }}
-  if(p==='/companies' && request.method==='GET'){ const rows=(await env.DB.prepare('SELECT * FROM companies WHERE owner_user_id=? ORDER BY created_at DESC').bind(user.id).all()).results||[]; return json(rows); }
-  if(p==='/companies' && request.method==='POST'){ const d=await request.json(); const companyId=id(); await env.DB.prepare('INSERT INTO companies VALUES (?,?,?,?,?)').bind(companyId,user.id,d.name,nitClean(d.nit),now()).run(); await env.DB.prepare('INSERT INTO accounting_settings (company_id) VALUES (?)').bind(companyId).run(); for(const r of [['supplier','CLARO','51353501','Servicios públicos - Teléfono','Administración',10],['supplier','CLASSIC JEANS','51952501','Elementos de aseo y cafetería','Administración',35],['default','*','52959505','Gastos diversos POS','Administración',999]]) await env.DB.prepare('INSERT INTO accounting_rules VALUES (?,?,?,?,?,?,?,?,?,?)').bind(id(),companyId,r[0],r[1],r[2],r[3],r[4],r[5],1,now()).run(); return json(await env.DB.prepare('SELECT * FROM companies WHERE id=?').bind(companyId).first()); }
+  if(p==='/companies' && request.method==='GET'){ const rows=(await env.DB.prepare('SELECT * FROM companies WHERE owner_user_id=? ORDER BY created_at DESC').bind(user.id).all()).results||[]; return json(rows.map(publicCompany)); }
+  if(p==='/companies' && request.method==='POST'){ const d=await request.json(); const companyId=id(); await env.DB.prepare('INSERT INTO companies (id,owner_user_id,name,nit,created_at) VALUES (?,?,?,?,?)').bind(companyId,user.id,d.name,nitClean(d.nit),now()).run(); await env.DB.prepare('INSERT INTO accounting_settings (company_id) VALUES (?)').bind(companyId).run(); for(const r of [['supplier','CLARO','51353501','Servicios públicos - Teléfono','Administración',10],['supplier','CLASSIC JEANS','51952501','Elementos de aseo y cafetería','Administración',35],['default','*','52959505','Gastos diversos POS','Administración',999]]) await env.DB.prepare('INSERT INTO accounting_rules VALUES (?,?,?,?,?,?,?,?,?,?)').bind(id(),companyId,r[0],r[1],r[2],r[3],r[4],r[5],1,now()).run(); return json(publicCompany(await env.DB.prepare('SELECT * FROM companies WHERE id=?').bind(companyId).first())); }
   let m=p.match(/^\/companies\/([^/]+)$/); if(m && request.method==='PUT'){
     await ensureCompany(env,user.id,m[1]);
     const d=await request.json();
@@ -614,7 +772,7 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     const other=await env.DB.prepare('SELECT id FROM companies WHERE owner_user_id=? AND nit=? AND id<>?').bind(user.id,nit,m[1]).first();
     if(other) throw new Error('Ya existe otra empresa con ese NIT');
     await env.DB.prepare('UPDATE companies SET name=?, nit=? WHERE id=? AND owner_user_id=?').bind(name,nit,m[1],user.id).run();
-    return json(await env.DB.prepare('SELECT * FROM companies WHERE id=?').bind(m[1]).first());
+    return json(publicCompany(await env.DB.prepare('SELECT * FROM companies WHERE id=?').bind(m[1]).first()));
   }
   m=p.match(/^\/companies\/([^/]+)$/); if(m && request.method==='DELETE'){
     await ensureCompany(env,user.id,m[1]);
@@ -635,11 +793,12 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
   if(m && request.method==='PUT'){
     await ensureCompany(env,user.id,m[1]); await ensureExtraSchema(env);
     const d=await request.json();
-    await validateAccountCode(env,m[1],d.vat_account,'Cuenta IVA');
+    await validateAccountCode(env,m[1],d.vat_account,'Cuenta IVA 19%');
+    await validateAccountCode(env,m[1],d.vat5_account,'Cuenta IVA 5%');
     await validateAccountCode(env,m[1],d.payable_account,'Cuenta proveedores');
     await validateAccountCode(env,m[1],d.withholding_account,'Cuenta retención');
     await validateAccountCode(env,m[1],d.default_expense_account,'Cuenta de gasto por defecto');
-    await env.DB.prepare('UPDATE accounting_settings SET vat_account=?, vat_description=?, payable_account=?, payable_description=?, withholding_account=?, withholding_description=?, default_cost_center=?, default_expense_account=?, default_expense_description=? WHERE company_id=?').bind(d.vat_account,d.vat_description,d.payable_account,d.payable_description,d.withholding_account,d.withholding_description,d.default_cost_center,d.default_expense_account,d.default_expense_description,m[1]).run();
+    await env.DB.prepare('UPDATE accounting_settings SET vat_account=?, vat_description=?, vat5_account=?, vat5_description=?, payable_account=?, payable_description=?, withholding_account=?, withholding_description=?, default_cost_center=?, default_expense_account=?, default_expense_description=? WHERE company_id=?').bind(d.vat_account,d.vat_description,d.vat5_account,d.vat5_description,d.payable_account,d.payable_description,d.withholding_account,d.withholding_description,d.default_cost_center,d.default_expense_account,d.default_expense_description,m[1]).run();
     return json(await getSettings(env,m[1]));
   }
   m=p.match(/^\/companies\/([^/]+)\/rules$/); if(m && request.method==='GET'){ await ensureCompany(env,user.id,m[1]); return json((await env.DB.prepare('SELECT * FROM accounting_rules WHERE company_id=? ORDER BY priority').bind(m[1]).all()).results||[]); }
@@ -690,8 +849,8 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
       const exists=await env.DB.prepare('SELECT id FROM invoices WHERE company_id=? AND cufe=?').bind(m[1],parsed.cufe).first();
       const finalId=exists?.id||invoiceId;
       if(exists) await env.DB.prepare('DELETE FROM invoice_items WHERE invoice_id=?').bind(finalId).run();
-      if(exists) await env.DB.prepare('UPDATE invoices SET invoice_number=?, issue_date=?, document_type=?, supplier_name=?, supplier_nit=?, customer_name=?, customer_nit=?, currency=?, subtotal=?, tax_amount=?, withholding_amount=?, payable_amount=?, status=?, raw_xml=?, updated_at=? WHERE id=?').bind(parsed.invoice_number,parsed.issue_date,parsed.document_type,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.currency,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,'received',parsed.invoice_xml,now(),finalId).run();
-      else await env.DB.prepare('INSERT INTO invoices VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(finalId,m[1],parsed.invoice_number,parsed.cufe,parsed.issue_date,parsed.document_type,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.currency,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,'received',parsed.invoice_xml,now(),now()).run();
+      if(exists) await env.DB.prepare('UPDATE invoices SET invoice_number=?, issue_date=?, document_type=?, supplier_name=?, supplier_nit=?, customer_name=?, customer_nit=?, currency=?, subtotal=?, tax_amount=?, withholding_amount=?, payable_amount=?, status=?, raw_xml=?, updated_at=?, tax_breakdown=? WHERE id=?').bind(parsed.invoice_number,parsed.issue_date,parsed.document_type,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.currency,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,'received',parsed.invoice_xml,now(),JSON.stringify(parsed.tax_breakdown||{}),finalId).run();
+      else await env.DB.prepare('INSERT INTO invoices VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(finalId,m[1],parsed.invoice_number,parsed.cufe,parsed.issue_date,parsed.document_type,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.currency,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,'received',parsed.invoice_xml,now(),now(),JSON.stringify(parsed.tax_breakdown||{})).run();
       for(const it of parsed.items) await env.DB.prepare('INSERT INTO invoice_items VALUES (?,?,?,?,?)').bind(id(),finalId,it.description,it.quantity,it.line_amount).run();
       imported.push({file:name, invoice_id:finalId, invoice_number:parsed.invoice_number});
     }
@@ -753,76 +912,28 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     await env.DB.prepare('UPDATE dian_connections SET status=?, last_test_at=?, updated_at=? WHERE company_id=?').bind(result.format_ok?'tested':'error', now(), now(), m[1]).run();
     return json(result);
   }
-  m=p.match(/^\/companies\/([^/]+)\/dian-session-start$/); if(m && request.method==='POST'){
-    const company=await ensureCompany(env,user.id,m[1]); await ensureExtraSchema(env);
-    const conn=await env.DB.prepare('SELECT * FROM dian_connections WHERE company_id=?').bind(m[1]).first(); if(!conn) throw new Error('Primero guarda la conexión DIAN');
-    const serviceUrl=(env.DIAN_SYNC_SERVICE_URL||'').replace(/\/$/,''); if(!serviceUrl) throw new Error('Falta configurar DIAN_SYNC_SERVICE_URL');
-    const payload={token_url:conn.token_url, company_nit:company.nit, start_date:conn.start_date||new Date(Date.now()-30*24*3600*1000).toISOString().slice(0,10), end_date:new Date().toISOString().slice(0,10), max_documents:50};
-    const responseText=await fetch(`${serviceUrl}/sessions/start`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)}).then(r=>r.text().then(t=>({ok:r.ok,status:r.status,text:t})));
-    let result; try{result=JSON.parse(responseText.text)}catch(_){result={text:responseText.text}}
-    if(!responseText.ok) throw new Error(result.detail||result.error||('Servicio DIAN respondió '+responseText.status));
-    await env.DB.prepare('INSERT INTO dian_sync_logs VALUES (?,?,?,?,?,?,?)').bind(id(),m[1],'remote_session_started',JSON.stringify(result),0,0,now()).run();
-    return json(result);
-  }
-  m=p.match(/^\/companies\/([^/]+)\/dian-session-sync$/); if(m && request.method==='POST'){
-    const company=await ensureCompany(env,user.id,m[1]); await ensureExtraSchema(env);
-    const conn=await env.DB.prepare('SELECT * FROM dian_connections WHERE company_id=?').bind(m[1]).first(); if(!conn) throw new Error('Primero guarda la conexión DIAN');
-    const serviceUrl=(env.DIAN_SYNC_SERVICE_URL||'').replace(/\/$/,''); if(!serviceUrl) throw new Error('Falta configurar DIAN_SYNC_SERVICE_URL');
-    const body=await request.json(); if(!body.session_id) throw new Error('Falta session_id');
-    const authHeader=request.headers.get('authorization')||'';
-    const payload={session_id:body.session_id, company_nit:company.nit, start_date:conn.start_date||new Date(Date.now()-30*24*3600*1000).toISOString().slice(0,10), end_date:new Date().toISOString().slice(0,10), max_documents:50, contapilot_upload_url:new URL(`/api/companies/${m[1]}/upload`, request.url).toString(), contapilot_bearer_token:authHeader.replace(/^Bearer\s+/i,'')};
-    const r=await fetch(`${serviceUrl}/sessions/sync`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
-    const responseText=await r.text(); let result; try{result=JSON.parse(responseText)}catch(_){result={text:responseText}}
-    let imported=0, errors=0; const uploads=result.upload_result?.uploads||[]; imported=uploads.reduce((a,u)=>a+((u.response?.imported||[]).length),0); errors=(result.errors||[]).length+uploads.reduce((a,u)=>a+((u.response?.errors||[]).length),0);
-    const status=r.ok?(errors&&imported?'partial':errors?'error':'success'):'error';
-    await env.DB.prepare('INSERT INTO dian_sync_logs VALUES (?,?,?,?,?,?,?)').bind(id(),m[1],status,JSON.stringify(result),imported,errors,now()).run();
-    await env.DB.prepare('UPDATE dian_connections SET status=?, last_sync_at=?, updated_at=? WHERE company_id=?').bind(status,now(),now(),m[1]).run();
-    if(!r.ok) throw new Error(result.detail||result.error||('Servicio DIAN respondió '+r.status));
-    return json({ok:status==='success'||status==='partial', status, imported, errors, result});
-  }
-  m=p.match(/^\/companies\/([^/]+)\/dian-session-close$/); if(m && request.method==='POST'){
-    await ensureCompany(env,user.id,m[1]); const serviceUrl=(env.DIAN_SYNC_SERVICE_URL||'').replace(/\/$/,''); if(!serviceUrl) throw new Error('Falta configurar DIAN_SYNC_SERVICE_URL');
-    const body=await request.json(); if(!body.session_id) throw new Error('Falta session_id');
-    const r=await fetch(`${serviceUrl}/sessions/${body.session_id}/close`,{method:'POST'}); const txt=await r.text(); let result; try{result=JSON.parse(txt)}catch(_){result={text:txt}}
-    return json(result,r.ok?200:r.status);
-  }
   m=p.match(/^\/companies\/([^/]+)\/dian-sync$/); if(m && request.method==='POST'){
-    const company=await ensureCompany(env,user.id,m[1]); await ensureExtraSchema(env);
-    const conn=await env.DB.prepare('SELECT * FROM dian_connections WHERE company_id=?').bind(m[1]).first(); if(!conn) throw new Error('Primero guarda la conexión DIAN');
-    const serviceUrl=(env.DIAN_SYNC_SERVICE_URL||'').replace(/\/$/,'');
-    if(!serviceUrl){
-      const test=await testDianTokenUrl(conn.token_url);
-      const msg='Conexión DIAN guardada, pero falta configurar DIAN_SYNC_SERVICE_URL para que ContaPilot llame al microservicio de sincronización.';
-      await env.DB.prepare('INSERT INTO dian_sync_logs VALUES (?,?,?,?,?,?,?)').bind(id(),m[1],'missing_service',JSON.stringify({message:msg,test}),0,1,now()).run();
-      return json({ok:false,status:'missing_service',message:msg,test});
-    }
-    const authHeader=request.headers.get('authorization')||'';
-    const payload={
-      token_url: conn.token_url,
-      company_nit: company.nit,
-      start_date: conn.start_date || new Date(Date.now()-30*24*3600*1000).toISOString().slice(0,10),
-      end_date: new Date().toISOString().slice(0,10),
-      max_documents: 50,
-      headless: true,
-      contapilot_upload_url: new URL(`/api/companies/${m[1]}/upload`, request.url).toString(),
-      contapilot_bearer_token: authHeader.replace(/^Bearer\s+/i,'')
-    };
-    let result, status='error', imported=0, errors=0;
+    await ensureCompany(env,user.id,m[1]); await ensureExtraSchema(env);
+    const conn=await env.DB.prepare('SELECT * FROM dian_connections WHERE company_id=?').bind(m[1]).first(); if(!conn) throw new Error('Primero guarda la conexión DIAN (pega el token de acceso)');
+    const body=await request.json().catch(()=>({}));
+    const method=body.method==='cufes' ? 'cufes' : 'fechas';
+    const cufes=method==='cufes' ? (Array.isArray(body.cufes)?body.cufes:String(body.cufes||'').split(/[\s,;]+/)).map(s=>String(s||'').trim()).filter(Boolean) : [];
+    if(method==='cufes' && !cufes.length) throw new Error('Ingresa al menos un CUFE para buscar');
+    const startDate=body.start_date || conn.start_date || new Date(Date.now()-30*24*3600*1000).toISOString().slice(0,10);
+    const endDate=body.end_date || new Date().toISOString().slice(0,10);
+    let docs=[], status='error', errorMsg='';
     try{
-      const res=await fetch(`${serviceUrl}/sync`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
-      const responseText=await res.text(); try{ result=JSON.parse(responseText); }catch(_){ result={text:responseText}; }
-      if(!res.ok) throw new Error(result.detail||result.error||('Servicio DIAN respondió '+res.status));
-      status=result.ok?'success':'partial';
-      const uploads=result.upload_result?.uploads||[];
-      imported=uploads.reduce((acc,u)=>acc+((u.response?.imported||[]).length),0);
-      errors=(result.errors||[]).length + uploads.reduce((acc,u)=>acc+((u.response?.errors||[]).length),0);
-      if(errors && imported) status='partial'; else if(errors) status='error';
-    }catch(e){
-      result={error:e.message}; status='error'; errors=1;
-    }
-    await env.DB.prepare('INSERT INTO dian_sync_logs VALUES (?,?,?,?,?,?,?)').bind(id(),m[1],status,JSON.stringify(result),imported,errors,now()).run();
+      docs=await fetchDianReceivedDocuments(conn.token_url, method==='fechas' ? {mode:'fechas', start_date:startDate, end_date:endDate} : {mode:'cufes', cufes});
+      status='success';
+    }catch(e){ errorMsg=e.message; status='error'; }
+    const existing=(await env.DB.prepare('SELECT cufe FROM invoices WHERE company_id=?').bind(m[1]).all()).results||[];
+    const knownSet=new Set(existing.map(r=>String(r.cufe||'').toUpperCase()));
+    for(const d of docs) d.already_in_contapilot = knownSet.has(String(d.id||'').toUpperCase());
+    const resultSummary={method, start_date:startDate, end_date:endDate, cufes, found:docs.length, error:errorMsg};
+    await env.DB.prepare('INSERT INTO dian_sync_logs VALUES (?,?,?,?,?,?,?)').bind(id(),m[1],status,JSON.stringify(resultSummary),docs.length,errorMsg?1:0,now()).run();
     await env.DB.prepare('UPDATE dian_connections SET status=?, last_sync_at=?, updated_at=? WHERE company_id=?').bind(status,now(),now(),m[1]).run();
-    return json({ok:status==='success'||status==='partial',status,imported,errors,result});
+    if(status==='error') return json({ok:false, error:errorMsg}, 400);
+    return json({ok:true, found:docs.length, documents:docs});
   }
   m=p.match(/^\/companies\/([^/]+)\/dian-logs$/); if(m && request.method==='GET'){
     await ensureCompany(env,user.id,m[1]); await ensureExtraSchema(env);
@@ -953,9 +1064,9 @@ async function saveParsedInvoiceForCompany(env, company, parsed, sourceName='ema
     await env.DB.prepare('DELETE FROM invoice_items WHERE invoice_id=?').bind(finalId).run();
     await env.DB.prepare('DELETE FROM accounting_entry_lines WHERE entry_id IN (SELECT id FROM accounting_entries WHERE invoice_id=?)').bind(finalId).run().catch(()=>{});
     await env.DB.prepare('DELETE FROM accounting_entries WHERE invoice_id=?').bind(finalId).run().catch(()=>{});
-    await env.DB.prepare('UPDATE invoices SET invoice_number=?, issue_date=?, document_type=?, supplier_name=?, supplier_nit=?, customer_name=?, customer_nit=?, currency=?, subtotal=?, tax_amount=?, withholding_amount=?, payable_amount=?, status=?, raw_xml=?, updated_at=? WHERE id=?').bind(parsed.invoice_number,parsed.issue_date,parsed.document_type,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.currency,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,'received',parsed.invoice_xml,now(),finalId).run();
+    await env.DB.prepare('UPDATE invoices SET invoice_number=?, issue_date=?, document_type=?, supplier_name=?, supplier_nit=?, customer_name=?, customer_nit=?, currency=?, subtotal=?, tax_amount=?, withholding_amount=?, payable_amount=?, status=?, raw_xml=?, updated_at=?, tax_breakdown=? WHERE id=?').bind(parsed.invoice_number,parsed.issue_date,parsed.document_type,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.currency,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,'received',parsed.invoice_xml,now(),JSON.stringify(parsed.tax_breakdown||{}),finalId).run();
   }else{
-    await env.DB.prepare('INSERT INTO invoices VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(finalId,company.id,parsed.invoice_number,parsed.cufe,parsed.issue_date,parsed.document_type,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.currency,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,'received',parsed.invoice_xml,now(),now()).run();
+    await env.DB.prepare('INSERT INTO invoices VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(finalId,company.id,parsed.invoice_number,parsed.cufe,parsed.issue_date,parsed.document_type,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.currency,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,'received',parsed.invoice_xml,now(),now(),JSON.stringify(parsed.tax_breakdown||{})).run();
   }
   for(const it of parsed.items) await env.DB.prepare('INSERT INTO invoice_items VALUES (?,?,?,?,?)').bind(id(),finalId,it.description,it.quantity,it.line_amount).run();
   return {file:sourceName, invoice_id:finalId, invoice_number:parsed.invoice_number};

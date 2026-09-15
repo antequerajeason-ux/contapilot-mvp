@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ContaPilot | Admin</title>
+  <style>
+    :root{
+      --bg:#05070c;--surface:rgba(255,255,255,.035);--surface-strong:rgba(255,255,255,.06);
+      --ink:#f2f5f9;--muted:#8b96ab;--line:rgba(255,255,255,.10);--line-strong:rgba(255,255,255,.20);
+      --primary:#2f8fe0;--primary-dark:#1c6fb3;--primary-soft:rgba(47,143,224,.16);
+      --green:#1fb98a;--red:#f2555a;--radius:16px
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);
+      background:
+        radial-gradient(900px 480px at 50% -10%, rgba(47,143,224,.20), transparent 60%),
+        radial-gradient(700px 380px at 90% 10%, rgba(47,143,224,.08), transparent 60%),
+        var(--bg);
+      min-height:100vh;display:flex;flex-direction:column
+    }
+    button,input{font-family:inherit}
+    .corner-brand{position:fixed;top:22px;left:24px;display:flex;align-items:center;gap:8px;z-index:5}
+    .corner-brand img{width:36px;height:36px;object-fit:contain}
+    .corner-brand span{color:var(--ink);font-weight:700;font-size:14.5px;letter-spacing:.01em}
+    .shell{flex:1;display:flex;align-items:center;justify-content:center;padding:90px 20px 40px}
+    .card{
+      width:min(440px,100%);background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+      padding:26px;backdrop-filter:blur(18px);box-shadow:0 30px 60px -30px rgba(0,0,0,.6)
+    }
+    h1{font-size:18px;margin:0 0 4px}
+    .lead{margin:0 0 20px;color:var(--muted);font-size:13px;line-height:1.5}
+    .field{margin-bottom:14px}
+    .field label{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+    .field input{height:42px;width:100%;border:1px solid var(--line);border-radius:9px;padding:0 13px;background:rgba(255,255,255,.03);outline:0;font-size:14px;color:var(--ink)}
+    .field input:focus{border-color:var(--primary);background:rgba(255,255,255,.05)}
+    .row{display:flex;gap:8px}
+    .row input{flex:1}
+    .btn{height:42px;border:1px solid rgba(47,143,224,.55);border-radius:9px;background:linear-gradient(180deg,var(--primary),var(--primary-dark));color:#fff;font-weight:700;font-size:13.5px;cursor:pointer;padding:0 16px}
+    .btn:hover{filter:brightness(1.08)}
+    .btn-full{width:100%;margin-top:4px}
+    .btn-ghost{background:var(--surface-strong);border:1px solid var(--line-strong);color:var(--ink);box-shadow:none}
+    .result{margin-top:16px;border-radius:10px;padding:14px;font-size:13px;line-height:1.6;display:none}
+    .result.ok{display:block;background:rgba(31,185,138,.12);border:1px solid rgba(31,185,138,.35);color:#bdf5e3}
+    .result.err{display:block;background:rgba(242,85,90,.12);border:1px solid rgba(242,85,90,.35);color:#ffc7c9}
+    .result strong{color:#fff}
+    .cred-box{margin-top:8px;background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+    .unauthorized{text-align:center;color:var(--muted);font-size:14px;padding:40px 10px}
+  </style>
+<script src="config.js"></script>
+</head>
+<body>
+  <div class="corner-brand"><img src="contapilot-symbol-transparent.png" alt="ContaPilot"><span>ContaPilot · Admin</span></div>
+  <main class="shell">
+    <section class="card" id="adminCard">
+      <h1>Crear cuenta de contador</h1>
+      <p class="lead">Crea el acceso para un cliente que ya pagó su suscripción. Copia el correo y la contraseña generados y compártelos con él por un canal seguro.</p>
+      <div class="field"><label>Nombre</label><input id="accName" placeholder="Nombre del contador o empresa"></div>
+      <div class="field"><label>Email</label><input id="accEmail" placeholder="cliente@empresa.com"></div>
+      <div class="field"><label>Contraseña</label>
+        <div class="row">
+          <input id="accPassword" placeholder="Contraseña temporal">
+          <button class="btn btn-ghost" onclick="generatePassword()">Generar</button>
+        </div>
+      </div>
+      <button class="btn btn-full" onclick="createAccount()">Crear cuenta</button>
+      <div id="result" class="result"></div>
+    </section>
+  </main>
+<script>
+function base(){return localStorage.getItem('cp_api_base')||window.CONTAPILOT_API_BASE||''}
+function token(){return localStorage.getItem('cp_token')||''}
+async function api(path,opts={}){const headers=opts.headers||{};headers.Authorization='Bearer '+token();const r=await fetch(base()+path,{...opts,headers});const data=await r.json().catch(()=>({}));if(!r.ok){const d=data.detail||data.error||data;throw new Error(typeof d==='string'?d:JSON.stringify(d))}return data}
+function generatePassword(){const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';let out='';for(let i=0;i<10;i++)out+=chars[Math.floor(Math.random()*chars.length)];accPassword.value=out}
+function showResult(cls,html){const el=document.getElementById('result');el.className='result '+cls;el.innerHTML=html}
+async function createAccount(){
+  try{
+    if(!token()){location.href='app.html';return}
+    const name=accName.value.trim(), email=accEmail.value.trim(), password=accPassword.value;
+    if(!email||!password) return showResult('err','Completa el email y la contraseña.');
+    const res=await api('/api/admin/accounts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password})});
+    showResult('ok',`<strong>Cuenta creada.</strong> Comparte estos datos con el cliente:<div class="cred-box">Email: ${res.user.email}<br>Contraseña: ${res.password}<br>Ingreso: ${location.origin}/app.html</div>`);
+    accName.value='';accEmail.value='';accPassword.value='';
+  }catch(e){
+    if(String(e.message).includes('No autorizado')) document.getElementById('adminCard').innerHTML='<div class="unauthorized">No tienes permisos de administrador para ver esta página.</div>';
+    else showResult('err', e.message||'No pude crear la cuenta');
+  }
+}
+if(!token()) location.href='app.html';
+</script>
+</body>
+</html>

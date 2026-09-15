@@ -12,6 +12,7 @@ SIIGO_IVA_19_TAX_ID = "892"
 SIIGO_DEFAULT_COUNTRY_CODE = "CO"
 SIIGO_DEFAULT_STATE_CODE = "08"
 SIIGO_DEFAULT_CITY_CODE = "08001"
+ADMIN_EMAILS = "antequerajeason@gmail.com"
 
 [assets]
 directory = "./assets"

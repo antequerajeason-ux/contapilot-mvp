@@ -5,17 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ContaPilot | Centro de facturas</title>
   <style>
-    :root{--bg:#f5f7fa;--surface:#fff;--ink:#101828;--muted:#66748e;--line:#e2e8f0;--primary:#0f6fb8;--primary-dark:#0a4a7a;--navy:#0b1524;--cyan:#1fb6c9;--green:#0f8f6c;--amber:#a8620c;--red:#b3261e;--radius:10px}
+    :root{
+      --bg:#05070c;--surface:rgba(255,255,255,.035);--surface-2:rgba(255,255,255,.06);--surface-solid:#0c1119;
+      --ink:#f2f5f9;--muted:#8b96ab;--line:rgba(255,255,255,.10);--line-strong:rgba(255,255,255,.20);
+      --primary:#2f8fe0;--primary-dark:#1c6fb3;--primary-soft:rgba(47,143,224,.16);
+      --navy:#0c1119;--cyan:#38b6c9;--green:#1fb98a;--amber:#e0a72f;--red:#f2555a;--radius:14px
+    }
     *{box-sizing:border-box}
-    body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg)}
+    body{
+      margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);
+      background:
+        radial-gradient(1100px 560px at 50% -14%, rgba(47,143,224,.18), transparent 60%),
+        radial-gradient(700px 380px at 96% 0%, rgba(47,143,224,.07), transparent 60%),
+        var(--bg);
+      scrollbar-color:rgba(255,255,255,.25) transparent
+    }
+    ::-webkit-scrollbar{height:10px;width:10px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:6px}
     button,input,select{font-family:inherit}
     .page{width:min(1280px,calc(100% - 32px));margin:0 auto;padding:24px 0 60px}
 
     /* Topbar */
-    .nav{position:sticky;top:0;z-index:30;height:60px;border-radius:0;background:var(--navy);border:0;border-bottom:1px solid #1c2b40;box-shadow:none;display:flex;align-items:center;justify-content:space-between;padding:0 20px;margin:0 0 24px}
+    .nav{position:sticky;top:0;z-index:30;height:60px;border-radius:0;background:rgba(5,7,12,.75);backdrop-filter:blur(14px);border:0;border-bottom:1px solid var(--line);box-shadow:none;display:flex;align-items:center;justify-content:space-between;padding:0 20px;margin:0 0 24px}
     .page.app-shell{padding-top:0}
     .brand,.brand-icon-only{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700;letter-spacing:0;color:#fff}
-    .brand-symbol{width:30px;height:30px;object-fit:contain}
+    .brand-symbol{width:40px;height:40px;object-fit:contain}
+    select{color-scheme:dark}
+    select option{background:var(--surface-solid);color:var(--ink)}
     .mark{width:30px;height:30px;border-radius:8px;background:var(--primary);position:relative;display:grid;place-items:center;color:#fff;font-size:13px;font-weight:800}
     .mark:before{content:'CP';position:relative;z-index:2}
     .mark:after{display:none}
@@ -23,129 +40,128 @@
     .menu{position:relative}
     .menu-btn{height:36px;border:0;border-radius:8px;background:transparent;padding:0 12px;font-weight:600;font-size:13.5px;cursor:pointer;transition:background .12s;color:rgba(255,255,255,.82)}
     .menu-btn:hover,.menu.open .menu-btn{background:rgba(255,255,255,.10);color:#fff}
-    .dropdown{position:absolute;top:44px;right:0;width:300px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 12px 32px rgba(15,23,42,.16);padding:14px;display:none;z-index:50}
+    .dropdown{position:absolute;top:44px;right:0;width:300px;background:var(--surface-solid);border:1px solid var(--line-strong);border-radius:var(--radius);box-shadow:0 20px 44px rgba(0,0,0,.5);padding:14px;display:none;z-index:50}
     .menu.open .dropdown{display:block}
     .dropdown.wide{width:360px}
     .field{margin-bottom:12px}
     .field label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px}
-    .field input,.field select{height:38px;width:100%;border:1px solid var(--line);border-radius:8px;padding:0 11px;background:#fff;outline:0;font-size:14px;color:var(--ink)}
+    .field input,.field select{height:38px;width:100%;border:1px solid var(--line);border-radius:8px;padding:0 11px;background:rgba(255,255,255,.04);outline:0;font-size:14px;color:var(--ink)}
     .field input:focus,.field select:focus{border-color:var(--primary)}
     .actions{display:flex;gap:8px;flex-wrap:wrap}
     .topbar-user{display:flex;align-items:center;gap:12px}
     .user{font-size:13px;color:rgba(255,255,255,.75);font-weight:500;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
     /* Buttons */
-    .btn{height:38px;border:1px solid transparent;border-radius:8px;padding:0 14px;font-weight:600;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:background .12s,border-color .12s;white-space:nowrap}
-    .btn:hover{filter:brightness(1.04)}
+    .btn{height:38px;border:1px solid transparent;border-radius:9px;padding:0 14px;font-weight:600;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:background .12s,border-color .12s,filter .12s;white-space:nowrap}
+    .btn:hover{filter:brightness(1.08)}
     .btn:disabled{opacity:.5;cursor:not-allowed}
-    .btn-primary{background:var(--primary);color:#fff}
-    .btn-green{background:var(--green);color:#fff}
-    .btn-blue{background:var(--primary);color:#fff}
-    .btn-red{background:var(--red);color:#fff}
-    .btn-light{background:#fff;border-color:var(--line);color:var(--ink)}
-    .btn-light:hover{background:#f8fafc}
-    .btn-danger-light{background:#fdf2f2;border-color:#f3c9c6;color:var(--red)}
+    .btn-primary{border-color:rgba(47,143,224,.55);background:linear-gradient(180deg,var(--primary),var(--primary-dark));color:#fff;box-shadow:0 8px 22px -12px rgba(47,143,224,.6)}
+    .btn-green{border-color:rgba(31,185,138,.5);background:linear-gradient(180deg,#22c99a,#159873);color:#fff;box-shadow:0 8px 22px -12px rgba(31,185,138,.5)}
+    .btn-blue{border-color:rgba(47,143,224,.55);background:linear-gradient(180deg,var(--primary),var(--primary-dark));color:#fff}
+    .btn-red{border-color:rgba(242,85,90,.55);background:linear-gradient(180deg,#f2555a,#c93b40);color:#fff}
+    .btn-light{background:var(--surface-2);border-color:var(--line-strong);color:var(--ink)}
+    .btn-light:hover{background:rgba(255,255,255,.10)}
+    .btn-danger-light{background:rgba(242,85,90,.12);border-color:rgba(242,85,90,.35);color:var(--red)}
     .btn-full{width:100%}
     .btn-siigo img{width:20px;height:20px;object-fit:contain;background:#fff;border-radius:5px;padding:1px}
 
-    /* Hero */
-    .hero,.product-hero{margin:0 0 20px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:none;overflow:hidden;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(300px,.7fr);gap:0;padding:0}
-    .hero-copy{padding:32px;display:flex;flex-direction:column;justify-content:center}
-    .eyebrow{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:6px;background:#eef6fc;color:var(--primary-dark);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;width:fit-content}
-    .hero h1,.product-hero h1{font-size:30px;line-height:1.15;letter-spacing:-.01em;margin:14px 0 8px;color:var(--ink);max-width:520px;font-weight:700}
-    .hero p,.product-hero p{margin:0;color:var(--muted);font-size:14.5px;line-height:1.55;max-width:480px}
-    .hero-actions{margin-top:20px}
-    .hero-main{border-color:var(--line)}
-    .workflow{display:flex;gap:18px;margin-top:20px}
-    .workflow div{font-size:12.5px;color:var(--muted)}
-    .workflow strong{display:block;color:var(--primary);font-size:13px;margin-bottom:2px}
-    .hero-visual{background:#fafbfd;border-left:1px solid var(--line);padding:24px;display:flex;align-items:center;justify-content:center}
-    .mini-dashboard{width:100%;max-width:380px;border-radius:8px;background:#fff;border:1px solid var(--line);padding:16px}
-    .mini-top{display:none}
-    .mini-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:12px}
-    .flow-row{display:grid;grid-template-columns:30px 1fr;gap:10px;align-items:center;background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:9px 0;margin-bottom:0}
-    .flow-row:last-of-type{border-bottom:0}
-    .flow-dot{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;background:var(--bg);color:var(--muted);font-weight:700;font-size:12px}
-    .flow-dot.active{background:var(--primary);color:#fff}
-    .flow-row strong{display:block;font-size:13px;font-weight:600}
-    .flow-row small{display:block;color:var(--muted);font-weight:500;margin-top:1px;font-size:12px}
-    .siigo-strip{margin-top:12px;display:flex;align-items:center;gap:8px;border-radius:8px;background:var(--bg);border:1px solid var(--line);padding:10px;color:var(--muted);font-weight:600;font-size:12.5px}
-    .siigo-strip img{width:22px;height:22px;object-fit:contain}
+    /* Floating action button */
+    .fab{position:fixed;right:26px;bottom:26px;z-index:60;display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+    .fab-menu{display:flex;flex-direction:column;gap:8px;margin-bottom:2px;align-items:flex-end}
+    .fab-menu.show{display:flex}
+    .fab-menu:not(.show){display:none}
+    .fab-item{display:inline-flex;align-items:center;gap:9px;height:42px;padding:0 16px 0 14px;border-radius:999px;background:var(--surface-solid);border:1px solid var(--line-strong);color:var(--ink);font-weight:600;font-size:13px;cursor:pointer;box-shadow:0 14px 30px -12px rgba(0,0,0,.6);white-space:nowrap}
+    .fab-item:hover{background:rgba(255,255,255,.10)}
+    .fab-item .ic{width:22px;height:22px;border-radius:50%;background:var(--primary-soft);color:var(--primary);display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+    .fab-main{width:58px;height:58px;border-radius:50%;border:1px solid rgba(47,143,224,.55);background:linear-gradient(180deg,var(--primary),var(--primary-dark));color:#fff;font-size:26px;font-weight:400;cursor:pointer;box-shadow:0 16px 34px -10px rgba(47,143,224,.65);transition:transform .18s ease}
+    .fab-main.open{transform:rotate(45deg)}
+
+    /* Hero strip */
+    .hero-strip{margin:0 0 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+    .hero-strip h1{font-size:22px;letter-spacing:-.01em;margin:0 0 3px;color:var(--ink);font-weight:700}
+    .hero-strip p{margin:0;color:var(--muted);font-size:13.5px}
+
+    /* Bulk action bar (appears only when rows are selected) */
+    .bulk-bar{align-items:center;justify-content:space-between;gap:12px;background:var(--primary-soft);border:1px solid rgba(47,143,224,.35);border-radius:10px;padding:10px 12px;margin:-4px 0 14px;flex-wrap:wrap}
+    .bulk-bar .selected-counter{background:rgba(255,255,255,.07)}
 
     /* Stats */
     .stats,.metrics-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;padding:0;margin-bottom:20px}
-    .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+    .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;backdrop-filter:blur(14px)}
     .stat span{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
     .stat strong{display:block;font-size:26px;margin-top:4px;font-weight:700;font-family:ui-monospace,Consolas,monospace}
 
     /* Card / board */
-    .card,.invoice-board{margin-top:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:none;overflow:hidden}
+    .card,.invoice-board{margin-top:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:none;overflow:hidden;backdrop-filter:blur(14px)}
     .card-head,.board-head{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:14px}
-    .section-label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;color:var(--primary)}
+    .section-label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;color:var(--primary);font-family:ui-monospace,Consolas,monospace}
     .card-head h2,.board-head h2{margin:2px 0 2px;font-size:18px;font-weight:700;letter-spacing:0}
     .card-head p,.board-head p{margin:0;color:var(--muted);font-size:13px}
     .card-body{padding:18px 20px}
     .toolbar,.board-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;background:transparent;border:0;padding:0}
-    .search{height:38px;border:1px solid var(--line);border-radius:8px;display:flex;align-items:center;gap:8px;padding:0 11px;flex:1;min-width:260px;background:#fff;color:var(--muted)}
-    .search input{border:0;outline:0;flex:1;font-size:14px;color:var(--ink)}
-    .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fff}
+    .search{height:38px;border:1px solid var(--line);border-radius:9px;display:flex;align-items:center;gap:8px;padding:0 11px;flex:1;min-width:260px;background:rgba(255,255,255,.04);color:var(--muted)}
+    .search input{border:0;outline:0;flex:1;font-size:14px;color:var(--ink);background:transparent}
+    .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);scrollbar-color:rgba(255,255,255,.25) transparent}
+    .table-wrap::-webkit-scrollbar{height:10px;width:10px}
+    .table-wrap::-webkit-scrollbar-track{background:transparent}
+    .table-wrap::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:6px}
     table{width:100%;border-collapse:collapse;min-width:1040px}
-    th{background:#fafbfd;text-align:left;padding:10px 13px;color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--line)}
+    th{background:rgba(255,255,255,.035);text-align:left;padding:10px 13px;color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--line)}
     td{padding:12px 13px;border-top:1px solid var(--line);font-size:13.5px;vertical-align:middle}
-    tbody tr:hover td{background:#fafbfd}
+    tbody tr:hover td{background:rgba(255,255,255,.03)}
     .supplier{font-weight:600}
     .sub{display:block;color:var(--muted);font-size:12px;margin-top:2px}
     .mono{font-family:ui-monospace,Consolas,monospace}
     td strong,.stat strong,.money-highlight{font-family:ui-monospace,Consolas,monospace}
 
     /* Status pills */
-    .pill{display:inline-flex;border-radius:6px;padding:4px 9px;font-size:11.5px;font-weight:700}
-    .received{background:#fdf3e7;color:var(--amber)}
-    .accounted{background:#eaf3fb;color:var(--primary-dark)}
-    .approved{background:#e9f7f1;color:var(--green)}
+    .pill{display:inline-flex;border-radius:999px;padding:4px 10px;font-size:11.5px;font-weight:700;border:1px solid transparent}
+    .received{background:rgba(224,167,47,.14);color:var(--amber);border-color:rgba(224,167,47,.35)}
+    .accounted{background:var(--primary-soft);color:#7fc0f2;border-color:rgba(47,143,224,.35)}
+    .approved{background:rgba(31,185,138,.14);color:var(--green);border-color:rgba(31,185,138,.35)}
 
     /* Action select / checkboxes */
-    .action-select{height:36px;border:1px solid var(--line);border-radius:7px;background:#fff;padding:0 10px;font-weight:600;font-size:13px;color:var(--ink);cursor:pointer;min-width:140px}
+    .action-select{height:36px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.04);padding:0 10px;font-weight:600;font-size:13px;color:var(--ink);cursor:pointer;min-width:140px}
     .check-cell{width:44px;text-align:center}
     .mini-check{width:15px;height:15px;accent-color:var(--primary);cursor:pointer}
     .select-all-wrap{display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:12px;font-weight:600;color:var(--muted)}
-    .selected-counter{font-size:12.5px;color:var(--muted);font-weight:600;background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px 11px}
-    .progress-wide{display:none;margin:0 0 14px;background:#eaf3fb;border:1px solid #c7dff2;color:var(--primary-dark);border-radius:8px;padding:10px 12px;font-size:13px;font-weight:600}
+    .selected-counter{font-size:12.5px;color:var(--muted);font-weight:600;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:7px;padding:8px 11px}
+    .progress-wide{display:none;margin:0 0 14px;background:var(--primary-soft);border:1px solid rgba(47,143,224,.35);color:#7fc0f2;border-radius:8px;padding:10px 12px;font-size:13px;font-weight:600}
 
     /* Log / errors */
-    .log-panel{margin-top:14px;background:var(--navy);color:#cbd5e1;border-radius:8px;padding:12px;white-space:pre-wrap;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.5;display:none}
+    .log-panel{margin-top:14px;background:#000;color:#cbd5e1;border:1px solid var(--line);border-radius:8px;padding:12px;white-space:pre-wrap;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.5;display:none}
     .log-panel.show{display:block}
 
     /* Modals */
-    .modal-bg{position:fixed;inset:0;background:rgba(10,17,28,.5);display:none;align-items:center;justify-content:center;padding:20px;z-index:80}
+    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;padding:20px;z-index:80}
     .modal-bg.show{display:flex}
-    .modal{width:min(820px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:12px;box-shadow:0 24px 60px rgba(15,23,42,.22);padding:22px;animation:pop .14s ease}
+    .modal{width:min(820px,100%);max-height:92vh;overflow:auto;background:var(--surface-solid);border:1px solid var(--line-strong);border-radius:16px;box-shadow:0 30px 70px rgba(0,0,0,.55);padding:22px;animation:pop .14s ease;color:var(--ink)}
     .modal.small{width:min(480px,100%)}
     @keyframes pop{from{transform:scale(.98);opacity:.6}to{transform:scale(1);opacity:1}}
     .modal-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:16px}
     .modal-head h3{margin:0 0 4px;font-size:18px;font-weight:700}
     .modal-head p{margin:0;color:var(--muted);line-height:1.45;font-size:13px}
-    .close{width:32px;height:32px;border:0;border-radius:7px;background:var(--bg);font-size:18px;cursor:pointer;color:var(--muted)}
-    .close:hover{background:var(--line)}
+    .close{width:32px;height:32px;border:0;border-radius:8px;background:rgba(255,255,255,.06);font-size:18px;cursor:pointer;color:var(--muted)}
+    .close:hover{background:rgba(255,255,255,.12)}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .export-title{display:flex;align-items:center;gap:12px}
-    .export-title img{width:36px;height:36px;object-fit:contain;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px}
+    .export-title img{width:36px;height:36px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;padding:5px}
 
     /* Toast */
-    .toast{position:fixed;right:20px;bottom:20px;background:var(--navy);color:#fff;border-radius:8px;padding:12px 15px;box-shadow:0 12px 32px rgba(15,23,42,.24);font-weight:600;font-size:13.5px;display:none;z-index:100;max-width:380px}
+    .toast{position:fixed;right:20px;bottom:20px;background:var(--surface-solid);border:1px solid var(--line-strong);color:#fff;border-radius:10px;padding:12px 15px;box-shadow:0 20px 44px rgba(0,0,0,.5);font-weight:600;font-size:13.5px;display:none;z-index:100;max-width:380px}
     .toast.show{display:block}
 
     /* Invoice / entry detail */
-    .invoice-hero{border-radius:8px;background:var(--bg);border:1px solid var(--line);color:var(--ink);padding:16px;margin-bottom:14px}
+    .invoice-hero{border-radius:10px;background:rgba(255,255,255,.03);border:1px solid var(--line);color:var(--ink);padding:16px;margin-bottom:14px}
     .invoice-hero h2{margin:0 0 4px;font-size:19px;font-weight:700}
     .invoice-hero p{margin:0;color:var(--muted);font-size:13px}
     .detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
-    .detail-box{border:1px solid var(--line);border-radius:8px;background:#fff;padding:12px}
+    .detail-box{border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.03);padding:12px}
     .detail-box.span2{grid-column:span 2}
     .detail-box span{display:block;color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
     .detail-box strong{display:block;margin-top:5px;font-size:14px;line-height:1.35}
     .money-highlight{font-size:18px!important;color:var(--green)}
-    .support-box{border:1px dashed var(--line);background:var(--bg);border-radius:8px;padding:12px;margin-top:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    .support-box{border:1px dashed var(--line);background:rgba(255,255,255,.03);border-radius:10px;padding:12px;margin-top:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
     .support-box p{margin:0;color:var(--muted);font-size:12.5px}
     .xml-box{display:none}
 
@@ -162,9 +178,11 @@
       .toolbar,.board-toolbar{display:block}
       .search{min-width:0;margin-bottom:8px}
       .hero h1,.product-hero h1{font-size:24px}
+      .fab{right:16px;bottom:16px}
     }
   </style>
 <script src="config.js"></script>
+<script src="xlsx.full.min.js"></script>
 </head>
 <body>
 <div class="page app-shell">
@@ -172,39 +190,33 @@
     <div class="brand brand-icon-only"><img class="brand-symbol" src="contapilot-symbol-transparent.png" alt="ContaPilot"></div>
     <div class="nav-center nav-center-modern">
       <div class="menu" id="companyMenu"><button class="menu-btn" onclick="toggleMenu('companyMenu')">Empresas ▾</button><div class="dropdown wide"><div class="field"><label>Empresa activa</label><select id="companySelect" onchange="onCompanyChange()"></select></div><div class="actions"><button class="btn btn-primary" onclick="openCompanyModal()">+ Agregar empresa</button><button class="btn btn-light" onclick="openEditCompanyModal()">Editar</button><button class="btn btn-danger-light" onclick="deleteCompany()">Eliminar</button><button class="btn btn-light" onclick="loadCompanies()">Actualizar</button></div><div class="sub" id="companyHint" style="margin-top:10px">Agrega una empresa para iniciar.</div></div></div>
-      <div class="menu" id="configMenu"><button class="menu-btn" onclick="toggleMenu('configMenu')">Configuración ▾</button><div class="dropdown"><button class="btn btn-light btn-full" onclick="openDian();closeMenus()">Importar facturas DIAN</button><button class="btn btn-light btn-full btn-siigo" onclick="openSiigoModal();closeMenus()" style="margin-top:8px"><img src="siigo-nube-logo.png" alt="Siigo">Siigo Nube</button><button class="btn btn-light btn-full" onclick="openSettings();closeMenus()" style="margin-top:8px">Config. contable</button><button class="btn btn-light btn-full" onclick="openRules();closeMenus()" style="margin-top:8px">Reglas contables</button><button class="btn btn-light btn-full" onclick="openChartModal();closeMenus()" style="margin-top:8px">Plan de cuentas</button><button class="btn btn-light btn-full" onclick="openImportHistory();closeMenus()" style="margin-top:8px">Historial de cargas</button><button class="btn btn-light btn-full" onclick="toggleLog()" style="margin-top:8px">Ver log</button></div></div>
+      <div class="menu" id="configMenu"><button class="menu-btn" onclick="toggleMenu('configMenu')">Configuración ▾</button><div class="dropdown"><button class="btn btn-light btn-full btn-siigo" onclick="openSiigoModal();closeMenus()">Siigo Nube</button><button class="btn btn-light btn-full" onclick="openSettings();closeMenus()" style="margin-top:8px">Config. contable</button><button class="btn btn-light btn-full" onclick="openRules();closeMenus()" style="margin-top:8px">Reglas contables</button><button class="btn btn-light btn-full" onclick="openChartModal();closeMenus()" style="margin-top:8px">Plan de cuentas</button><button class="btn btn-light btn-full" onclick="openImportHistory();closeMenus()" style="margin-top:8px">Historial de cargas</button><button class="btn btn-light btn-full" onclick="toggleLog()" style="margin-top:8px">Ver log</button></div></div>
     </div>
     <div class="topbar-user"><span class="user" id="userLabel">admin@contapilot.com</span><button class="btn btn-red" onclick="logout()">Salir</button></div>
   </nav>
 
-  <section class="hero product-hero">
-    <div class="hero-copy">
-      <div class="eyebrow">DIAN → Causación → Siigo Nube</div>
-      <h1>Centro de facturas</h1>
-      <p>Procesa meses completos de facturas electrónicas, selecciona documentos, causa por lotes y exporta el resultado contable.</p>
-      <div class="actions hero-actions"><input id="fileInput" type="file" multiple accept=".xml,.zip,.html,.htm,.txt" style="display:none" onchange="upload()"><button class="btn btn-light hero-main" onclick="openDian()">Importar facturas DIAN</button><button class="btn btn-blue btn-siigo" onclick="openExport()"><img src="siigo-nube-logo.png" alt="Siigo Nube">Exportar</button></div>
-    </div>
-    <div class="hero-visual" aria-hidden="true">
-      <div class="mini-dashboard">
-        <div class="mini-top"><span></span><span></span><span></span></div>
-        <div class="mini-title">Flujo del mes</div>
-        <div class="flow-row"><div class="flow-dot active">1</div><div><strong>Importar XML/ZIP</strong><small>Lectura por lotes</small></div></div>
-        <div class="flow-row"><div class="flow-dot active">2</div><div><strong>Causar seleccionadas</strong><small>Motor contable automático</small></div></div>
-        <div class="flow-row"><div class="flow-dot">3</div><div><strong>Exportar</strong><small>CSV / Siigo Nube</small></div></div>
-        <div class="siigo-strip"><img src="siigo-nube-logo.png" alt="Siigo"><span>Salida preparada para Siigo Nube</span></div>
-      </div>
-    </div>
+  <section class="hero-strip">
+    <div><h1>Centro de facturas</h1><p>Importa, causa y exporta tus facturas electrónicas.</p></div>
+    <div class="actions"><input id="fileInput" type="file" multiple accept=".xml,.zip,.html,.htm,.txt" style="display:none" onchange="upload()"><button class="btn btn-primary" onclick="openDian()">+ Importar facturas</button></div>
   </section>
 
   <section class="stats metrics-grid"><div class="stat"><span>Facturas</span><strong id="mTotal">0</strong></div><div class="stat"><span>Recibidas</span><strong id="mReceived">0</strong></div><div class="stat"><span>Causadas</span><strong id="mAccounted">0</strong></div><div class="stat"><span>Aprobadas</span><strong id="mApproved">0</strong></div><div class="stat"><span>Exportadas</span><strong id="mExported">0</strong></div></section>
 
-  <section class="card invoice-board"><div class="card-head board-head"><div><span class="section-label">Operación</span><h2>Bandeja de facturas</h2><p>Marca las facturas que quieres causar. Puedes seleccionar una, varias o todas.</p></div><button class="btn btn-light" onclick="loadInvoices()">Actualizar</button></div><div class="card-body"><div class="toolbar board-toolbar"><div class="search">⌕ <input id="search" oninput="renderInvoices()" placeholder="Buscar factura, proveedor, receptor o NIT"></div><select id="statusFilter" class="action-select" onchange="renderInvoices()"><option value="all">Todos los estados</option><option value="received">Recibidas</option><option value="accounted">Causadas</option><option value="approved">Aprobadas</option><option value="exported">Exportadas</option></select><span id="selectedCounter" class="selected-counter">0 seleccionadas</span><span id="progressBox" class="selected-counter" style="display:none;background:#eef6ff;color:#0f5f9f">Listo</span><div class="actions"><button id="causeSelectedBtn" class="btn btn-green" onclick="causeSelectedInvoices()">Causar Factura</button><button id="deleteSelectedBtn" class="btn btn-danger-light" onclick="deleteSelectedInvoices()">Eliminar</button><button id="uploadSiigoBtn" class="btn btn-blue btn-siigo" onclick="uploadSelectedToSiigo()"><img src="siigo-nube-logo.png" alt="Siigo">Subir a Siigo</button><button class="btn btn-green" onclick="approveAll()">Aprobar todas</button></div></div><div id="wideProgress" class="progress-wide">Listo</div><div class="table-wrap"><table><thead><tr><th class="check-cell"><label class="select-all-wrap"><input id="selectAllBox" class="mini-check" type="checkbox" onchange="toggleSelectAll(this.checked)"><span>Seleccionar todas</span></label></th><th>Factura</th><th>Fecha</th><th>Proveedor</th><th>Receptor</th><th>Total</th><th>Estado</th><th>Gestión</th></tr></thead><tbody id="rows"><tr><td colspan="8">Sin facturas</td></tr></tbody></table></div><div id="uploadErrors" style="display:none;margin-top:14px;background:#fff1f1;border:1px solid #fecaca;color:#991b1b;border-radius:18px;padding:14px;font-size:13px;font-weight:750"></div><div id="log" class="log-panel">Listo.</div></div></section>
+  <div class="fab" id="fab">
+    <div class="fab-menu" id="fabMenu">
+      <button class="fab-item" onclick="closeFab();openExport()"><span class="ic">⭳</span>Exportar</button>
+      <button class="fab-item" onclick="closeFab();openSiigoModal()"><span class="ic">$</span>Siigo Nube</button>
+      <button class="fab-item" onclick="closeFab();fileInput.click()"><span class="ic">＋</span>Subir ZIP/XML</button>
+    </div>
+    <button class="fab-main" id="fabMain" onclick="toggleFab()">＋</button>
+  </div>
+  <section class="card invoice-board"><div class="card-head board-head"><div><span class="section-label">Operación</span><h2>Bandeja de facturas</h2><p>Selecciona las facturas que quieres causar, aprobar o subir a Siigo.</p></div><div class="actions"><button class="btn btn-light" onclick="openExport()">Exportar</button><button class="btn btn-light" onclick="loadInvoices()">Actualizar</button></div></div><div class="card-body"><div class="toolbar board-toolbar"><div class="search">⌕ <input id="search" oninput="renderInvoices()" placeholder="Buscar factura, proveedor, receptor o NIT"></div><select id="statusFilter" class="action-select" onchange="renderInvoices()"><option value="all">Todos los estados</option><option value="received">Recibidas</option><option value="accounted">Causadas</option><option value="approved">Aprobadas</option><option value="exported">Exportadas</option></select><span id="progressBox" class="selected-counter" style="display:none;background:var(--primary-soft);color:#7fc0f2">Listo</span></div><div id="bulkBar" class="bulk-bar" style="display:none"><span id="selectedCounter" class="selected-counter">0 seleccionadas</span><div class="actions"><button id="causeSelectedBtn" class="btn btn-green" onclick="causeSelectedInvoices()">Causar</button><button id="approveSelectedBtn" class="btn btn-green" onclick="approveSelectedInvoices()">Aprobar</button><button id="uploadSiigoBtn" class="btn btn-blue btn-siigo" onclick="uploadSelectedToSiigo()"><img src="siigo-nube-logo.png" alt="Siigo">Subir a Siigo</button><button id="deleteSelectedBtn" class="btn btn-danger-light" onclick="deleteSelectedInvoices()">Eliminar</button></div></div><div id="wideProgress" class="progress-wide">Listo</div><div class="table-wrap"><table><thead><tr><th class="check-cell"><label class="select-all-wrap"><input id="selectAllBox" class="mini-check" type="checkbox" onchange="toggleSelectAll(this.checked)"><span>Seleccionar todas</span></label></th><th>Factura</th><th>Fecha</th><th>Proveedor</th><th>Receptor</th><th>Total</th><th>Estado</th><th>Gestión</th></tr></thead><tbody id="rows"><tr><td colspan="8">Sin facturas</td></tr></tbody></table></div><div id="uploadErrors" style="display:none;margin-top:14px;background:rgba(242,85,90,.12);border:1px solid rgba(242,85,90,.35);color:#ff9498;border-radius:14px;padding:14px;font-size:13px;font-weight:750"></div><div id="log" class="log-panel">Listo.</div></div></section>
 </div>
 
 <div id="companyModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div><h3 id="companyModalTitle">Agregar empresa</h3><p id="companyModalText">El NIT debe coincidir con el receptor de las facturas.</p></div><button class="close" onclick="closeModal('companyModal')">×</button></div><div class="field"><label>Empresa</label><input id="companyName" value=""></div><div class="field"><label>NIT receptor</label><input id="companyNit" value=""></div><button id="companySaveButton" class="btn btn-green btn-full" onclick="saveCompany()">Guardar empresa</button></div></div>
-<div id="dianModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Importar facturas DIAN</h3><p>Flujo simple: descarga en DIAN, sube a ContaPilot y causa todas.</p></div><button class="close" onclick="closeModal('dianModal')">×</button></div><div style="background:#f8fafc;border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:14px">
+<div id="dianModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Importar facturas DIAN</h3><p>Flujo simple: descarga en DIAN, sube a ContaPilot y causa todas.</p></div><button class="close" onclick="closeModal('dianModal')">×</button></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px">
   <strong>Pasos para el contador</strong>
-  <ol style="margin:10px 0 0;padding-left:18px;line-height:1.65;color:#344054;font-size:14px">
+  <ol style="margin:10px 0 0;padding-left:18px;line-height:1.65;color:#c7cedb;font-size:14px">
     <li>Entra al portal de la DIAN.</li>
     <li>Busca <strong>Documentos recibidos</strong> y filtra el mes o los meses que quieres causar.</li>
     <li>Descarga el archivo que entrega la DIAN: puede ser <strong>ZIP</strong> o <strong>XML</strong>.</li>
@@ -212,26 +224,70 @@
     <li>Cuando ContaPilot liste las facturas, selecciona una, varias o todas y presiona <strong>Causar Factura</strong>.</li>
     <li>Finalmente exporta el resultado para Siigo Nube o CSV.</li>
   </ol>
-  <div style="margin-top:12px;padding:12px;border-radius:14px;background:#ecfdf5;color:#047857;font-weight:850;font-size:13px">ContaPilot revisa el ZIP, localiza los XML de factura, valida el NIT receptor y prepara la causación masiva.</div>
-  <div style="margin-top:10px;padding:12px;border-radius:14px;background:#fff7ed;color:#c2410c;font-weight:850;font-size:13px">Sincronización automática DIAN: próximamente. Por ahora usamos el flujo estable recomendado por el contador.</div>
+  <div style="margin-top:12px;padding:12px;border-radius:14px;background:rgba(31,185,138,.14);border:1px solid rgba(31,185,138,.35);color:#3ddba3;font-weight:850;font-size:13px">ContaPilot revisa el ZIP, localiza los XML de factura, valida el NIT receptor y prepara la causación masiva.</div>
   <div class="actions" style="margin-top:14px">
     <button class="btn btn-light" onclick="openDianPortal()">Abrir portal DIAN</button>
     <button class="btn btn-green" onclick="closeModal('dianModal'); fileInput.click()">Subir ZIP/XML</button>
     <button class="btn btn-light" onclick="closeModal('dianModal'); openImportHistory()">Ver historial de cargas</button>
   </div>
 </div></div></div>
-<div id="siigoModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div class="export-title"><img src="siigo-nube-logo.png" alt="Siigo Nube"><div><h3>Conexión Siigo Nube</h3><p>Primero probamos la conexión segura con las credenciales API configuradas en Cloudflare.</p></div></div><button class="close" onclick="closeModal('siigoModal')">×</button></div><div style="background:#f8fbff;border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:14px;color:#344054;font-size:13px;line-height:1.5"><strong>Importante:</strong> las credenciales de Siigo no se guardan en GitHub. Deben configurarse en Cloudflare como variables/secretos: <strong>SIIGO_USERNAME</strong>, <strong>SIIGO_ACCESS_KEY</strong> y opcional <strong>SIIGO_PARTNER_ID</strong>.</div><div class="actions"><button class="btn btn-blue btn-full btn-siigo" onclick="testSiigoConnection()"><img src="siigo-nube-logo.png" alt="Siigo">Probar conexión Siigo</button><button class="btn btn-light btn-full" onclick="loadSiigoCatalogs()" style="margin-top:8px">Consultar catálogos básicos</button></div><div id="siigoResult" style="margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:16px;padding:12px;font-size:13px;white-space:pre-wrap;display:none"></div></div></div>
-<div id="settingsModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Configuración contable</h3><p>Cuentas base de la empresa activa.</p></div><button class="close" onclick="closeModal('settingsModal')">×</button></div><div class="grid2"><div class="field"><label>IVA</label><input id="setVatAccount" list="accountsDatalist"></div><div class="field"><label>Descripción IVA</label><input id="setVatDescription"></div><div class="field"><label>Proveedores</label><input id="setPayableAccount" list="accountsDatalist"></div><div class="field"><label>Descripción proveedores</label><input id="setPayableDescription"></div><div class="field"><label>Retención</label><input id="setWithholdingAccount" list="accountsDatalist"></div><div class="field"><label>Descripción retención</label><input id="setWithholdingDescription"></div><div class="field"><label>Centro costo default</label><input id="setDefaultCostCenter"></div><div class="field"><label>Cuenta gasto default</label><input id="setDefaultExpenseAccount" list="accountsDatalist"></div></div><div class="field"><label>Descripción gasto default</label><input id="setDefaultExpenseDescription"></div><div class="actions" style="justify-content:flex-end"><button class="btn btn-green" onclick="saveSettings()">Guardar</button></div></div></div>
+<div id="dianSyncModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Sincronizar con la DIAN</h3><p>Busca automáticamente tus facturas de compra en el portal de la DIAN.</p></div><button class="close" onclick="closeModal('dianSyncModal')">×</button></div>
+  <div style="background:rgba(224,167,47,.14);border:1px solid rgba(224,167,47,.35);border-radius:10px;padding:12px;margin-bottom:14px;color:var(--amber);font-size:13px;line-height:1.5"><strong>Cómo funciona:</strong> la búsqueda es automática. La DIAN exige resolver un captcha de seguridad (solo lo puede hacer una persona) antes de descargar cada documento — por eso resuelves ese captcha una sola vez en el portal de la DIAN y luego generas aquí un "conector" que descarga y sube automáticamente el resto de facturas nuevas.</div>
+  <div class="field"><label>Token de acceso</label><input id="dianTokenUrl" placeholder="Pega la URL de token (catalogo-vpfe.dian.gov.co/User/AuthToken?...)"></div>
+  <p style="margin:-6px 0 14px;color:var(--muted);font-size:12.5px">Revisa el correo del representante legal registrado en el RUT: la DIAN envía ese enlace cada vez que se solicita.</p>
+  <button class="btn btn-light btn-full" onclick="saveDianConnection()">Guardar conexión</button>
+  <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+  <div class="grid2">
+    <div class="field"><label>Método de búsqueda</label>
+      <select id="dianSyncMethod" onchange="paintDianSyncMethod()"><option value="fechas">Buscar por fechas</option><option value="cufes">Buscar por CUFEs</option></select>
+    </div>
+    <div></div>
+  </div>
+  <div id="dianDateFields" class="grid2">
+    <div class="field"><label>Fecha inicial</label><input id="dianStartDate" type="date"></div>
+    <div class="field"><label>Fecha final</label><input id="dianEndDate" type="date"></div>
+  </div>
+  <div id="dianCufesField" class="field" style="display:none"><label>CUFEs</label><textarea id="dianCufes" rows="3" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 11px;font-family:ui-monospace,Consolas,monospace;font-size:12.5px" placeholder="Uno por línea o separados por coma"></textarea></div>
+  <button class="btn btn-primary btn-full" onclick="syncDian()">Buscar en la DIAN</button>
+  <div id="dianResult" style="margin-top:14px;background:rgba(242,85,90,.12);border:1px solid rgba(242,85,90,.35);color:var(--red);border-radius:8px;padding:12px;font-size:13px;white-space:pre-wrap;display:none"></div>
+  <div id="dianDocsWrap" style="display:none;margin-top:14px">
+    <p style="margin:0 0 8px;font-weight:600;font-size:13.5px" id="dianDocsSummary"></p>
+    <div class="table-wrap"><table style="min-width:720px"><thead><tr><th>Fecha</th><th>Proveedor</th><th>Documento</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody id="dianDocsRows"></tbody></table></div>
+    <button class="btn btn-primary btn-full" style="margin-top:12px" onclick="generateDianConnector()">Generar conector de descarga automática</button>
+    <div id="dianConnectorBox" style="display:none;margin-top:12px">
+      <div style="background:var(--primary-soft);border:1px solid rgba(47,143,224,.35);border-radius:8px;padding:12px;margin-bottom:10px;color:#bfe0fb;font-size:13px;line-height:1.6">
+        <strong>Cómo usarlo:</strong>
+        <ol style="margin:6px 0 0;padding-left:18px">
+          <li>Ve a la pestaña donde tienes abierto el portal de la DIAN (o ábrelo con "Abrir portal DIAN").</li>
+          <li>Resuelve el cuadro "Verifique que es un ser humano" (una sola vez).</li>
+          <li>Presiona F12 para abrir las herramientas de desarrollador, ve a la pestaña <strong>Console</strong>.</li>
+          <li>Pega el texto de abajo ahí y presiona Enter. Verás el progreso en esa misma consola.</li>
+        </ol>
+      </div>
+      <textarea id="dianConnectorScript" readonly rows="4" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 11px;font-family:ui-monospace,Consolas,monospace;font-size:11.5px" onclick="this.select()"></textarea>
+      <button class="btn btn-light btn-full" style="margin-top:8px" onclick="copyDianConnector()">Copiar script</button>
+    </div>
+  </div>
+  <div style="margin-top:14px"><button class="btn btn-light btn-full" onclick="loadDianLogs()">Ver historial de búsquedas</button><div id="dianLogsBox" style="margin-top:10px;display:none"><div class="table-wrap"><table style="min-width:500px"><thead><tr><th>Fecha</th><th>Estado</th><th>Encontrados</th><th>Errores</th></tr></thead><tbody id="dianLogs"></tbody></table></div></div></div>
+</div></div>
+<div id="siigoModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div class="export-title"><img src="siigo-nube-logo.png" alt="Siigo Nube"><div><h3>Conexión Siigo Nube</h3><p>Cada empresa usa su propia cuenta de Siigo — nunca se cruza con la de otro contador.</p></div></div><button class="close" onclick="closeModal('siigoModal')">×</button></div>
+  <div id="siigoCredStatus" style="margin-bottom:10px;font-size:12.5px;color:var(--muted)"></div>
+  <div class="field"><label>Usuario API Siigo</label><input id="siigoUsername" placeholder="tucorreo@empresa.com"></div>
+  <div class="field"><label>Clave de acceso (Access Key)</label><input id="siigoAccessKey" type="password" placeholder="Déjalo vacío para conservar la actual"></div>
+  <button class="btn btn-green btn-full" onclick="saveSiigoCredentials()">Guardar credenciales</button>
+  <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+  <div class="actions"><button class="btn btn-blue btn-full btn-siigo" onclick="testSiigoConnection()"><img src="siigo-nube-logo.png" alt="Siigo">Probar conexión Siigo</button><button class="btn btn-light btn-full" onclick="loadSiigoCatalogs()" style="margin-top:8px">Consultar catálogos básicos</button></div><div id="siigoResult" style="margin-top:14px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:16px;padding:12px;font-size:13px;white-space:pre-wrap;display:none"></div></div></div>
+<div id="settingsModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Configuración contable</h3><p>Cuentas base de la empresa activa.</p></div><button class="close" onclick="closeModal('settingsModal')">×</button></div><div class="grid2"><div class="field"><label>IVA 19%</label><input id="setVatAccount" list="accountsDatalist"></div><div class="field"><label>Descripción IVA 19%</label><input id="setVatDescription"></div><div class="field"><label>IVA 5%</label><input id="setVat5Account" list="accountsDatalist"></div><div class="field"><label>Descripción IVA 5%</label><input id="setVat5Description"></div><div class="field"><label>Proveedores</label><input id="setPayableAccount" list="accountsDatalist"></div><div class="field"><label>Descripción proveedores</label><input id="setPayableDescription"></div><div class="field"><label>Retención</label><input id="setWithholdingAccount" list="accountsDatalist"></div><div class="field"><label>Descripción retención</label><input id="setWithholdingDescription"></div><div class="field"><label>Centro costo default</label><input id="setDefaultCostCenter"></div><div class="field"><label>Cuenta gasto default</label><input id="setDefaultExpenseAccount" list="accountsDatalist"></div></div><div class="field"><label>Descripción gasto default</label><input id="setDefaultExpenseDescription"></div><div class="actions" style="justify-content:flex-end"><button class="btn btn-green" onclick="saveSettings()">Guardar</button></div></div></div>
 <datalist id="accountsDatalist"></datalist>
 <div id="rulesModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Reglas contables</h3><p>Reglas por empresa: proveedor/descripcion → cuenta.</p></div><button class="close" onclick="closeModal('rulesModal')">×</button></div><div class="grid2"><div class="field"><label>Tipo</label><select id="ruleType"><option value="supplier">Proveedor contiene</option><option value="description">Descripción contiene</option><option value="default">Default</option></select></div><div class="field"><label>Texto</label><input id="ruleValue" placeholder="CLASSIC JEANS"></div><div class="field"><label>Cuenta</label><input id="ruleAccount" placeholder="519525" list="accountsDatalist"></div><div class="field"><label>Descripción</label><input id="ruleDescription" placeholder="Vestuario"></div><div class="field"><label>Centro costo</label><input id="ruleCostCenter" placeholder="Administración"></div><div class="field"><label>Prioridad</label><input id="rulePriority" type="number" value="50"></div></div><div class="actions" style="justify-content:flex-end"><button class="btn btn-green" onclick="createRule()">Crear regla</button></div><hr style="border:0;border-top:1px solid var(--line);margin:16px 0"><div class="table-wrap"><table style="min-width:700px"><thead><tr><th>Tipo</th><th>Texto</th><th>Cuenta</th><th>Descripción</th><th>Prioridad</th></tr></thead><tbody id="rulesRows"></tbody></table></div></div></div>
-<div id="chartModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Plan de cuentas</h3><p>Importa el CSV del plan de cuentas de Siigo Nube (columnas: codigo,nombre,categoria,clase,activo,nivel) para validar las cuentas que se usan en reglas y configuración contable.</p></div><button class="close" onclick="closeModal('chartModal')">×</button></div><div style="background:#f8fafc;border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:14px"><input id="chartFileInput" type="file" accept=".csv" style="display:none" onchange="uploadChartCsv()"><div class="actions"><button class="btn btn-green" onclick="chartFileInput.click()">Subir CSV plan de cuentas</button></div><div id="chartImportResult" style="margin-top:10px;font-size:13px;color:#344054;font-weight:750"></div></div><div class="field"><label>Buscar cuenta</label><input id="chartSearch" oninput="renderChartAccountsList()" placeholder="Código o nombre"></div><div class="table-wrap"><table style="min-width:600px"><thead><tr><th>Código</th><th>Nombre</th><th>Clase</th></tr></thead><tbody id="chartRows"><tr><td colspan="3">Sin cuentas importadas</td></tr></tbody></table></div></div></div>
+<div id="chartModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Plan de cuentas</h3><p>Importa el Excel o CSV del plan de cuentas exportado de Siigo Nube para validar las cuentas que se usan en reglas y configuración contable.</p></div><button class="close" onclick="closeModal('chartModal')">×</button></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px"><input id="chartFileInput" type="file" accept=".csv,.xlsx,.xls" style="display:none" onchange="uploadChartCsv()"><div class="actions"><button class="btn btn-green" onclick="chartFileInput.click()">Subir plan de cuentas (Excel o CSV)</button></div><div id="chartImportResult" style="margin-top:10px;font-size:13px;color:#c7cedb;font-weight:750"></div></div><div class="field"><label>Buscar cuenta</label><input id="chartSearch" oninput="renderChartAccountsList()" placeholder="Código o nombre"></div><div class="table-wrap"><table style="min-width:600px"><thead><tr><th>Código</th><th>Nombre</th><th>Clase</th></tr></thead><tbody id="chartRows"><tr><td colspan="3">Sin cuentas importadas</td></tr></tbody></table></div></div></div>
 <div id="facturaModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3 id="facturaTitle">Detalle de factura</h3><p id="facturaSubtitle">Información extraída del XML.</p></div><button class="close" onclick="closeModal('facturaModal')">×</button></div><div class="invoice-hero"><h2 id="facturaHeroNumber">Factura</h2><p id="facturaHeroInfo">Proveedor → Receptor</p></div><div id="facturaDetail" class="detail-grid"></div><h3 style="margin:12px 0 8px">Ítems de la factura</h3><div class="table-wrap"><table style="min-width:680px"><thead><tr><th>Descripción</th><th>Cantidad</th><th>Valor línea</th></tr></thead><tbody id="facturaItems"><tr><td colspan="3">Sin ítems</td></tr></tbody></table></div><div class="support-box"><div><strong>Soporte XML original</strong><p>El XML se guarda como respaldo técnico. Puedes descargarlo si necesitas auditar la factura.</p></div><button class="btn btn-light" onclick="downloadCurrentXml()">Descargar XML</button></div><pre id="facturaXml" class="xml-box"></pre></div></div>
 <div id="causacionModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3 id="causacionTitle">Causación</h3><p id="causacionSubtitle">Asiento contable generado para la factura.</p></div><button class="close" onclick="closeModal('causacionModal')">×</button></div><div class="table-wrap"><table style="min-width:760px"><thead><tr><th>Cuenta</th><th>Descripción</th><th>Débito</th><th>Crédito</th><th>Centro costo</th></tr></thead><tbody id="causacionRows"><tr><td colspan="5">Sin causación</td></tr></tbody></table></div><div class="actions" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-light" onclick="closeModal('causacionModal')">Cerrar</button></div></div></div>
 <div id="historyModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Historial de importaciones</h3><p>Registro de cargas XML/ZIP realizadas para la empresa activa.</p></div><button class="close" onclick="closeModal('historyModal')">×</button></div><div class="table-wrap"><table style="min-width:780px"><thead><tr><th>Fecha</th><th>Archivos</th><th>Estado</th><th>Importadas</th><th>Errores</th><th>Detalle</th></tr></thead><tbody id="historyRows"><tr><td colspan="6">Sin historial</td></tr></tbody></table></div></div></div>
 <div id="exportModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div class="export-title"><img src="siigo-nube-logo.png" alt="Siigo Nube"><div><h3>Exportar a Siigo Nube</h3><p>Descarga las causaciones listas para revisión o carga en Siigo.</p></div></div><button class="close" onclick="closeModal('exportModal')">×</button></div><div class="field"><label>Formato</label><select id="exportFormat"><option value="siigo">Siigo Nube</option><option value="general">General contable</option><option value="invoices">Resumen facturas</option></select></div><button class="btn btn-blue btn-full btn-siigo" onclick="exportCsv()"><img src="siigo-nube-logo.png" alt="Siigo Nube">Descargar CSV para Siigo</button></div></div><div id="toast" class="toast"></div>
 <script>
-let token=localStorage.getItem('cp_token')||'';let invoices=[];let companies=[];let selectedInvoiceIds=new Set();let editingCompanyId='';let dianRemoteSessionId=localStorage.getItem('cp_dian_session_id')||'';let dianRemoteLiveUrl=localStorage.getItem('cp_dian_live_url')||'';if(!token)location.href='app.html';const user=JSON.parse(localStorage.getItem('cp_user')||'{}');userLabel.textContent=user.email||'admin@contapilot.com';function base(){return localStorage.getItem('cp_api_base')||window.CONTAPILOT_API_BASE||''}function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),4500)}function log(m,o){const el=document.getElementById('log');el.textContent=m+(o?'\n'+JSON.stringify(o,null,2):'')}function sleep(ms){return new Promise(r=>setTimeout(r,ms))}function setProgress(m){const p=document.getElementById('progressBox');if(p){p.style.display=m?'inline-flex':'none';p.textContent=m||''}const w=document.getElementById('wideProgress');if(w){w.style.display=m?'block':'none';w.textContent=m||''}}function setBusy(v){document.body.style.cursor=v?'progress':'';['causeSelectedBtn','deleteSelectedBtn','uploadSiigoBtn'].forEach(id=>{const b=document.getElementById(id);if(b)b.disabled=!!v});document.querySelectorAll('.action-select,.mini-check,#statusFilter,#search').forEach(el=>{el.disabled=!!v})}function chunks(arr,size){const out=[];for(let i=0;i<arr.length;i+=size)out.push(arr.slice(i,i+size));return out}
-function showUploadErrors(errors){const box=document.getElementById('uploadErrors'); if(!box)return; if(!errors||!errors.length){box.style.display='none';box.innerHTML='';return} box.style.display='block'; box.innerHTML='<strong>Observaciones:</strong><ul style="margin:8px 0 0;padding-left:18px">'+errors.map(e=>'<li><strong>'+String(e.file||'archivo')+':</strong> '+String(e.error||e)+'</li>').join('')+'</ul>';}function toggleLog(){document.getElementById('log').classList.toggle('show');closeMenus()}async function api(path,opts={}){const headers=opts.headers||{};headers.Authorization='Bearer '+token;const r=await fetch(base()+path,{...opts,headers});const ct=r.headers.get('content-type')||'';const data=ct.includes('json')?await r.json():await r.text();if(!r.ok){const d=typeof data==='string'?data:(data.detail||data.error||data);throw new Error(typeof d==='string'?d:JSON.stringify(d))}return data}function cid(){return companySelect.value}function openModal(id){closeMenus();document.getElementById(id).classList.add('show')}function closeModal(id){document.getElementById(id).classList.remove('show')}function closeMenus(){document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'))}function toggleMenu(id){document.querySelectorAll('.menu').forEach(m=>{if(m.id!==id)m.classList.remove('open')});document.getElementById(id).classList.toggle('open')}document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.modal-bg.show').forEach(m=>m.classList.remove('show'));closeMenus()}});document.addEventListener('click',e=>{if(!e.target.closest('.menu'))closeMenus()});document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('mousedown',e=>{if(e.target===bg)bg.classList.remove('show')}));function money(v){return new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP'}).format(v||0)}function statusClass(s){return s==='exported'?'approved':s==='approved'?'approved':s==='accounted'?'accounted':'received'}
+let token=localStorage.getItem('cp_token')||'';let invoices=[];let companies=[];let selectedInvoiceIds=new Set();let editingCompanyId='';let lastDianDocs=[];if(!token)location.href='app.html';const user=JSON.parse(localStorage.getItem('cp_user')||'{}');userLabel.textContent=user.email||'admin@contapilot.com';function base(){return localStorage.getItem('cp_api_base')||window.CONTAPILOT_API_BASE||''}function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),4500)}function log(m,o){const el=document.getElementById('log');el.textContent=m+(o?'\n'+JSON.stringify(o,null,2):'')}function sleep(ms){return new Promise(r=>setTimeout(r,ms))}function setProgress(m){const p=document.getElementById('progressBox');if(p){p.style.display=m?'inline-flex':'none';p.textContent=m||''}const w=document.getElementById('wideProgress');if(w){w.style.display=m?'block':'none';w.textContent=m||''}}function setBusy(v){document.body.style.cursor=v?'progress':'';['causeSelectedBtn','approveSelectedBtn','deleteSelectedBtn','uploadSiigoBtn'].forEach(id=>{const b=document.getElementById(id);if(b)b.disabled=!!v});document.querySelectorAll('.action-select,.mini-check,#statusFilter,#search').forEach(el=>{el.disabled=!!v})}function chunks(arr,size){const out=[];for(let i=0;i<arr.length;i+=size)out.push(arr.slice(i,i+size));return out}
+function showUploadErrors(errors){const box=document.getElementById('uploadErrors'); if(!box)return; if(!errors||!errors.length){box.style.display='none';box.innerHTML='';return} box.style.display='block'; box.innerHTML='<strong>Observaciones:</strong><ul style="margin:8px 0 0;padding-left:18px">'+errors.map(e=>'<li><strong>'+String(e.file||'archivo')+':</strong> '+String(e.error||e)+'</li>').join('')+'</ul>';}function toggleLog(){document.getElementById('log').classList.toggle('show');closeMenus()}async function api(path,opts={}){const headers=opts.headers||{};headers.Authorization='Bearer '+token;const r=await fetch(base()+path,{...opts,headers});const ct=r.headers.get('content-type')||'';const data=ct.includes('json')?await r.json():await r.text();if(!r.ok){const d=typeof data==='string'?data:(data.detail||data.error||data);throw new Error(typeof d==='string'?d:JSON.stringify(d))}return data}function cid(){return companySelect.value}function openModal(id){closeMenus();document.getElementById(id).classList.add('show')}function closeModal(id){document.getElementById(id).classList.remove('show')}function closeMenus(){document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'))}function toggleFab(){fabMenu.classList.toggle('show');fabMain.classList.toggle('open')}function closeFab(){fabMenu.classList.remove('show');fabMain.classList.remove('open')}function toggleMenu(id){document.querySelectorAll('.menu').forEach(m=>{if(m.id!==id)m.classList.remove('open')});document.getElementById(id).classList.toggle('open')}document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.modal-bg.show').forEach(m=>m.classList.remove('show'));closeMenus();closeFab()}});document.addEventListener('click',e=>{if(!e.target.closest('.menu'))closeMenus();if(!e.target.closest('.fab'))closeFab()});document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('mousedown',e=>{if(e.target===bg)bg.classList.remove('show')}));function money(v){return new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP'}).format(v||0)}function statusClass(s){return s==='exported'?'approved':s==='approved'?'approved':s==='accounted'?'accounted':'received'}
 function u16c(bytes,pos){return bytes[pos]|(bytes[pos+1]<<8)}
 function u32c(bytes,pos){return (bytes[pos]|(bytes[pos+1]<<8)|(bytes[pos+2]<<16)|(bytes[pos+3]<<24))>>>0}
 async function inflateRawClient(bytes){
@@ -329,7 +385,7 @@ async function upload(){
 }
 async function loadInvoices(){try{if(!cid())return;invoices=await api(`/api/companies/${cid()}/invoices`);selectedInvoiceIds=new Set([...selectedInvoiceIds].filter(id=>invoices.some(i=>i.id===id)));renderInvoices()}catch(e){log('Error facturas',{error:e.message})}}
 function filteredInvoices(){const q=(search.value||'').toLowerCase();const sf=(document.getElementById('statusFilter')?.value)||'all';return invoices.filter(i=>(sf==='all'||i.status===sf)&&(!q||`${i.invoice_number} ${i.supplier_name} ${i.customer_name} ${i.supplier_nit} ${i.customer_nit}`.toLowerCase().includes(q)))}
-function syncSelectedInfo(data=filteredInvoices()){const counter=document.getElementById('selectedCounter');if(counter)counter.textContent=`${selectedInvoiceIds.size} seleccionada${selectedInvoiceIds.size===1?'':'s'}`;const box=document.getElementById('selectAllBox');if(box){box.checked=data.length>0&&data.every(i=>selectedInvoiceIds.has(i.id));box.indeterminate=data.some(i=>selectedInvoiceIds.has(i.id))&&!box.checked;}}
+function syncSelectedInfo(data=filteredInvoices()){const counter=document.getElementById('selectedCounter');if(counter)counter.textContent=`${selectedInvoiceIds.size} seleccionada${selectedInvoiceIds.size===1?'':'s'}`;const bar=document.getElementById('bulkBar');if(bar)bar.style.display=selectedInvoiceIds.size?'flex':'none';const box=document.getElementById('selectAllBox');if(box){box.checked=data.length>0&&data.every(i=>selectedInvoiceIds.has(i.id));box.indeterminate=data.some(i=>selectedInvoiceIds.has(i.id))&&!box.checked;}}
 function onInvoiceCheck(id,checked){if(checked)selectedInvoiceIds.add(id);else selectedInvoiceIds.delete(id);syncSelectedInfo()}
 function toggleSelectAll(checked){const data=filteredInvoices();for(const i of data){if(checked)selectedInvoiceIds.add(i.id);else selectedInvoiceIds.delete(i.id)}renderInvoices()}
 function renderInvoices(){const data=filteredInvoices();mTotal.textContent=invoices.length;mReceived.textContent=invoices.filter(i=>i.status==='received').length;mAccounted.textContent=invoices.filter(i=>i.status==='accounted').length;mApproved.textContent=invoices.filter(i=>i.status==='approved').length;if(document.getElementById('mExported'))mExported.textContent=invoices.filter(i=>i.status==='exported').length;rows.innerHTML=data.map(i=>`<tr><td class="check-cell"><input class="mini-check" type="checkbox" ${selectedInvoiceIds.has(i.id)?'checked':''} onchange="onInvoiceCheck('${i.id}',this.checked)"></td><td><strong>${i.invoice_number}</strong><span class="sub mono">${(i.cufe||'').slice(0,22)}</span></td><td>${i.issue_date||''}</td><td><span class="supplier">${i.supplier_name||''}</span><span class="sub">NIT ${i.supplier_nit||''}</span></td><td><span class="supplier">${i.customer_name||''}</span><span class="sub">NIT ${i.customer_nit||''}</span></td><td><strong>${money(i.payable_amount)}</strong></td><td><span class="pill ${statusClass(i.status)}">${i.status}</span></td><td><select class="action-select" onchange="handleInvoiceAction(this,'${i.id}')"><option value="">Acción</option><option value="invoice">Ver factura</option><option value="cause">Causar</option><option value="entry">Ver causación</option><option value="approve">Aprobar</option></select></td></tr>`).join('')||'<tr><td colspan="8">Sin facturas</td></tr>';syncSelectedInfo(data)}
@@ -419,15 +475,169 @@ async function causeSelectedInvoices(){
     setBusy(false);setProgress('');
   }
 }
-async function causeAll(){return causeSelectedInvoices()}
-async function approveAll(){for(const i of invoices){if(i.status==='received')await cause(i.id);await approve(i.id)}toast('Aprobación masiva terminada')}
+async function approveSelectedInvoices(){
+  try{
+    if(!cid())return toast('Selecciona empresa');
+    const ids=[...selectedInvoiceIds];
+    if(!ids.length)return toast('Selecciona primero una o varias facturas.');
+    setBusy(true);showUploadErrors([]);
+    const groups=chunks(ids,5);let approved=0,allErrors=[];
+    for(let g=0;g<groups.length;g++){
+      setProgress(`Aprobando lote ${g+1}/${groups.length} · ${approved}/${ids.length} factura(s)`);
+      for(const id of groups[g]){
+        try{ await api(`/api/invoices/${id}/approve`,{method:'POST'}); approved++; }
+        catch(e){ allErrors.push({id, error:e.message}); }
+      }
+      await loadInvoices();await sleep(60);
+    }
+    selectedInvoiceIds.clear();await loadInvoices();
+    if(allErrors.length){showUploadErrors(allErrors.map(e=>({file:e.id||'factura',error:e.error||e})));toast(`Se aprobaron ${approved} factura(s). ${allErrors.length} tuvieron error.`);}
+    else {showUploadErrors([]);toast(`Se aprobaron ${approved} factura(s).`);}
+  }catch(e){
+    log('Error al aprobar seleccionadas',{error:e.message});toast(e.message||'Hubo un error al aprobar las facturas.');
+  }finally{
+    setBusy(false);setProgress('');
+  }
+}
 function openDianPortal(){window.open('https://catalogo-vpfe.dian.gov.co/User/CompanyLogin','_blank','noopener')}
 function showDianResult(obj){dianResult.style.display='block';dianResult.textContent=typeof obj==='string'?obj:JSON.stringify(obj,null,2)}
 function openDian(){if(!cid())return toast('Selecciona empresa');openModal('dianModal')}
-async function saveDianConnection(){try{if(!cid())return toast('Selecciona empresa');if(!dianTokenUrl.value.startsWith('http'))return toast('Pega la URL completa del token DIAN');const body={person_type:dianPersonType.value,representative_id_type:dianRepType.value,representative_id:dianRepId.value,company_nit:dianCompanyNit.value,token_url:dianTokenUrl.value,start_date:dianStartDate.value};const res=await api(`/api/companies/${cid()}/dian-connection`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});showDianResult(res);toast('Conexión DIAN guardada')}catch(e){showDianResult({error:e.message});log('Error guardar DIAN',{error:e.message})}}
-async function testDianConnection(){try{const res=await api(`/api/companies/${cid()}/dian-test`,{method:'POST'});showDianResult(res)}catch(e){showDianResult({error:e.message});log('Error probar DIAN',{error:e.message})}}
-async function syncDian(){try{const res=await api(`/api/companies/${cid()}/dian-sync`,{method:'POST'});showDianResult(res);await loadDianLogs();toast('Solicitud DIAN procesada. Revisa resultado.')}catch(e){showDianResult({error:e.message});log('Error sync DIAN',{error:e.message})}}
-async function loadDianLogs(){try{const rows=await api(`/api/companies/${cid()}/dian-logs`);dianLogs.innerHTML=rows.map(r=>`<tr><td>${r.created_at}</td><td>${r.status}</td><td>${r.imported_count||0}</td><td>${r.error_count||0}</td><td>${r.message||''}</td></tr>`).join('')||'<tr><td colspan="5">Sin sincronizaciones</td></tr>'}catch(e){dianLogs.innerHTML='<tr><td colspan="5">Sin sincronizaciones</td></tr>'}}
+function paintDianSyncMethod(){const isCufes=dianSyncMethod.value==='cufes';dianDateFields.style.display=isCufes?'none':'grid';dianCufesField.style.display=isCufes?'block':'none'}
+async function openDianSync(){
+  if(!cid())return toast('Selecciona empresa');
+  dianResult.style.display='none';
+  try{
+    const conn=await api(`/api/companies/${cid()}/dian-connection`);
+    if(conn&&conn.token_last4) dianTokenUrl.placeholder=`Token guardado (termina en ...${conn.token_last4}). Pega uno nuevo para reemplazarlo.`;
+  }catch(e){}
+  const todayStr=new Date().toISOString().slice(0,10);
+  const monthAgo=new Date(Date.now()-30*24*3600*1000).toISOString().slice(0,10);
+  if(!dianStartDate.value) dianStartDate.value=monthAgo;
+  if(!dianEndDate.value) dianEndDate.value=todayStr;
+  paintDianSyncMethod();
+  openModal('dianSyncModal');
+}
+async function saveDianConnection(){
+  try{
+    if(!cid())return toast('Selecciona empresa');
+    if(!dianTokenUrl.value.trim().startsWith('http'))return toast('Pega la URL completa del token DIAN');
+    const res=await api(`/api/companies/${cid()}/dian-connection`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token_url:dianTokenUrl.value.trim()})});
+    dianTokenUrl.value='';
+    showDianResult(res);
+    toast('Conexión DIAN guardada');
+  }catch(e){showDianResult({error:e.message});toast(e.message||'No pude guardar la conexión DIAN')}
+}
+function dianDocRowHtml(d){
+  const badge=d.already_in_contapilot?'<span class="pill approved">Ya en ContaPilot</span>':'<span class="pill received">Nueva</span>';
+  return `<tr><td>${d.issue_date||''}</td><td><span class="supplier">${d.supplier_name||''}</span><span class="sub">NIT ${d.supplier_nit||''}</span></td><td>${d.document_type||''}<span class="sub mono">${d.serie_number||''}</span></td><td>${money(d.total_amount)}</td><td>${badge}</td><td><a class="btn btn-light" href="https://catalogo-vpfe.dian.gov.co/Document/Received" target="_blank" rel="noopener">Ver en DIAN</a></td></tr>`;
+}
+async function syncDian(){
+  try{
+    if(!cid())return toast('Selecciona empresa');
+    dianResult.style.display='none'; dianDocsWrap.style.display='none';
+    const method=dianSyncMethod.value;
+    const body={method};
+    if(method==='cufes') body.cufes=dianCufes.value.split(/[\s,;]+/).map(s=>s.trim()).filter(Boolean);
+    else { body.start_date=dianStartDate.value; body.end_date=dianEndDate.value; }
+    const res=await api(`/api/companies/${cid()}/dian-sync`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    await loadDianLogs();
+    const docs=res.documents||[];
+    if(!docs.length){ dianResult.style.display='block'; dianResult.style.color='var(--muted)'; dianResult.style.background='var(--bg)'; dianResult.textContent='No encontré documentos en ese rango.'; return; }
+    const nuevas=docs.filter(d=>!d.already_in_contapilot).length;
+    dianDocsSummary.textContent=`${docs.length} documento(s) encontrado(s) en la DIAN · ${nuevas} nueva(s) que no están en ContaPilot`;
+    dianDocsRows.innerHTML=docs.map(dianDocRowHtml).join('');
+    dianDocsWrap.style.display='block';
+    dianConnectorBox.style.display='none';
+    lastDianDocs=docs;
+    toast(`Encontré ${docs.length} documento(s) en la DIAN.`);
+  }catch(e){
+    dianResult.style.display='block'; dianResult.style.color='var(--red)'; dianResult.style.background='#fdf2f2';
+    dianResult.textContent=e.message; toast(e.message||'No pude buscar en la DIAN');
+  }
+}
+function buildDianConnectorScript(docs){
+  const apiBase=location.origin+base();
+  const companyId=cid();
+  const payload={apiBase, companyId, token, docs:docs.map(d=>({id:d.id, label:(d.serie_number||d.id||'')}))};
+  const data=JSON.stringify(payload).replace(/</g,'\\u003c');
+  return `(async function(){
+  const CFG=${data};
+  function getCaptchaToken(){
+    const el=document.querySelector('input[name="cf-turnstile-response"]');
+    return el&&el.value?el.value:'';
+  }
+  function u16(b,p){return b[p]|(b[p+1]<<8)}
+  function u32(b,p){return (b[p]|(b[p+1]<<8)|(b[p+2]<<16)|(b[p+3]<<24))>>>0}
+  async function inflateRaw(bytes){
+    const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+  async function extractXmlFromZip(buf){
+    const bytes=new Uint8Array(buf);let eocd=-1;
+    for(let i=bytes.length-22;i>=0&&i>bytes.length-66000;i--){if(u32(bytes,i)===0x06054b50){eocd=i;break}}
+    if(eocd<0) throw new Error('ZIP invalido');
+    const total=u16(bytes,eocd+10);let cdOffset=u32(bytes,eocd+16);const decoder=new TextDecoder('utf-8');const out=[];
+    for(let n=0;n<total;n++){
+      if(u32(bytes,cdOffset)!==0x02014b50)break;
+      const method=u16(bytes,cdOffset+10),compSize=u32(bytes,cdOffset+20),nameLen=u16(bytes,cdOffset+28),extraLen=u16(bytes,cdOffset+30),commentLen=u16(bytes,cdOffset+32),localOffset=u32(bytes,cdOffset+42);
+      const name=decoder.decode(bytes.slice(cdOffset+46,cdOffset+46+nameLen));cdOffset+=46+nameLen+extraLen+commentLen;
+      if(name.endsWith('/'))continue;
+      if(u32(bytes,localOffset)!==0x04034b50)continue;
+      const ln=u16(bytes,localOffset+26),le=u16(bytes,localOffset+28);const dataStart=localOffset+30+ln+le;const compressed=bytes.slice(dataStart,dataStart+compSize);
+      let content;if(method===0)content=compressed;else if(method===8)content=await inflateRaw(compressed);else continue;
+      if(name.toLowerCase().endsWith('.xml')) out.push({name, text:decoder.decode(content)});
+    }
+    return out;
+  }
+  function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+  console.log('[ContaPilot] Iniciando descarga automatica de '+CFG.docs.length+' documento(s)...');
+  let ok=0, fail=0;
+  for(const doc of CFG.docs){
+    try{
+      const captcha=getCaptchaToken();
+      if(!captcha){ console.warn('[ContaPilot] No encontre el captcha resuelto. Resuelvelo y vuelve a pegar el script.'); break; }
+      const dl=await fetch('/Document/DownloadZipFiles?trackId='+encodeURIComponent(doc.id)+'&captcha='+encodeURIComponent(captcha), {credentials:'include'});
+      if(!dl.ok) throw new Error('DIAN respondio '+dl.status);
+      const buf=await dl.arrayBuffer();
+      const ct=dl.headers.get('content-type')||'';
+      let xmls=[];
+      if(ct.includes('zip') || (buf.byteLength>4 && new Uint8Array(buf,0,4).join(',')==='80,75,3,4')) xmls=await extractXmlFromZip(buf);
+      else xmls=[{name:doc.label+'.xml', text:new TextDecoder('utf-8').decode(buf)}];
+      if(!xmls.length) throw new Error('No encontre XML en la respuesta de la DIAN');
+      for(const x of xmls){
+        const fd=new FormData();
+        fd.append('file', new File([x.text], x.name, {type:'text/xml;charset=utf-8'}));
+        const up=await fetch(CFG.apiBase+'/api/companies/'+CFG.companyId+'/upload', {method:'POST', headers:{'Authorization':'Bearer '+CFG.token}, body:fd});
+        if(!up.ok) throw new Error('ContaPilot respondio '+up.status+' al subir '+x.name);
+      }
+      ok++;
+      console.log('[ContaPilot] OK ('+ok+'/'+CFG.docs.length+'): '+doc.label);
+    }catch(e){
+      fail++;
+      console.error('[ContaPilot] Error con '+doc.label+': '+e.message);
+    }
+    await sleep(1500);
+  }
+  console.log('[ContaPilot] Listo. '+ok+' subida(s), '+fail+' error(es). Refresca ContaPilot para verlas.');
+})();`;
+}
+function generateDianConnector(){
+  const docs=(lastDianDocs||[]).filter(d=>!d.already_in_contapilot);
+  if(!docs.length) return toast('No hay documentos nuevos para descargar');
+  dianConnectorScript.value=buildDianConnectorScript(docs);
+  dianConnectorBox.style.display='block';
+}
+function copyDianConnector(){
+  dianConnectorScript.select();
+  navigator.clipboard.writeText(dianConnectorScript.value).then(()=>toast('Script copiado. Pégalo en la consola de la pestaña de la DIAN.')).catch(()=>toast('No pude copiar automáticamente, selecciona y copia el texto manualmente'));
+}
+async function loadDianLogs(){
+  try{
+    const rows=await api(`/api/companies/${cid()}/dian-logs`);
+    dianLogsBox.style.display='block';
+    dianLogs.innerHTML=rows.map(r=>`<tr><td>${r.created_at}</td><td>${r.status}</td><td>${r.imported_count||0}</td><td>${r.error_count||0}</td></tr>`).join('')||'<tr><td colspan="4">Sin sincronizaciones</td></tr>';
+  }catch(e){dianLogsBox.style.display='block';dianLogs.innerHTML='<tr><td colspan="4">Sin sincronizaciones</td></tr>'}
+}
 async function uploadSelectedToSiigo(){
   try{
     if(!cid())return toast('Selecciona empresa');
@@ -450,17 +660,43 @@ async function uploadSelectedToSiigo(){
   }catch(e){log('Error subiendo a Siigo',{error:e.message});toast(e.message||'No pude subir a Siigo');}
   finally{setBusy(false);setProgress('');}
 }
-function openSiigoModal(){openModal('siigoModal')}
+function openSiigoModal(){if(!cid())return toast('Selecciona empresa');siigoUsername.value='';siigoAccessKey.value='';paintSiigoCredStatus();openModal('siigoModal')}
+function paintSiigoCredStatus(){const c=companies.find(x=>x.id===cid());const box=document.getElementById('siigoCredStatus');if(!c){box.textContent='';return}if(c.siigo_configured){box.innerHTML=`✓ Configurado — usuario <strong>${c.siigo_username||''}</strong>, clave termina en ...${c.siigo_key_last4||''}`;siigoUsername.value=c.siigo_username||''}else{box.textContent='Esta empresa aún no tiene credenciales de Siigo configuradas.'}}
+async function saveSiigoCredentials(){try{if(!cid())return toast('Selecciona empresa');const body={siigo_username:siigoUsername.value.trim(),siigo_access_key:siigoAccessKey.value.trim()};const updated=await api(`/api/companies/${cid()}/siigo-credentials`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const idx=companies.findIndex(x=>x.id===cid());if(idx>-1)companies[idx]=updated;siigoAccessKey.value='';paintSiigoCredStatus();toast('Credenciales de Siigo guardadas')}catch(e){toast(e.message||'No pude guardar las credenciales de Siigo')}}
 function showSiigoResult(obj){const el=document.getElementById('siigoResult');el.style.display='block';el.textContent=typeof obj==='string'?obj:JSON.stringify(obj,null,2)}
-async function testSiigoConnection(){try{showSiigoResult('Probando conexión con Siigo...');const res=await api('/api/siigo/test',{method:'POST'});showSiigoResult(res);toast('Conexión Siigo correcta')}catch(e){showSiigoResult({ok:false,error:e.message});toast('No se pudo conectar con Siigo')}}
-async function loadSiigoCatalogs(){try{showSiigoResult('Consultando catálogos básicos...');const res=await api('/api/siigo/catalogs');showSiigoResult(res);toast('Consulta Siigo terminada')}catch(e){showSiigoResult({ok:false,error:e.message});toast('No pude consultar catálogos Siigo')}}
-async function openSettings(){try{if(!cid())return toast('Selecciona empresa');const s=await api(`/api/companies/${cid()}/settings`);setVatAccount.value=s.vat_account;setVatDescription.value=s.vat_description;setPayableAccount.value=s.payable_account;setPayableDescription.value=s.payable_description;setWithholdingAccount.value=s.withholding_account;setWithholdingDescription.value=s.withholding_description;setDefaultCostCenter.value=s.default_cost_center;setDefaultExpenseAccount.value=s.default_expense_account;setDefaultExpenseDescription.value=s.default_expense_description;await loadChartAccounts();openModal('settingsModal')}catch(e){log('Error settings',{error:e.message})}}async function saveSettings(){try{const body={vat_account:setVatAccount.value,vat_description:setVatDescription.value,payable_account:setPayableAccount.value,payable_description:setPayableDescription.value,withholding_account:setWithholdingAccount.value,withholding_description:setWithholdingDescription.value,default_cost_center:setDefaultCostCenter.value,default_expense_account:setDefaultExpenseAccount.value,default_expense_description:setDefaultExpenseDescription.value};log('Config guardada',await api(`/api/companies/${cid()}/settings`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}));toast('Configuración guardada');closeModal('settingsModal')}catch(e){log('Error guardar config',{error:e.message});toast(e.message||'No pude guardar la configuración')}}async function openRules(){try{if(!cid())return toast('Selecciona empresa');const data=await api(`/api/companies/${cid()}/rules`);rulesRows.innerHTML=data.map(r=>`<tr><td>${r.match_type}</td><td>${r.match_value}</td><td>${r.account}</td><td>${r.description}</td><td>${r.priority}</td></tr>`).join('')||'<tr><td colspan="5">Sin reglas</td></tr>';await loadChartAccounts();openModal('rulesModal')}catch(e){log('Error reglas',{error:e.message})}}async function createRule(){try{const body={match_type:ruleType.value,match_value:ruleValue.value||'*',account:ruleAccount.value,description:ruleDescription.value,cost_center:ruleCostCenter.value,priority:Number(rulePriority.value||50)};log('Regla creada',await api(`/api/companies/${cid()}/rules`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}));toast('Regla creada');await openRules()}catch(e){log('Error crear regla',{error:e.message});toast(e.message||'No pude crear la regla')}}
+async function testSiigoConnection(){try{if(!cid())return toast('Selecciona empresa');showSiigoResult('Probando conexión con Siigo...');const res=await api(`/api/companies/${cid()}/siigo-test`,{method:'POST'});showSiigoResult(res);toast('Conexión Siigo correcta')}catch(e){showSiigoResult({ok:false,error:e.message});toast('No se pudo conectar con Siigo')}}
+async function loadSiigoCatalogs(){try{if(!cid())return toast('Selecciona empresa');showSiigoResult('Consultando catálogos básicos...');const res=await api(`/api/companies/${cid()}/siigo-catalogs`);showSiigoResult(res);toast('Consulta Siigo terminada')}catch(e){showSiigoResult({ok:false,error:e.message});toast('No pude consultar catálogos Siigo')}}
+async function openSettings(){try{if(!cid())return toast('Selecciona empresa');const s=await api(`/api/companies/${cid()}/settings`);setVatAccount.value=s.vat_account;setVatDescription.value=s.vat_description;setVat5Account.value=s.vat5_account;setVat5Description.value=s.vat5_description;setPayableAccount.value=s.payable_account;setPayableDescription.value=s.payable_description;setWithholdingAccount.value=s.withholding_account;setWithholdingDescription.value=s.withholding_description;setDefaultCostCenter.value=s.default_cost_center;setDefaultExpenseAccount.value=s.default_expense_account;setDefaultExpenseDescription.value=s.default_expense_description;await loadChartAccounts();openModal('settingsModal')}catch(e){log('Error settings',{error:e.message})}}async function saveSettings(){try{const body={vat_account:setVatAccount.value,vat_description:setVatDescription.value,vat5_account:setVat5Account.value,vat5_description:setVat5Description.value,payable_account:setPayableAccount.value,payable_description:setPayableDescription.value,withholding_account:setWithholdingAccount.value,withholding_description:setWithholdingDescription.value,default_cost_center:setDefaultCostCenter.value,default_expense_account:setDefaultExpenseAccount.value,default_expense_description:setDefaultExpenseDescription.value};log('Config guardada',await api(`/api/companies/${cid()}/settings`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}));toast('Configuración guardada');closeModal('settingsModal')}catch(e){log('Error guardar config',{error:e.message});toast(e.message||'No pude guardar la configuración')}}async function openRules(){try{if(!cid())return toast('Selecciona empresa');const data=await api(`/api/companies/${cid()}/rules`);rulesRows.innerHTML=data.map(r=>`<tr><td>${r.match_type}</td><td>${r.match_value}</td><td>${r.account}</td><td>${r.description}</td><td>${r.priority}</td></tr>`).join('')||'<tr><td colspan="5">Sin reglas</td></tr>';await loadChartAccounts();openModal('rulesModal')}catch(e){log('Error reglas',{error:e.message})}}async function createRule(){try{const body={match_type:ruleType.value,match_value:ruleValue.value||'*',account:ruleAccount.value,description:ruleDescription.value,cost_center:ruleCostCenter.value,priority:Number(rulePriority.value||50)};log('Regla creada',await api(`/api/companies/${cid()}/rules`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}));toast('Regla creada');await openRules()}catch(e){log('Error crear regla',{error:e.message});toast(e.message||'No pude crear la regla')}}
 let chartAccounts=[];
 function openChartModal(){if(!cid())return toast('Selecciona empresa');chartImportResult.textContent='';loadChartAccounts();openModal('chartModal')}
+function csvCellChart(v){ return '"'+String(v??'').replace(/"/g,'""')+'"'; }
+function xlsxRowsToAccountsCsv(rows){
+  const out=['codigo,nombre,categoria,clase,activo,nivel'];
+  for(const row of rows){
+    const code=String(row[0]||'').trim();
+    const nivel=String(row[8]||'').trim();
+    if(!/^\d+$/.test(code) || nivel!=='Transaccional') continue;
+    const activoRaw=String(row[7]||'').trim().toLowerCase();
+    const activo=(activoRaw==='sí'||activoRaw==='si'||activoRaw==='1') ? '1' : '0';
+    out.push([csvCellChart(code),csvCellChart(row[1]),csvCellChart(row[2]),csvCellChart(row[3]),activo,csvCellChart(nivel)].join(','));
+  }
+  return out.join('\n');
+}
 async function uploadChartCsv(){
   try{
     const f=chartFileInput.files[0]; if(!f)return;
-    const fd=new FormData(); fd.append('file',f);
+    let fileToSend=f;
+    const lower=(f.name||'').toLowerCase();
+    if(lower.endsWith('.xlsx') || lower.endsWith('.xls')){
+      const buf=await f.arrayBuffer();
+      const wb=XLSX.read(buf,{type:'array'});
+      const sheet=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:''});
+      const csvText=xlsxRowsToAccountsCsv(rows);
+      if(csvText.split('\n').length<2) throw new Error('No encontré cuentas transaccionales en ese Excel. Debe ser la exportación estándar de Siigo (con la columna "Nivel agrupación").');
+      fileToSend=new File([csvText], f.name.replace(/\.(xlsx|xls)$/i,'.csv'), {type:'text/csv'});
+    }
+    const fd=new FormData(); fd.append('file',fileToSend);
     const res=await api(`/api/companies/${cid()}/chart-of-accounts`,{method:'POST',body:fd});
     chartImportResult.textContent=`Importadas ${res.imported} cuenta(s). Total en catálogo: ${res.total_accounts} (${res.active_accounts} activas).`;
     toast('Plan de cuentas importado');

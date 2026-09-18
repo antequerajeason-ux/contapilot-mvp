@@ -49,9 +49,16 @@
     .note{background:var(--primary-soft);border:1px solid rgba(47,143,224,.30);border-radius:var(--radius);padding:18px;text-align:left;font-size:13.5px;color:#cfe6fb;line-height:1.6;margin-bottom:30px}
     .note strong{display:block;margin-bottom:4px;color:#fff}
 
-    .btn-cta{display:inline-flex;align-items:center;gap:8px;height:48px;padding:0 30px;border-radius:11px;border:1px solid rgba(47,143,224,.6);background:linear-gradient(180deg,var(--primary),var(--primary-dark));color:#fff;font-weight:700;font-size:15px;box-shadow:0 14px 30px -12px rgba(47,143,224,.6)}
+    .btn-cta{display:inline-flex;align-items:center;gap:8px;height:48px;padding:0 30px;border-radius:11px;border:1px solid rgba(47,143,224,.6);background:linear-gradient(180deg,var(--primary),var(--primary-dark));color:#fff;font-weight:700;font-size:15px;box-shadow:0 14px 30px -12px rgba(47,143,224,.6);cursor:pointer}
     .btn-cta:hover{filter:brightness(1.06)}
     .footnote{margin-top:18px;color:var(--muted);font-size:12.5px}
+    .price-card{background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--radius);padding:26px;margin-bottom:22px;backdrop-filter:blur(18px)}
+    .price-value{font-size:38px;font-weight:800;font-family:ui-monospace,Consolas,monospace}
+    .price-value small{font-size:14px;color:var(--muted);font-weight:600;font-family:Inter,sans-serif}
+    .price-lead{margin:4px 0 20px;color:var(--muted);font-size:13px}
+    #wompiForm{display:flex;justify-content:center}
+    .thanks{background:rgba(31,185,138,.14);border:1px solid rgba(31,185,138,.35);border-radius:var(--radius);padding:22px;text-align:left;color:#bdf5e3;font-size:14px;line-height:1.6;margin-bottom:22px}
+    .thanks strong{display:block;color:#fff;font-size:16px;margin-bottom:4px}
     @media(max-width:560px){.nav{padding:0 16px}}
   </style>
 </head>
@@ -88,8 +95,39 @@
       Si algo no cuadra, se ve raro, o se te ocurre algo que falta, cuéntaselo directamente a quien te compartió este enlace. Estamos ajustando ContaPilot con base en lo que encuentres.
     </div>
 
-    <a class="btn-cta" href="app.html">Entrar a ContaPilot →</a>
-    <p class="footnote">¿Primera vez? Puedes crear tu cuenta directamente en la siguiente pantalla.</p>
+    <div id="thanksBox" class="thanks" style="display:none">
+      <strong>¡Pago recibido!</strong>
+      En breve te contactamos con tu correo y contraseña de acceso a ContaPilot.
+    </div>
+
+    <div id="priceBox" class="price-card">
+      <div class="price-value">$350.000 <small>COP / mes</small></div>
+      <p class="price-lead">Suscripción mensual · acceso completo a ContaPilot</p>
+      <form id="wompiForm"></form>
+    </div>
+
+    <a class="btn-cta" href="app.html">Ya tengo cuenta — Entrar →</a>
+    <p class="footnote">¿Ya pagaste? Tu acceso llega por el canal que nos compartiste.</p>
   </main>
+<script>
+(function(){
+  const params = new URLSearchParams(location.search);
+  if (params.get('id')) {
+    document.getElementById('thanksBox').style.display = 'block';
+    document.getElementById('priceBox').style.display = 'none';
+    return;
+  }
+  const reference = 'contapilot-' + Date.now();
+  const s = document.createElement('script');
+  s.src = 'https://checkout.wompi.co/widget.js';
+  s.setAttribute('data-render', 'button');
+  s.setAttribute('data-public-key', 'pub_prod_VLoy47PMqQP5VlBIlhomv6hdIGupU8BN');
+  s.setAttribute('data-currency', 'COP');
+  s.setAttribute('data-amount-in-cents', '35000000');
+  s.setAttribute('data-reference', reference);
+  s.setAttribute('data-redirect-url', location.origin + location.pathname);
+  document.getElementById('wompiForm').appendChild(s);
+})();
+</script>
 </body>
 </html>

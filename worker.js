@@ -192,6 +192,23 @@ async function ensureCompany(env,userId,companyId){ const c=await env.DB.prepare
 function siigoEnvFor(env, company){ return {...env, SIIGO_USERNAME: (company&&company.siigo_username)||env.SIIGO_USERNAME, SIIGO_ACCESS_KEY: (company&&company.siigo_access_key)||env.SIIGO_ACCESS_KEY, SIIGO_PARTNER_ID: (company&&company.siigo_partner_id)||env.SIIGO_PARTNER_ID }; }
 function publicCompany(c){ if(!c) return c; const {siigo_access_key, ...rest}=c; return {...rest, siigo_configured: !!(c.siigo_username && c.siigo_access_key), siigo_key_last4: c.siigo_access_key ? String(c.siigo_access_key).slice(-4) : '' }; }
 function isAdminUser(env, user){ const list=String(env.ADMIN_EMAILS||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean); return list.includes(String(user.email||'').toLowerCase()); }
+async function listBatches(env, companyId){
+  let rows=(await env.DB.prepare('SELECT * FROM invoice_batches WHERE company_id=? ORDER BY created_at').bind(companyId).all()).results||[];
+  if(!rows.length){
+    const batchId=id();
+    await env.DB.prepare('INSERT INTO invoice_batches (id,company_id,name,created_at) VALUES (?,?,?,?)').bind(batchId,companyId,'General',now()).run();
+    rows=[{id:batchId,company_id:companyId,name:'General',created_at:now()}];
+  }
+  return rows;
+}
+async function resolveBatchId(env, companyId, requestedBatchId){
+  if(requestedBatchId){
+    const ok=await env.DB.prepare('SELECT id FROM invoice_batches WHERE id=? AND company_id=?').bind(requestedBatchId,companyId).first();
+    if(ok) return ok.id;
+  }
+  const batches=await listBatches(env, companyId);
+  return batches[batches.length-1].id;
+}
 async function getSettings(env, companyId){ const s=await env.DB.prepare('SELECT * FROM accounting_settings WHERE company_id=?').bind(companyId).first(); return normalizeSettings(s||{}); }
 function normalizeSettings(s){
   // Normalización basada en plan de cuentas DISTRIBUCIONES TORRES GARCIA SAS / Siigo.
@@ -551,12 +568,13 @@ async function siigoRequest(env, path, options={}){
 
 
 function invoicePrefixNumber(invoiceNumber){
+  // Nunca reconstruimos el consecutivo (antes se unian todos los grupos de digitos
+  // encontrados, lo que corrompia numeros como "FEV2026-000990" -> "2026000990").
+  // Si no calza el patron simple prefijo+digitos, se manda tal cual llego de la DIAN.
   const raw=String(invoiceNumber||'').trim();
   const m=raw.match(/^([A-Za-z\-]*)(\d+)$/);
   if(m) return {prefix:m[1]||'', number:m[2]};
-  const digits=(raw.match(/\d+/g)||[]).join('');
-  const prefix=raw.replace(/\d/g,'').slice(0,10);
-  return {prefix, number:digits||raw};
+  return {prefix:'', number:raw};
 }
 async function siigoGetPurchaseConfig(env){
   const cfg={};
@@ -854,9 +872,31 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     return json({ok:true, imported, total_accounts:total?.c||0, active_accounts:total?.a||0});
   }
   m=p.match(/^\/companies\/([^/]+)\/invoices$/); if(m && request.method==='GET'){ await ensureCompany(env,user.id,m[1]); return json((await env.DB.prepare('SELECT * FROM invoices WHERE company_id=? ORDER BY issue_date DESC').bind(m[1]).all()).results||[]); }
+  { const mm=p.match(/^\/companies\/([^/]+)\/batches$/); if(mm && request.method==='GET'){
+    await ensureCompany(env,user.id,mm[1]);
+    return json(await listBatches(env,mm[1]));
+  }}
+  { const mm=p.match(/^\/companies\/([^/]+)\/batches$/); if(mm && request.method==='POST'){
+    await ensureCompany(env,user.id,mm[1]);
+    const d=await request.json().catch(()=>({}));
+    const name=String(d.name||'').trim();
+    if(!name) return json({detail:'El centro de facturas necesita un nombre'},400);
+    const batchId=id();
+    await env.DB.prepare('INSERT INTO invoice_batches (id,company_id,name,created_at) VALUES (?,?,?,?)').bind(batchId,mm[1],name,now()).run();
+    return json({id:batchId,company_id:mm[1],name,created_at:now()});
+  }}
+  { const mm=p.match(/^\/companies\/([^/]+)\/batches\/([^/]+)$/); if(mm && request.method==='PUT'){
+    await ensureCompany(env,user.id,mm[1]);
+    const d=await request.json().catch(()=>({}));
+    const name=String(d.name||'').trim();
+    if(!name) return json({detail:'El nombre no puede quedar vacío'},400);
+    await env.DB.prepare('UPDATE invoice_batches SET name=? WHERE id=? AND company_id=?').bind(name,mm[2],mm[1]).run();
+    return json({ok:true});
+  }}
   m=p.match(/^\/companies\/([^/]+)\/upload$/); if(m && request.method==='POST'){
     const company=await ensureCompany(env,user.id,m[1]);
     const fd=await request.formData();
+    const batchId=await resolveBatchId(env, m[1], fd.get('batch_id'));
     const imported=[], errors=[];
     async function processOne(name, xml){
       const parsed=await parseInvoice(xml);
@@ -866,10 +906,11 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
       const finalId=exists?.id||invoiceId;
       if(exists) await env.DB.prepare('DELETE FROM invoice_items WHERE invoice_id=?').bind(finalId).run();
       if(exists) await env.DB.prepare('UPDATE invoices SET invoice_number=?, issue_date=?, document_type=?, supplier_name=?, supplier_nit=?, customer_name=?, customer_nit=?, currency=?, subtotal=?, tax_amount=?, withholding_amount=?, payable_amount=?, status=?, raw_xml=?, updated_at=?, tax_breakdown=? WHERE id=?').bind(parsed.invoice_number,parsed.issue_date,parsed.document_type,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.currency,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,'received',parsed.invoice_xml,now(),JSON.stringify(parsed.tax_breakdown||{}),finalId).run();
-      else await env.DB.prepare('INSERT INTO invoices VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(finalId,m[1],parsed.invoice_number,parsed.cufe,parsed.issue_date,parsed.document_type,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.currency,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,'received',parsed.invoice_xml,now(),now(),JSON.stringify(parsed.tax_breakdown||{})).run();
+      else await env.DB.prepare('INSERT INTO invoices (id,company_id,invoice_number,cufe,issue_date,document_type,supplier_name,supplier_nit,customer_name,customer_nit,currency,subtotal,tax_amount,withholding_amount,payable_amount,status,raw_xml,created_at,updated_at,tax_breakdown,batch_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(finalId,m[1],parsed.invoice_number,parsed.cufe,parsed.issue_date,parsed.document_type,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.currency,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,'received',parsed.invoice_xml,now(),now(),JSON.stringify(parsed.tax_breakdown||{}),batchId).run();
       for(const it of parsed.items) await env.DB.prepare('INSERT INTO invoice_items VALUES (?,?,?,?,?)').bind(id(),finalId,it.description,it.quantity,it.line_amount).run();
       imported.push({file:name, invoice_id:finalId, invoice_number:parsed.invoice_number});
     }
+    const zipNotices=[];
     for(const file of fd.getAll('file')){
       try{
         const lower=(file.name||'').toLowerCase();
@@ -880,6 +921,7 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
             errors.push({file:file.name,error: detail ? `El ZIP no contiene XML/HTML/TXT procesable. ${detail}. Si solo contiene PDF, descarga desde DIAN el XML de las facturas.` : 'El ZIP no contiene XML/HTML/TXT procesable'});
             continue;
           }
+          zipNotices.push(`${file.name}: ${zipStatsMessage(entries.stats)}`);
           for(const entry of entries){
             if(entry._error){ errors.push({file:entry.name,error:entry._error}); continue; }
             try{ await processOne(entry.name, entry.text); }
@@ -894,7 +936,7 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     const status = errors.length && imported.length ? 'partial' : errors.length ? 'error' : 'success';
     const fileNames = [...fd.getAll('file')].map(f=>f.name).join(', ');
     await env.DB.prepare('INSERT INTO import_logs VALUES (?,?,?,?,?,?,?,?)').bind(id(), m[1], fileNames, status, imported.length, errors.length, JSON.stringify({imported,errors}), now()).run();
-    return json({imported,errors});
+    return json({imported,errors,zip_notices:zipNotices});
   }
   m=p.match(/^\/invoices\/([^/]+)$/); if(m && request.method==='GET'){
     const inv=await env.DB.prepare('SELECT * FROM invoices WHERE id=?').bind(m[1]).first();
@@ -1082,7 +1124,8 @@ async function saveParsedInvoiceForCompany(env, company, parsed, sourceName='ema
     await env.DB.prepare('DELETE FROM accounting_entries WHERE invoice_id=?').bind(finalId).run().catch(()=>{});
     await env.DB.prepare('UPDATE invoices SET invoice_number=?, issue_date=?, document_type=?, supplier_name=?, supplier_nit=?, customer_name=?, customer_nit=?, currency=?, subtotal=?, tax_amount=?, withholding_amount=?, payable_amount=?, status=?, raw_xml=?, updated_at=?, tax_breakdown=? WHERE id=?').bind(parsed.invoice_number,parsed.issue_date,parsed.document_type,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.currency,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,'received',parsed.invoice_xml,now(),JSON.stringify(parsed.tax_breakdown||{}),finalId).run();
   }else{
-    await env.DB.prepare('INSERT INTO invoices VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(finalId,company.id,parsed.invoice_number,parsed.cufe,parsed.issue_date,parsed.document_type,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.currency,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,'received',parsed.invoice_xml,now(),now(),JSON.stringify(parsed.tax_breakdown||{})).run();
+    const batchId=await resolveBatchId(env, company.id, null);
+    await env.DB.prepare('INSERT INTO invoices (id,company_id,invoice_number,cufe,issue_date,document_type,supplier_name,supplier_nit,customer_name,customer_nit,currency,subtotal,tax_amount,withholding_amount,payable_amount,status,raw_xml,created_at,updated_at,tax_breakdown,batch_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(finalId,company.id,parsed.invoice_number,parsed.cufe,parsed.issue_date,parsed.document_type,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.currency,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,'received',parsed.invoice_xml,now(),now(),JSON.stringify(parsed.tax_breakdown||{}),batchId).run();
   }
   for(const it of parsed.items) await env.DB.prepare('INSERT INTO invoice_items VALUES (?,?,?,?,?)').bind(id(),finalId,it.description,it.quantity,it.line_amount).run();
   return {file:sourceName, invoice_id:finalId, invoice_number:parsed.invoice_number};

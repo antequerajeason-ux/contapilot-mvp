@@ -644,7 +644,12 @@ async function handleDriveSync(request, env, p){
   if(p==='/drive-sync/check' && request.method==='POST'){
     const files=(Array.isArray(d.files)?d.files:[]).slice(0,300).filter(f=>f&&f.id);
     if(!files.length) return json({pending:[]});
-    const rows=(await env.DB.prepare(`SELECT file_id,updated,status FROM drive_files WHERE user_id=? AND file_id IN (${files.map(()=>'?').join(',')})`).bind(user.id,...files.map(f=>String(f.id))).all()).results||[];
+    // D1 admite como máximo 100 parámetros por consulta: se consulta en grupos de 90.
+    const rows=[];
+    for(let i=0;i<files.length;i+=90){
+      const ids=files.slice(i,i+90).map(f=>String(f.id));
+      rows.push(...((await env.DB.prepare(`SELECT file_id,updated,status FROM drive_files WHERE user_id=? AND file_id IN (${ids.map(()=>'?').join(',')})`).bind(user.id,...ids).all()).results||[]));
+    }
     const byId=new Map(rows.map(r=>[r.file_id,r]));
     // Pendiente: nunca visto, modificado desde la última vez, o con errores (se reintenta, p. ej. cuando ya se creó la empresa;
     // las facturas que ya entraron se reconocen por CUFE y no se duplican).

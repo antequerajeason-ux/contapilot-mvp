@@ -164,6 +164,8 @@
     .batch-tab:hover{color:var(--ink)}
     .batch-tab.active{background:var(--card);color:var(--primary-dark);box-shadow:0 2px 8px -3px rgba(13,27,46,.25)}
     .batch-tab .edit-ic{opacity:.55;font-size:11px}
+    .batch-tab .tab-count{min-width:20px;height:18px;padding:0 6px;border-radius:999px;background:rgba(13,27,46,.08);color:var(--ink-2);font-size:10.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+    .batch-tab.active .tab-count{background:var(--primary-soft);color:var(--primary-dark)}
     .btn-batch-add{height:32px;padding:0 13px;border-radius:9px;border:1px dashed var(--line-strong);background:transparent;color:var(--muted);font-weight:600;font-size:12.5px;cursor:pointer}
     .btn-batch-add:hover{border-color:var(--primary);color:var(--primary)}
 
@@ -556,7 +558,8 @@ async function loadBatches(){
 }
 function renderBatchTabs(){
   const box=document.getElementById('batchTabs'); if(!box)return;
-  box.innerHTML=batches.map(b=>`<button class="batch-tab ${b.id===activeBatchId?'active':''}" onclick="selectBatch('${b.id}')">${b.name}${b.id===activeBatchId?' <span class="edit-ic" onclick="event.stopPropagation();renameBatch(\''+b.id+'\')">✎</span>':''}</button>`).join('');
+  const cnt=id=>(invoices||[]).filter(i=>inBatch(i,id)).length;
+  box.innerHTML=batches.map(b=>`<button class="batch-tab ${b.id===activeBatchId?'active':''}" onclick="selectBatch('${b.id}')">${esc(b.name)}<span class="tab-count">${cnt(b.id)}</span>${b.id===activeBatchId?' <span class="edit-ic" onclick="event.stopPropagation();renameBatch(\''+b.id+'\')">✎</span>':''}</button>`).join('');
 }
 function selectBatch(batchId){activeBatchId=batchId;renderBatchTabs();renderInvoices();if(currentView==='dashboard')renderDashboard()}
 async function createBatch(){
@@ -632,8 +635,9 @@ async function upload(){
     setBusy(false);setProgress('');
   }
 }
-async function loadInvoices(){try{if(!cid())return;invoices=await api(`/api/companies/${cid()}/invoices`);selectedInvoiceIds=new Set([...selectedInvoiceIds].filter(id=>invoices.some(i=>i.id===id)));renderInvoices()}catch(e){log('Error facturas',{error:e.message})}}
-function batchInvoices(){return invoices.filter(i=>!activeBatchId||i.batch_id===activeBatchId||!i.batch_id)}
+async function loadInvoices(){try{if(!cid())return;invoices=await api(`/api/companies/${cid()}/invoices`);if(invoices.some(i=>i.batch_id&&!batches.some(b=>b.id===i.batch_id)))await loadBatches();else renderBatchTabs();selectedInvoiceIds=new Set([...selectedInvoiceIds].filter(id=>invoices.some(i=>i.id===id)));renderInvoices()}catch(e){log('Error facturas',{error:e.message})}}
+function inBatch(i,bid){const known=i.batch_id&&batches.some(b=>b.id===i.batch_id);return known?i.batch_id===bid:(batches[0]&&batches[0].id===bid)}
+function batchInvoices(){return invoices.filter(i=>!activeBatchId||inBatch(i,activeBatchId))}
 function filteredInvoices(){const q=(search.value||'').toLowerCase();const sf=(document.getElementById('statusFilter')?.value)||'all';return batchInvoices().filter(i=>(sf==='all'||i.status===sf)&&(!q||`${i.invoice_number} ${i.supplier_name} ${i.customer_name} ${i.supplier_nit} ${i.customer_nit}`.toLowerCase().includes(q)))}
 function syncSelectedInfo(data=filteredInvoices()){const counter=document.getElementById('selectedCounter');if(counter)counter.textContent=`${selectedInvoiceIds.size} seleccionada${selectedInvoiceIds.size===1?'':'s'}`;const bar=document.getElementById('bulkBar');if(bar)bar.style.display=selectedInvoiceIds.size?'flex':'none';const box=document.getElementById('selectAllBox');if(box){box.checked=data.length>0&&data.every(i=>selectedInvoiceIds.has(i.id));box.indeterminate=data.some(i=>selectedInvoiceIds.has(i.id))&&!box.checked;}}
 function onInvoiceCheck(id,checked){if(checked)selectedInvoiceIds.add(id);else selectedInvoiceIds.delete(id);syncSelectedInfo()}

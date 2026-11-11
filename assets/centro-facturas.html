@@ -74,6 +74,21 @@
     @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-delay:0ms!important;transition-duration:.01ms!important}}
 
     /* ===== Tarjetas del dashboard ===== */
+    .period-bar{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:8px;margin-bottom:14px}
+    .period-seg{display:flex;gap:3px;flex-wrap:wrap;background:#eef2f7;padding:3px;border-radius:11px}
+    .period-seg button{height:32px;padding:0 12px;border:0;border-radius:9px;background:transparent;color:var(--muted);font-weight:600;font-size:12.5px;cursor:pointer;white-space:nowrap;transition:background .2s,color .2s,box-shadow .2s}
+    .period-seg button:hover{color:var(--ink)}
+    .period-seg button.active{background:var(--card);color:var(--primary-dark);box-shadow:0 2px 8px -3px rgba(13,27,46,.25)}
+    .period-custom{display:none;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+    .period-custom.show{display:flex;animation:cardIn .3s var(--ease) both}
+    .period-custom input{height:34px;border:1px solid var(--line-strong);border-radius:9px;padding:0 9px;font-size:13px;color:var(--ink);background:var(--card)}
+    .period-custom input:focus{outline:0;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+    .period-label{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2);padding:0 8px}
+    .period-label b{color:var(--primary-dark)}
+    .period-label .cal{width:28px;height:28px;border-radius:8px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center;flex-shrink:0}
+    .period-label .cal svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .period-label.bad{color:var(--red)}
+    @media(max-width:640px){.period-label{margin-left:0;padding:4px 4px 2px}.period-seg{width:100%}.period-seg button{flex:1 1 auto;padding:0 8px}}
     .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px}
     .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 16px 12px;box-shadow:var(--shadow);cursor:pointer;position:relative;overflow:hidden}
     .kpi .k-top{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--muted);font-weight:600}
@@ -357,15 +372,27 @@
     <div class="batch-bar"><div id="batchTabs" class="batch-tabs"></div><button class="btn-batch-add" onclick="createBatch()" title="Nuevo centro de facturas">+ Centro</button></div>
 
     <section class="view" id="view-dashboard">
+      <div class="period-bar reveal" style="--i:0">
+        <div class="period-seg" id="periodSeg">
+          <button data-p="all" onclick="setPeriod('all')">Todo el histórico</button>
+          <button data-p="month" onclick="setPeriod('month')">Mes actual</button>
+          <button data-p="prevmonth" onclick="setPeriod('prevmonth')">Mes anterior</button>
+          <button data-p="year" onclick="setPeriod('year')">Año actual</button>
+          <button data-p="prevyear" onclick="setPeriod('prevyear')">Año anterior</button>
+          <button data-p="custom" onclick="setPeriod('custom')">Personalizado</button>
+        </div>
+        <div class="period-custom" id="periodCustom"><input type="date" id="periodFrom" onchange="applyCustomPeriod()" aria-label="Fecha inicial"><span>a</span><input type="date" id="periodTo" onchange="applyCustomPeriod()" aria-label="Fecha final"></div>
+        <div class="period-label" id="periodLabel"></div>
+      </div>
       <div class="kpis" id="kpis"></div>
       <div class="dash-grid">
-        <div class="panel reveal" style="--i:4"><div class="panel-head"><div><h3>Compras por mes</h3><p>Subtotal e IVA de las facturas del centro activo, por fecha de emisión</p></div><div class="legend"><span><i style="background:var(--primary)"></i>Subtotal</span><span><i style="background:#9fcdf2"></i>IVA</span></div></div><svg class="bars-chart" id="monthChart" viewBox="0 0 640 230" preserveAspectRatio="none"></svg></div>
-        <div class="panel reveal" style="--i:5"><div class="panel-head"><div><h3>Estado de la contabilización</h3><p>Avance de las facturas en el flujo</p></div></div><div class="donut-wrap"><svg class="donut" id="statusDonut" viewBox="0 0 120 120"></svg><div class="donut-legend" id="statusLegend"></div></div></div>
+        <div class="panel reveal" style="--i:4"><div class="panel-head"><div><h3>Compras por mes</h3><p>Subtotal e IVA del período, por fecha de emisión</p></div><div class="legend"><span><i style="background:var(--primary)"></i>Subtotal</span><span><i style="background:#9fcdf2"></i>IVA</span></div></div><svg class="bars-chart" id="monthChart" viewBox="0 0 640 230" preserveAspectRatio="none"></svg></div>
+        <div class="panel reveal" style="--i:5"><div class="panel-head"><div><h3>Estado de la contabilización</h3><p>Facturas emitidas en el período, según su estado</p></div></div><div class="donut-wrap"><svg class="donut" id="statusDonut" viewBox="0 0 120 120"></svg><div class="donut-legend" id="statusLegend"></div></div></div>
       </div>
       <div class="dash-grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)">
-        <div class="panel reveal" style="--i:6"><div class="panel-head"><div><h3>Principales proveedores</h3><p>Por valor total facturado</p></div></div><div class="hbars" id="topSuppliers"></div></div>
-        <div class="panel reveal" style="--i:7"><div class="panel-head"><div><h3>Por confirmar</h3><p>Causadas que esperan revisión</p></div><button class="link-btn" onclick="showView('pendientes')">Ver todas</button></div><ul class="mini-list" id="pendingList"></ul></div>
-        <div class="panel reveal" style="--i:8"><div class="panel-head"><div><h3>Últimas exportaciones</h3><p>Operaciones recientes hacia Siigo</p></div><button class="link-btn" onclick="showView('historial')">Historial</button></div><ul class="mini-list" id="recentExports"></ul></div>
+        <div class="panel reveal" style="--i:6"><div class="panel-head"><div><h3>Principales proveedores</h3><p>Valor total facturado en el período</p></div></div><div class="hbars" id="topSuppliers"></div></div>
+        <div class="panel reveal" style="--i:7"><div class="panel-head"><div><h3>Por confirmar</h3><p>Causadas del período que esperan revisión</p></div><button class="link-btn" onclick="showView('pendientes')">Ver todas</button></div><ul class="mini-list" id="pendingList"></ul></div>
+        <div class="panel reveal" style="--i:8"><div class="panel-head"><div><h3>Últimas exportaciones</h3><p id="exportsNote">Por <b>fecha de exportación</b> a Siigo · toda la empresa</p></div><button class="link-btn" onclick="showView('historial')">Historial</button></div><ul class="mini-list" id="recentExports"></ul></div>
       </div>
     </section>
 
@@ -1255,14 +1282,64 @@ const fmtInt=n=>Math.round(n).toLocaleString('es-CO');
 function fmtShort(n){n=Number(n)||0;const a=Math.abs(n);if(a>=1e9)return '$'+(n/1e9).toFixed(1).replace('.',',')+' mil M';if(a>=1e6)return '$'+(n/1e6).toFixed(1).replace('.',',')+' M';if(a>=1e3)return '$'+Math.round(n/1e3)+' mil';return '$'+Math.round(n)}
 function monthKey(d){const m=String(d||'').match(/^(\d{4})-(\d{2})/);return m?m[1]+'-'+m[2]:''}
 const monthNames=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-function lastMonths(data,n=6){
-  const keys=[...new Set(data.map(i=>monthKey(i.issue_date)).filter(Boolean))].sort();
-  const end=keys.length?keys[keys.length-1]:new Date().toISOString().slice(0,7);
-  let [y,m]=end.split('-').map(Number);const out=[];
-  for(let i=0;i<n;i++){out.unshift(`${y}-${String(m).padStart(2,'0')}`);m--;if(!m){m=12;y--}}
-  return out;
+// ---------- Filtro de períodos del Dashboard (solo consulta/visualización) ----------
+// El período se aplica sobre la FECHA DE EMISIÓN de las facturas del centro activo de la empresa activa.
+// "Últimas exportaciones" usa la FECHA DE EXPORTACIÓN a Siigo (se indica en su panel).
+let dashPeriod={mode:'all',from:'',to:''};
+try{const s=JSON.parse(localStorage.getItem('cp_period')||'null');if(s&&s.mode)dashPeriod=s}catch(e){}
+const periodNames={all:'Todo el histórico',month:'Mes actual',prevmonth:'Mes anterior',year:'Año actual',prevyear:'Año anterior',custom:'Período personalizado'};
+function ymd(d){const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`}
+function issueDay(i){const d=String(i.issue_date||'').slice(0,10);return /^\d{4}-\d{2}-\d{2}$/.test(d)?d:''}
+function periodRange(){
+  const t=new Date(),y=t.getFullYear(),m=t.getMonth();
+  switch(dashPeriod.mode){
+    case 'month': return {from:ymd(new Date(y,m,1)),to:ymd(new Date(y,m+1,0))};
+    case 'prevmonth': return {from:ymd(new Date(y,m-1,1)),to:ymd(new Date(y,m,0))};
+    case 'year': return {from:`${y}-01-01`,to:`${y}-12-31`};
+    case 'prevyear': return {from:`${y-1}-01-01`,to:`${y-1}-12-31`};
+    case 'custom': return {from:dashPeriod.from||'',to:dashPeriod.to||''};
+    default:{const ds=batchInvoices().map(issueDay).filter(Boolean).sort();return {all:true,from:ds[0]||'',to:ds[ds.length-1]||''}}
+  }
 }
+function periodValid(r){return r.all||(r.from&&r.to&&r.from<=r.to)}
+// Facturas del centro activo emitidas dentro del período. "Todo el histórico" incluye todas, incluso sin fecha.
+function dashInvoices(){
+  const r=periodRange();
+  if(r.all)return batchInvoices();
+  if(!periodValid(r))return [];
+  return batchInvoices().filter(i=>{const d=issueDay(i);return d&&d>=r.from&&d<=r.to});
+}
+function monthsInRange(r){
+  const today=ymd(new Date());
+  const f=(r.from||today).slice(0,7), t=(r.to||r.from||today).slice(0,7);
+  let [y,m]=f.split('-').map(Number);const [ty,tm]=t.split('-').map(Number);const out=[];
+  while((y<ty||(y===ty&&m<=tm))&&out.length<240){out.push(`${y}-${String(m).padStart(2,'0')}`);m++;if(m>12){m=1;y++}}
+  return out.length?out:[today.slice(0,7)];
+}
+function fmtDay(d){const m=String(d||'').match(/^(\d{4})-(\d{2})-(\d{2})/);return m?`${Number(m[3])} ${monthNames[Number(m[2])-1]} ${m[1]}`:''}
+function paintPeriodUI(){
+  document.querySelectorAll('#periodSeg button').forEach(b=>b.classList.toggle('active',b.dataset.p===dashPeriod.mode));
+  periodCustom.classList.toggle('show',dashPeriod.mode==='custom');
+  const r=periodRange();
+  if(dashPeriod.mode==='custom'){periodFrom.value=r.from;periodTo.value=r.to}
+  const centro=(batches.find(b=>b.id===activeBatchId)||{}).name||'todos los centros';
+  const cal='<span class="cal"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>';
+  let txt;
+  if(!periodValid(r)){periodLabel.classList.add('bad');periodLabel.innerHTML=cal+'<span>Elige una fecha inicial y una final (la inicial no puede ser posterior).</span>';return}
+  periodLabel.classList.remove('bad');
+  if(r.all) txt=r.from?`<b>${periodNames.all}</b> · del ${fmtDay(r.from)} al ${fmtDay(r.to)}`:`<b>${periodNames.all}</b> · sin facturas con fecha`;
+  else txt=`<b>${periodNames[dashPeriod.mode]}</b> · del ${fmtDay(r.from)} al ${fmtDay(r.to)}`;
+  periodLabel.innerHTML=`${cal}<span>${txt} · por fecha de emisión · centro <b>${esc(centro)}</b></span>`;
+}
+function savePeriod(){try{localStorage.setItem('cp_period',JSON.stringify(dashPeriod))}catch(e){}}
+function setPeriod(mode){
+  dashPeriod.mode=mode;
+  if(mode==='custom'&&(!dashPeriod.from||!dashPeriod.to)){const t=new Date();dashPeriod.from=ymd(new Date(t.getFullYear(),t.getMonth(),1));dashPeriod.to=ymd(t)}
+  savePeriod();renderDashboard();
+}
+function applyCustomPeriod(){dashPeriod.mode='custom';dashPeriod.from=periodFrom.value;dashPeriod.to=periodTo.value;savePeriod();renderDashboard()}
 function sparkPath(vals,w=200,h=34){
+  if(vals.length<2)vals=[vals[0]||0,vals[0]||0];
   const max=Math.max(1,...vals);const step=vals.length>1?w/(vals.length-1):w;
   const pts=vals.map((v,i)=>[i*step,h-3-(v/max)*(h-8)]);
   let d=`M${pts[0][0]},${pts[0][1]}`;
@@ -1271,14 +1348,15 @@ function sparkPath(vals,w=200,h=34){
 }
 let dashBuilt=false;
 function renderDashboard(soft){
-  const data=batchInvoices();
-  const months=lastMonths(data);
+  paintPeriodUI();
+  const data=dashInvoices();
+  const months=monthsInRange(periodRange());
   const by=s=>data.filter(i=>s==='all'||i.status===s);
   const series=s=>months.map(k=>by(s).filter(i=>monthKey(i.issue_date)===k).length);
   const sum=(arr,k)=>arr.reduce((a,i)=>a+Number(i[k]||0),0);
   const total=data.length, exp=by('exported').length;
   const kp=[
-    {key:'all',tone:'blue',label:'Facturas del centro',val:total,sub:fmtShort(sum(data,'payable_amount'))+' en compras',badge:total?'100%':'—',icon:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',color:'#1478c8'},
+    {key:'all',tone:'blue',label:'Facturas del período',val:total,sub:fmtShort(sum(data,'payable_amount'))+' en compras',badge:total?'100%':'—',icon:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',color:'#1478c8'},
     {key:'received',tone:'amber',label:'Por causar',val:by('received').length,sub:fmtShort(sum(by('received'),'payable_amount')),badge:total?Math.round(by('received').length*100/total)+'%':'—',icon:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',color:'#e0a72f'},
     {key:'accounted',tone:'violet',label:'Por confirmar',val:by('accounted').length,sub:'Causadas sin revisión',badge:total?Math.round(by('accounted').length*100/total)+'%':'—',icon:'<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>',color:'#6d4fd6'},
     {key:'exported',tone:'green',label:'Exportadas a Siigo',val:exp,sub:by('approved').length+' confirmada(s) listas para subir',badge:total?Math.round(exp*100/total)+'%':'—',icon:'<path d="M5 12l5 5L20 7"/>',color:'#119a72'}
@@ -1296,21 +1374,23 @@ function renderDashboard(soft){
 }
 function drawMonthChart(animate){
   const svg=document.getElementById('monthChart');if(!svg)return;
-  const data=batchInvoices();const months=lastMonths(data);
+  const data=dashInvoices();const months=monthsInRange(periodRange());
   const W=Math.max(320,svg.clientWidth||640),H=230,padL=58,padB=28,padT=10;
+  const every=Math.max(1,Math.ceil(months.length/Math.max(4,Math.floor((W-70)/58))));
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('preserveAspectRatio','xMidYMid meet');
   const vals=months.map(k=>{const r=data.filter(i=>monthKey(i.issue_date)===k);return {k,sub:r.reduce((a,i)=>a+Number(i.subtotal||0),0),iva:r.reduce((a,i)=>a+Number(i.tax_amount||0),0),n:r.length}});
   const max=Math.max(1,...vals.map(v=>v.sub+v.iva));
   const nice=(()=>{const p=Math.pow(10,Math.floor(Math.log10(max)));const f=max/p;return (f<=2?2:f<=5?5:10)*p})();
-  const plotH=H-padB-padT, plotW=W-padL-10, slot=plotW/vals.length, bw=Math.min(46,slot*.46);
+  const plotH=H-padB-padT, plotW=W-padL-10, slot=plotW/vals.length, bw=Math.max(2,Math.min(46,slot*.56));
   let out='';
   for(let g=0;g<=4;g++){const y=padT+plotH-(g/4)*plotH;out+=`<line x1="${padL}" x2="${W-10}" y1="${y}" y2="${y}" stroke="#e2e8f0" stroke-dasharray="${g?'3 4':''}"/><text x="${padL-8}" y="${y+4}" text-anchor="end" font-size="11" fill="#6b7a90">${fmtShort(nice*g/4)}</text>`}
   vals.forEach((v,i)=>{
     const x=padL+slot*i+(slot-bw)/2;const hs=(v.sub/nice)*plotH, hi=(v.iva/nice)*plotH;const y0=padT+plotH;
     const [yy,mm]=v.k.split('-');const label=monthNames[Number(mm)-1]+' '+yy.slice(2);
     const tip=`${label}: ${v.n} factura(s) · Subtotal ${money(v.sub)} · IVA ${money(v.iva)}`;
-    const delay=animate?`animation-delay:${i*70}ms`:'animation:none';
-    out+=`<g data-tip="${esc(tip)}" style="cursor:pointer"><rect x="${x-4}" y="${padT}" width="${bw+8}" height="${plotH}" fill="transparent"/><rect class="bar" style="${delay}" x="${x}" y="${y0-hs}" width="${bw}" height="${Math.max(0,hs)}" rx="6" fill="url(#mgrad)"/>${hi>0.5?`<rect class="bar" style="${delay}" x="${x}" y="${y0-hs-hi-2}" width="${bw}" height="${hi}" rx="5" fill="#9fcdf2"/>`:''}</g><text x="${x+bw/2}" y="${H-8}" text-anchor="middle" font-size="11.5" fill="#6b7a90">${label}</text>`;
+    const delay=animate?`animation-delay:${Math.min(i*70,900)}ms`:'animation:none';
+    const showLabel=i%every===0;
+    out+=`<g data-tip="${esc(tip)}" style="cursor:pointer"><rect x="${x-4}" y="${padT}" width="${bw+8}" height="${plotH}" fill="transparent"/><rect class="bar" style="${delay}" x="${x}" y="${y0-hs}" width="${bw}" height="${Math.max(0,hs)}" rx="6" fill="url(#mgrad)"/>${hi>0.5?`<rect class="bar" style="${delay}" x="${x}" y="${y0-hs-hi-2}" width="${bw}" height="${hi}" rx="5" fill="#9fcdf2"/>`:''}</g>${showLabel?`<text x="${x+bw/2}" y="${H-8}" text-anchor="middle" font-size="11.5" fill="#6b7a90">${label}</text>`:''}`;
   });
   svg.innerHTML=`<defs><linearGradient id="mgrad" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2b9be6"/><stop offset="1" stop-color="#0b5fa5"/></linearGradient></defs>`+out;
   const tipEl=document.getElementById('chartTip');
@@ -1331,20 +1411,24 @@ function drawSuppliers(data){
   const box=document.getElementById('topSuppliers');if(!box)return;
   const map=new Map();for(const i of data){const k=i.supplier_nit||i.supplier_name||'?';const r=map.get(k)||{name:i.supplier_name||k,v:0,n:0};r.v+=Number(i.payable_amount||0);r.n++;map.set(k,r)}
   const top=[...map.values()].sort((a,b)=>b.v-a.v).slice(0,5);const max=Math.max(1,...top.map(t=>t.v));
-  box.innerHTML=top.map(t=>`<div class="hbar"><div class="row"><span title="${esc(t.name)}">${esc(t.name)}</span><b>${fmtShort(t.v)}</b></div><div class="track"><i data-w="${(t.v/max*100).toFixed(1)}"></i></div></div>`).join('')||'<div class="empty-note">Aún no hay facturas en este centro.</div>';
+  box.innerHTML=top.map(t=>`<div class="hbar"><div class="row"><span title="${esc(t.name)} · ${t.n} factura(s) · ${esc(money(t.v))}">${esc(t.name)}</span><b>${fmtShort(t.v)}</b></div><div class="track"><i data-w="${(t.v/max*100).toFixed(1)}"></i></div></div>`).join('')||'<div class="empty-note">No hay compras en este período.</div>';
   requestAnimationFrame(()=>requestAnimationFrame(()=>box.querySelectorAll('.track i').forEach(el=>el.style.width=el.dataset.w+'%')));
 }
 function drawPending(data){
   const box=document.getElementById('pendingList');if(!box)return;
   const rows=data.filter(i=>i.status==='accounted').slice(0,5);
-  box.innerHTML=rows.map(i=>`<li><span class="dot" style="background:${statusColors.accounted}"></span><div class="ml-main"><b>${esc(i.supplier_name||'')}</b><span>${esc(i.invoice_number)} · ${money(i.payable_amount)}</span></div><button class="link-btn" onclick="viewEntry('${i.id}')">Revisar</button></li>`).join('')||'<li class="empty-note">No hay facturas pendientes de confirmar. 🎉</li>';
+  box.innerHTML=rows.map(i=>`<li><span class="dot" style="background:${statusColors.accounted}"></span><div class="ml-main"><b>${esc(i.supplier_name||'')}</b><span>${esc(i.invoice_number)} · ${money(i.payable_amount)}</span></div><button class="link-btn" onclick="viewEntry('${i.id}')">Revisar</button></li>`).join('')||'<li class="empty-note">No hay facturas del período pendientes de confirmar.</li>';
 }
 async function loadRecentExports(){
   const box=document.getElementById('recentExports');if(!box||!cid())return;
   try{
-    const rows=await api(`/api/companies/${cid()}/siigo-exports?limit=6`);
+    // Fecha operativa distinta: aquí se filtra por la fecha en que se exportó a Siigo, no por la de emisión.
+    const r=periodRange();
+    const q=(!r.all&&periodValid(r))?`&from=${encodeURIComponent(new Date(r.from+'T00:00:00').toISOString())}&to=${encodeURIComponent(new Date(r.to+'T23:59:59.999').toISOString())}`:'';
+    if(!r.all&&!periodValid(r)){box.innerHTML='<li class="empty-note">Elige un período válido.</li>';return}
+    const rows=await api(`/api/companies/${cid()}/siigo-exports?limit=6${q}`);
     const col={success:'#119a72',error:'#d23f45',blocked:'#b7790b'};
-    box.innerHTML=rows.slice(0,6).map(r=>`<li><span class="dot" style="background:${col[r.status]||'#6b7a90'}"></span><div class="ml-main"><b>${esc(r.invoice_number)} · ${esc(r.supplier_name||'')}</b><span>${esc(fmtWhen(r.created_at))} · ${esc(exportStatusLabel[r.status]||r.status)}${r.siigo_name?' · '+esc(r.siigo_name):''}</span></div></li>`).join('')||'<li class="empty-note">Todavía no hay exportaciones a Siigo.</li>';
+    box.innerHTML=rows.slice(0,6).map(r=>`<li><span class="dot" style="background:${col[r.status]||'#6b7a90'}"></span><div class="ml-main"><b>${esc(r.invoice_number)} · ${esc(r.supplier_name||'')}</b><span>${esc(fmtWhen(r.created_at))} · ${esc(exportStatusLabel[r.status]||r.status)}${r.siigo_name?' · '+esc(r.siigo_name):''}</span></div></li>`).join('')||(q?'<li class="empty-note">No hubo exportaciones a Siigo en este período.</li>':'<li class="empty-note">Todavía no hay exportaciones a Siigo.</li>');
   }catch(e){box.innerHTML=`<li class="empty-note">${esc(e.message)}</li>`}
 }
 

@@ -1259,7 +1259,8 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     let sql='SELECT * FROM siigo_exports WHERE company_id=?'; const args=[m[1]];
     const st=url.searchParams.get('status'); if(st && st!=='all'){ sql+=' AND status=?'; args.push(st); }
     const from=url.searchParams.get('from'); if(from){ sql+=' AND created_at>=?'; args.push(from); }
-    const to=url.searchParams.get('to'); if(to){ sql+=' AND created_at<?'; args.push(to+'T99'); }
+    // "to" puede ser una fecha (AAAA-MM-DD, incluye todo el día) o un instante exacto en ISO (lo envía el Dashboard).
+    const to=url.searchParams.get('to'); if(to){ sql+=' AND created_at<=?'; args.push(to.includes('T')?to:to+'T99'); }
     const q=String(url.searchParams.get('q')||'').trim(); if(q){ sql+=' AND (invoice_number LIKE ? OR supplier_name LIKE ? OR supplier_nit LIKE ? OR cufe LIKE ? OR siigo_name LIKE ?)'; for(let i=0;i<5;i++) args.push(`%${q}%`); }
     const lim=Math.min(2000,Math.max(1,parseInt(url.searchParams.get('limit')||'2000',10)||2000));
     sql+=` ORDER BY created_at DESC LIMIT ${lim}`;

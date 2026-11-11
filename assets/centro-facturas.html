@@ -6,262 +6,386 @@
   <title>ContaPilot | Centro de facturas</title>
   <style>
     :root{
-      --bg:#05070c;--surface:rgba(255,255,255,.035);--surface-2:rgba(255,255,255,.06);--surface-solid:#0c1119;
-      --ink:#f2f5f9;--muted:#8b96ab;--line:rgba(255,255,255,.10);--line-strong:rgba(255,255,255,.20);
-      --primary:#2f8fe0;--primary-dark:#1c6fb3;--primary-soft:rgba(47,143,224,.16);
-      --navy:#0c1119;--cyan:#38b6c9;--green:#1fb98a;--amber:#e0a72f;--red:#f2555a;--radius:14px
+      --bg:#dfe6ef;--panel:#f4f7fb;--card:#ffffff;--surface:#ffffff;--surface-2:#f1f4f8;--surface-solid:#ffffff;
+      --ink:#0d1b2e;--ink-2:#33445c;--muted:#6b7a90;--line:#e2e8f0;--line-strong:#cbd5e1;
+      --primary:#1478c8;--primary-dark:#0b5fa5;--primary-light:#2b9be6;--primary-soft:#e5f1fb;--primary-ink:#0b5fa5;
+      --navy:#0b1426;--silver:#c9d2de;--green:#119a72;--green-soft:#e3f6ef;--amber:#b7790b;--amber-soft:#fdf3df;
+      --red:#d23f45;--red-soft:#fdeaea;--violet:#6d4fd6;--violet-soft:#efeafe;
+      --radius:16px;--shadow:0 1px 2px rgba(13,27,46,.04),0 6px 18px -10px rgba(13,27,46,.18);
+      --shadow-hover:0 2px 4px rgba(13,27,46,.05),0 18px 34px -16px rgba(13,40,80,.30);
+      --ease:cubic-bezier(.22,1,.36,1);
     }
     *{box-sizing:border-box}
-    body{
-      margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);
-      background:
-        radial-gradient(1100px 560px at 50% -14%, rgba(47,143,224,.18), transparent 60%),
-        radial-gradient(700px 380px at 96% 0%, rgba(47,143,224,.07), transparent 60%),
-        var(--bg);
-      scrollbar-color:rgba(255,255,255,.25) transparent
-    }
+    html,body{height:100%}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased}
+    button,input,select,textarea{font-family:inherit}
+    select{color-scheme:light}
     ::-webkit-scrollbar{height:10px;width:10px}
+    ::-webkit-scrollbar-thumb{background:#c3cdd9;border-radius:6px;border:2px solid transparent;background-clip:padding-box}
     ::-webkit-scrollbar-track{background:transparent}
-    ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:6px}
-    button,input,select{font-family:inherit}
-    .page{width:min(1280px,calc(100% - 32px));margin:0 auto;padding:24px 0 60px}
 
-    /* Topbar */
-    .nav{position:sticky;top:0;z-index:30;height:60px;border-radius:0;background:rgba(5,7,12,.75);backdrop-filter:blur(14px);border:0;border-bottom:1px solid var(--line);box-shadow:none;display:flex;align-items:center;justify-content:space-between;padding:0 20px;margin:0 0 24px}
-    .page.app-shell{padding-top:0}
-    .brand,.brand-icon-only{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700;letter-spacing:0;color:#fff}
-    .brand-symbol{width:40px;height:40px;object-fit:contain}
-    select{color-scheme:dark}
-    select option{background:var(--surface-solid);color:var(--ink)}
-    .mark{width:30px;height:30px;border-radius:8px;background:var(--primary);position:relative;display:grid;place-items:center;color:#fff;font-size:13px;font-weight:800}
-    .mark:before{content:'CP';position:relative;z-index:2}
-    .mark:after{display:none}
-    .nav-center,.nav-center-modern{display:flex;align-items:center;gap:4px;position:static;transform:none}
+    /* ===== Shell: menú lateral azul + panel principal ===== */
+    .shell{display:flex;min-height:100vh;padding:14px;gap:0;background:linear-gradient(165deg,#2b9be6 0%,#1478c8 42%,#0b4f94 100%)}
+    .sidebar{width:248px;flex-shrink:0;display:flex;flex-direction:column;color:#fff;padding:8px 14px 10px 6px;position:sticky;top:14px;height:calc(100vh - 28px)}
+    .sb-brand{display:flex;align-items:center;gap:10px;padding:6px 8px 18px}
+    .sb-brand img{width:40px;height:40px;object-fit:contain;filter:drop-shadow(0 4px 10px rgba(0,0,0,.25))}
+    .sb-brand strong{display:block;font-size:16px;letter-spacing:.01em}
+    .sb-brand span{display:block;font-size:11.5px;opacity:.75;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .sb-nav{position:relative;display:flex;flex-direction:column;gap:2px;overflow-y:auto;flex:1;padding-right:2px;scrollbar-width:none}
+    .sb-nav::-webkit-scrollbar{display:none}
+    .sb-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;opacity:.6;font-weight:700;padding:14px 12px 6px}
+    .sb-indicator{position:absolute;left:0;right:0;height:40px;border-radius:12px;background:#fff;box-shadow:0 8px 20px -10px rgba(5,30,60,.55);transition:transform .38s var(--ease),opacity .2s;pointer-events:none;opacity:0;z-index:0}
+    .sb-item{position:relative;z-index:1;height:40px;display:flex;align-items:center;gap:11px;padding:0 12px;border:0;border-radius:12px;background:transparent;color:rgba(255,255,255,.88);font-size:13.5px;font-weight:600;cursor:pointer;text-align:left;width:100%;transition:color .25s,background .2s}
+    .sb-item:hover{background:rgba(255,255,255,.12);color:#fff}
+    .sb-item.active{color:var(--primary-dark);background:transparent}
+    .sb-item svg{width:18px;height:18px;flex-shrink:0;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+    .sb-item .count{margin-left:auto;min-width:22px;height:20px;padding:0 7px;border-radius:999px;background:rgba(255,255,255,.2);color:#fff;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;transition:background .25s,color .25s}
+    .sb-item.active .count{background:var(--primary-soft);color:var(--primary-dark)}
+    .sb-item .count.warn{background:#ffd27a;color:#5b3d00}
+    .sb-progress{margin:12px 0 10px;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:12px}
+    .sb-progress .top{display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:8px}
+    .sb-progress .bar{height:7px;border-radius:999px;background:rgba(255,255,255,.22);overflow:hidden}
+    .sb-progress .bar i{display:block;height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,#e9eef5,#ffffff);transition:width 1s var(--ease)}
+    .sb-progress small{display:block;margin-top:7px;font-size:11px;opacity:.75}
+    .sb-user{display:flex;align-items:center;gap:10px;padding:10px 8px 2px;border-top:1px solid rgba(255,255,255,.18)}
+    .sb-avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#e9eef5,#b9c4d2);color:var(--navy);display:grid;place-items:center;font-weight:800;font-size:13px;flex-shrink:0}
+    .sb-user .who{flex:1;min-width:0;font-size:12px}
+    .sb-user .who b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .sb-user .who span{opacity:.7}
+    .sb-logout{width:32px;height:32px;border:0;border-radius:9px;background:rgba(255,255,255,.14);color:#fff;cursor:pointer;display:grid;place-items:center}
+    .sb-logout:hover{background:rgba(255,255,255,.25)}
+    .sb-logout svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+    .main-panel{flex:1;min-width:0;background:var(--panel);border-radius:24px;box-shadow:0 30px 60px -30px rgba(3,25,55,.55);padding:26px 30px 40px;position:relative}
+    .main-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+    .main-head h1{margin:0;font-size:26px;font-weight:750;letter-spacing:-.02em}
+    .main-head p{margin:4px 0 0;color:var(--muted);font-size:13.5px}
+    .head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .mobile-toggle{display:none}
+
+    /* ===== Vistas y animaciones ===== */
+    .view{display:none}
+    .view.active{display:block;animation:viewIn .42s var(--ease) both}
+    @keyframes viewIn{from{opacity:0;filter:blur(6px);transform:translateY(10px)}to{opacity:1;filter:blur(0);transform:none}}
+    .reveal{animation:cardIn .55s var(--ease) both;animation-delay:calc(var(--i,0) * 55ms)}
+    @keyframes cardIn{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+    .lift{transition:transform .25s var(--ease),box-shadow .25s var(--ease)}
+    .lift:hover{transform:translateY(-3px);box-shadow:var(--shadow-hover)}
+    @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-delay:0ms!important;transition-duration:.01ms!important}}
+
+    /* ===== Tarjetas del dashboard ===== */
+    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px}
+    .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 16px 12px;box-shadow:var(--shadow);cursor:pointer;position:relative;overflow:hidden}
+    .kpi .k-top{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--muted);font-weight:600}
+    .kpi .k-ic{width:28px;height:28px;border-radius:9px;display:grid;place-items:center}
+    .kpi .k-ic svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .kpi .k-badge{margin-left:auto;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px}
+    .kpi .k-val{font-size:28px;font-weight:750;letter-spacing:-.02em;margin:10px 0 2px;font-variant-numeric:tabular-nums}
+    .kpi .k-sub{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+    .kpi svg.spark{display:block;width:100%;height:34px;margin-top:8px;overflow:visible}
+    .tone-blue .k-ic,.tone-blue .k-badge{background:var(--primary-soft);color:var(--primary)}
+    .tone-amber .k-ic,.tone-amber .k-badge{background:var(--amber-soft);color:var(--amber)}
+    .tone-violet .k-ic,.tone-violet .k-badge{background:var(--violet-soft);color:var(--violet)}
+    .tone-green .k-ic,.tone-green .k-badge{background:var(--green-soft);color:var(--green)}
+    .dash-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:14px;margin-bottom:14px}
+    .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px}
+    .panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px}
+    .panel-head h3{margin:0;font-size:14.5px;font-weight:700}
+    .panel-head p{margin:3px 0 0;font-size:12px;color:var(--muted)}
+    .legend{display:flex;gap:12px;font-size:11.5px;color:var(--muted);font-weight:600;flex-wrap:wrap}
+    .legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+    .bars-chart{width:100%;height:230px;display:block}
+    .bars-chart .bar{transform-box:fill-box;transform-origin:bottom;animation:grow .8s var(--ease) both}
+    @keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+    .bars-chart .bar:hover{filter:brightness(1.08)}
+    .chart-tip{position:fixed;pointer-events:none;background:var(--navy);color:#fff;font-size:12px;padding:8px 10px;border-radius:9px;box-shadow:0 12px 24px -10px rgba(0,0,0,.5);opacity:0;transform:translateY(4px);transition:opacity .15s,transform .15s;z-index:200;white-space:nowrap}
+    .chart-tip.show{opacity:1;transform:none}
+    .donut-wrap{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+    .donut{width:150px;height:150px;flex-shrink:0}
+    .donut circle.seg{transition:stroke-dasharray 1s var(--ease)}
+    .donut-legend{flex:1;min-width:140px;display:flex;flex-direction:column;gap:9px;font-size:12.5px}
+    .donut-legend div{display:flex;align-items:center;gap:8px}
+    .donut-legend b{margin-left:auto;font-variant-numeric:tabular-nums}
+    .donut-legend i{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+    .hbars{display:flex;flex-direction:column;gap:12px}
+    .hbar .row{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;margin-bottom:5px}
+    .hbar .row span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+    .hbar .row b{font-variant-numeric:tabular-nums;color:var(--ink-2);font-weight:600}
+    .hbar .track{height:8px;border-radius:999px;background:var(--surface-2);overflow:hidden}
+    .hbar .track i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--primary-light),var(--primary-dark));width:0;transition:width 1s var(--ease)}
+    .mini-list{list-style:none;margin:0;padding:0}
+    .mini-list li{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);font-size:12.5px}
+    .mini-list li:first-child{border-top:0}
+    .mini-list .ml-main{flex:1;min-width:0}
+    .mini-list .ml-main b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .mini-list .ml-main span{color:var(--muted);font-size:11.5px}
+    .mini-list .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    .empty-note{color:var(--muted);font-size:12.5px;padding:10px 0}
+    .link-btn{border:0;background:transparent;color:var(--primary);font-weight:700;font-size:12.5px;cursor:pointer;padding:4px 6px;border-radius:7px}
+    .link-btn:hover{background:var(--primary-soft)}
+    .ring{width:64px;height:64px;flex-shrink:0}
+
+    /* ===== Controles comunes ===== */
     .menu{position:relative}
-    .menu-btn{height:36px;border:0;border-radius:8px;background:transparent;padding:0 12px;font-weight:600;font-size:13.5px;cursor:pointer;transition:background .12s;color:rgba(255,255,255,.82)}
-    .menu-btn:hover,.menu.open .menu-btn{background:rgba(255,255,255,.10);color:#fff}
-    .dropdown{position:absolute;top:44px;right:0;width:300px;background:var(--surface-solid);border:1px solid var(--line-strong);border-radius:var(--radius);box-shadow:0 20px 44px rgba(0,0,0,.5);padding:14px;display:none;z-index:50}
-    .menu.open .dropdown{display:block}
-    .dropdown.wide{width:360px}
+    .company-btn{height:38px;display:inline-flex;align-items:center;gap:8px;padding:0 12px 0 10px;border-radius:11px;border:1px solid var(--line-strong);background:var(--card);color:var(--ink);font-weight:600;font-size:13px;cursor:pointer;max-width:280px;transition:border-color .2s,box-shadow .2s}
+    .company-btn:hover{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+    .company-btn span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .company-btn .cb-ic{width:22px;height:22px;border-radius:7px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center;font-size:11px;font-weight:800;flex-shrink:0}
+    .dropdown{position:absolute;top:46px;right:0;width:340px;background:var(--card);border:1px solid var(--line-strong);border-radius:var(--radius);box-shadow:0 24px 48px -18px rgba(13,27,46,.35);padding:14px;z-index:50;opacity:0;transform:translateY(-6px) scale(.98);pointer-events:none;transition:opacity .18s,transform .22s var(--ease)}
+    .menu.open .dropdown{opacity:1;transform:none;pointer-events:auto}
     .field{margin-bottom:12px}
     .field label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px}
-    .field input,.field select{height:38px;width:100%;border:1px solid var(--line);border-radius:8px;padding:0 11px;background:rgba(255,255,255,.04);outline:0;font-size:14px;color:var(--ink)}
-    .field input:focus,.field select:focus{border-color:var(--primary)}
+    .field input,.field select,.field textarea{height:38px;width:100%;border:1px solid var(--line-strong);border-radius:10px;padding:0 11px;background:var(--card);outline:0;font-size:14px;color:var(--ink);transition:border-color .2s,box-shadow .2s}
+    .field textarea{height:auto;padding:8px 11px}
+    .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
     .actions{display:flex;gap:8px;flex-wrap:wrap}
-    .topbar-user{display:flex;align-items:center;gap:12px}
-    .user{font-size:13px;color:rgba(255,255,255,.75);font-weight:500;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .sub{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+    .mono{font-family:ui-monospace,Consolas,monospace}
 
-    /* Buttons */
-    .btn{height:38px;border:1px solid transparent;border-radius:9px;padding:0 14px;font-weight:600;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:background .12s,border-color .12s,filter .12s;white-space:nowrap}
-    .btn:hover{filter:brightness(1.08)}
+    .btn{height:38px;border:1px solid transparent;border-radius:10px;padding:0 15px;font-weight:600;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;transition:transform .15s,box-shadow .2s,background .2s,border-color .2s,filter .2s}
+    .btn:active{transform:scale(.97)}
     .btn:disabled{opacity:.5;cursor:not-allowed}
-    .btn-primary{border-color:rgba(47,143,224,.55);background:linear-gradient(180deg,var(--primary),var(--primary-dark));color:#fff;box-shadow:0 8px 22px -12px rgba(47,143,224,.6)}
-    .btn-green{border-color:rgba(31,185,138,.5);background:linear-gradient(180deg,#22c99a,#159873);color:#fff;box-shadow:0 8px 22px -12px rgba(31,185,138,.5)}
-    .btn-blue{border-color:rgba(47,143,224,.55);background:linear-gradient(180deg,var(--primary),var(--primary-dark));color:#fff}
-    .btn-red{border-color:rgba(242,85,90,.55);background:linear-gradient(180deg,#f2555a,#c93b40);color:#fff}
-    .btn-light{background:var(--surface-2);border-color:var(--line-strong);color:var(--ink)}
-    .btn-light:hover{background:rgba(255,255,255,.10)}
-    .btn-danger-light{background:rgba(242,85,90,.12);border-color:rgba(242,85,90,.35);color:var(--red)}
+    .btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .btn-primary,.btn-blue{background:linear-gradient(180deg,var(--primary-light),var(--primary-dark));color:#fff;box-shadow:0 8px 18px -10px rgba(20,120,200,.75)}
+    .btn-primary:hover,.btn-blue:hover{filter:brightness(1.06);box-shadow:0 12px 22px -10px rgba(20,120,200,.8)}
+    .btn-green{background:linear-gradient(180deg,#1bb487,#0f8f69);color:#fff;box-shadow:0 8px 18px -10px rgba(17,154,114,.7)}
+    .btn-green:hover{filter:brightness(1.05)}
+    .btn-red{background:linear-gradient(180deg,#e2545a,#bf353b);color:#fff}
+    .btn-light{background:var(--card);border-color:var(--line-strong);color:var(--ink)}
+    .btn-light:hover{border-color:var(--primary);color:var(--primary-dark);background:#fbfdff}
+    .btn-danger-light{background:var(--red-soft);border-color:#f3c6c8;color:var(--red)}
     .btn-full{width:100%}
     .btn-siigo img{width:20px;height:20px;object-fit:contain;background:#fff;border-radius:5px;padding:1px}
 
-    /* Floating action button */
-    .fab{position:fixed;right:26px;bottom:26px;z-index:60;display:flex;flex-direction:column;align-items:flex-end;gap:10px}
-    .fab-menu{display:flex;flex-direction:column;gap:8px;margin-bottom:2px;align-items:flex-end}
-    .fab-menu.show{display:flex}
-    .fab-menu:not(.show){display:none}
-    .fab-item{display:inline-flex;align-items:center;gap:9px;height:42px;padding:0 16px 0 14px;border-radius:999px;background:var(--surface-solid);border:1px solid var(--line-strong);color:var(--ink);font-weight:600;font-size:13px;cursor:pointer;box-shadow:0 14px 30px -12px rgba(0,0,0,.6);white-space:nowrap}
-    .fab-item:hover{background:rgba(255,255,255,.10)}
-    .fab-item .ic{width:22px;height:22px;border-radius:50%;background:var(--primary-soft);color:var(--primary);display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
-    .fab-main{width:58px;height:58px;border-radius:50%;border:1px solid rgba(47,143,224,.55);background:linear-gradient(180deg,var(--primary),var(--primary-dark));color:#fff;font-size:26px;font-weight:400;cursor:pointer;box-shadow:0 16px 34px -10px rgba(47,143,224,.65);transition:transform .18s ease}
-    .fab-main.open{transform:rotate(45deg)}
-
-    /* Hero strip */
-    .hero-strip{margin:0 0 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
-    .hero-strip h1{font-size:22px;letter-spacing:-.01em;margin:0 0 3px;color:var(--ink);font-weight:700}
-    .hero-strip p{margin:0;color:var(--muted);font-size:13.5px}
-
-    /* Batch tabs (centros de facturas) */
+    /* Centros de facturas (pestañas) */
     .batch-bar{display:flex;align-items:center;gap:10px;margin:0 0 16px;flex-wrap:wrap}
-    .batch-tabs{display:flex;gap:6px;flex-wrap:wrap}
-    .batch-tab{height:34px;padding:0 14px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-weight:600;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
-    .batch-tab:hover{background:var(--surface-2)}
-    .batch-tab.active{background:var(--primary-soft);border-color:rgba(47,143,224,.45);color:#bfe0fb}
-    .batch-tab .edit-ic{opacity:.6;font-size:11px}
-    .btn-batch-add{height:34px;padding:0 14px;border-radius:9px;border:1px dashed var(--line-strong);background:transparent;color:var(--muted);font-weight:600;font-size:12.5px;cursor:pointer}
-    .btn-batch-add:hover{background:var(--surface)}
+    .batch-tabs{display:flex;gap:4px;flex-wrap:wrap;background:#e8edf4;padding:4px;border-radius:12px}
+    .batch-tab{height:32px;padding:0 14px;border-radius:9px;border:0;background:transparent;color:var(--muted);font-weight:600;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:background .2s,color .2s,box-shadow .2s}
+    .batch-tab:hover{color:var(--ink)}
+    .batch-tab.active{background:var(--card);color:var(--primary-dark);box-shadow:0 2px 8px -3px rgba(13,27,46,.25)}
+    .batch-tab .edit-ic{opacity:.55;font-size:11px}
+    .btn-batch-add{height:32px;padding:0 13px;border-radius:9px;border:1px dashed var(--line-strong);background:transparent;color:var(--muted);font-weight:600;font-size:12.5px;cursor:pointer}
+    .btn-batch-add:hover{border-color:var(--primary);color:var(--primary)}
 
-    /* Bulk action bar (appears only when rows are selected) */
-    .bulk-bar{align-items:center;justify-content:space-between;gap:12px;background:var(--primary-soft);border:1px solid rgba(47,143,224,.35);border-radius:10px;padding:10px 12px;margin:-4px 0 14px;flex-wrap:wrap}
-    .bulk-bar .selected-counter{background:rgba(255,255,255,.07)}
+    /* Stats de la bandeja */
+    .stats,.metrics-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
+    .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 15px;box-shadow:var(--shadow);cursor:pointer;transition:transform .25s var(--ease),box-shadow .25s,border-color .2s}
+    .stat:hover{transform:translateY(-2px);box-shadow:var(--shadow-hover)}
+    .stat.on{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+    .stat span{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+    .stat strong{display:block;font-size:24px;margin-top:3px;font-weight:750;font-variant-numeric:tabular-nums}
 
-    /* Stats */
-    .stats,.metrics-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;padding:0;margin-bottom:20px}
-    .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;backdrop-filter:blur(14px)}
-    .stat span{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
-    .stat strong{display:block;font-size:26px;margin-top:4px;font-weight:700;font-family:ui-monospace,Consolas,monospace}
-
-    /* Card / board */
-    .card,.invoice-board{margin-top:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:none;overflow:hidden;backdrop-filter:blur(14px)}
-    .card-head,.board-head{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:14px}
-    .section-label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;color:var(--primary);font-family:ui-monospace,Consolas,monospace}
-    .card-head h2,.board-head h2{margin:2px 0 2px;font-size:18px;font-weight:700;letter-spacing:0}
+    /* Tarjeta / bandeja */
+    .card,.invoice-board{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+    .card-head,.board-head{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+    .section-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:var(--primary)}
+    .card-head h2,.board-head h2{margin:2px 0 2px;font-size:17px;font-weight:700}
     .card-head p,.board-head p{margin:0;color:var(--muted);font-size:13px}
-    .card-body{padding:18px 20px}
-    .toolbar,.board-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;background:transparent;border:0;padding:0}
-    .search{height:38px;border:1px solid var(--line);border-radius:9px;display:flex;align-items:center;gap:8px;padding:0 11px;flex:1;min-width:260px;background:rgba(255,255,255,.04);color:var(--muted)}
+    .card-body{padding:16px 20px 20px}
+    .toolbar,.board-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+    .search{height:38px;border:1px solid var(--line-strong);border-radius:10px;display:flex;align-items:center;gap:8px;padding:0 11px;flex:1;min-width:240px;background:var(--card);color:var(--muted);transition:border-color .2s,box-shadow .2s}
+    .search:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
     .search input{border:0;outline:0;flex:1;font-size:14px;color:var(--ink);background:transparent}
-    .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);scrollbar-color:rgba(255,255,255,.25) transparent}
-    .table-wrap::-webkit-scrollbar{height:10px;width:10px}
-    .table-wrap::-webkit-scrollbar-track{background:transparent}
-    .table-wrap::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:6px}
+    .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--card)}
     table{width:100%;border-collapse:collapse;min-width:1040px}
-    th{background:rgba(255,255,255,.035);text-align:left;padding:10px 13px;color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--line)}
-    td{padding:12px 13px;border-top:1px solid var(--line);font-size:13.5px;vertical-align:middle}
-    tbody tr:hover td{background:rgba(255,255,255,.03)}
+    th{background:#f6f8fb;text-align:left;padding:10px 13px;color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:1}
+    td{padding:11px 13px;border-top:1px solid var(--line);font-size:13.5px;vertical-align:middle}
+    tbody tr{transition:background .15s}
+    tbody tr:hover td{background:#f7fafd}
     .supplier{font-weight:600}
-    .sub{display:block;color:var(--muted);font-size:12px;margin-top:2px}
-    .mono{font-family:ui-monospace,Consolas,monospace}
-    td strong,.stat strong,.money-highlight{font-family:ui-monospace,Consolas,monospace}
+    td strong,.stat strong,.money-highlight{font-variant-numeric:tabular-nums}
+    .rows-in tr{animation:rowIn .45s var(--ease) both}
+    @keyframes rowIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
-    /* Status pills */
-    .pill{display:inline-flex;border-radius:999px;padding:4px 10px;font-size:11.5px;font-weight:700;border:1px solid transparent}
-    .received{background:rgba(224,167,47,.14);color:var(--amber);border-color:rgba(224,167,47,.35)}
-    .accounted{background:var(--primary-soft);color:#7fc0f2;border-color:rgba(47,143,224,.35)}
-    .approved{background:rgba(31,185,138,.14);color:var(--green);border-color:rgba(31,185,138,.35)}
-    .exported{background:rgba(155,120,240,.16);color:#c3a9ff;border-color:rgba(155,120,240,.4)}
-    .failed{background:rgba(242,85,90,.12);color:#ff9498;border-color:rgba(242,85,90,.35)}
+    /* Píldoras de estado */
+    .pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 10px;font-size:11.5px;font-weight:700;border:1px solid transparent;white-space:nowrap}
+    .pill:before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.8}
+    .received{background:var(--amber-soft);color:var(--amber);border-color:#f3dfb0}
+    .accounted{background:var(--primary-soft);color:var(--primary-dark);border-color:#c4def4}
+    .approved{background:var(--green-soft);color:var(--green);border-color:#bfe7d8}
+    .exported{background:var(--violet-soft);color:var(--violet);border-color:#d9cffb}
+    .failed{background:var(--red-soft);color:var(--red);border-color:#f3c6c8}
 
-    /* Revisión contable */
-    .modal.wide{width:min(1120px,100%)}
-    .review-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px}
-    .review-note{font-size:12px;color:var(--muted);margin:0 0 14px}
-    .check-box{border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:13px;line-height:1.5}
-    .check-box ul{margin:6px 0 0;padding-left:18px}
-    .check-ok{background:rgba(31,185,138,.12);border:1px solid rgba(31,185,138,.35);color:#5fe0b4}
-    .check-err{background:rgba(242,85,90,.12);border:1px solid rgba(242,85,90,.35);color:#ff9498}
-    .check-warn{background:rgba(224,167,47,.12);border:1px solid rgba(224,167,47,.35);color:#f1c262}
-    .check-info{background:rgba(155,120,240,.12);border:1px solid rgba(155,120,240,.35);color:#cdb8ff}
-    .entry-table{min-width:900px}
-    .entry-table td{padding:6px 8px}
-    .entry-table input{width:100%;height:34px;border:1px solid var(--line);border-radius:7px;background:rgba(255,255,255,.04);color:var(--ink);padding:0 9px;font-size:13px;outline:0}
-    .entry-table input:focus{border-color:var(--primary)}
-    .entry-table input.num{text-align:right;font-family:ui-monospace,Consolas,monospace}
-    .entry-table input[readonly]{background:transparent;border-color:transparent}
-    .entry-table tfoot td{font-weight:700;font-family:ui-monospace,Consolas,monospace;border-top:1px solid var(--line-strong);padding:10px 8px}
-    .acc-name{display:block;font-size:11px;color:var(--muted);margin-top:3px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .row-del{width:30px;height:30px;border:0;border-radius:7px;background:rgba(242,85,90,.12);color:var(--red);cursor:pointer;font-size:15px}
-    .diff-bad{color:var(--red)}
-    .diff-ok{color:var(--green)}
-    .audit-list{margin:0;padding:0;list-style:none;font-size:12.5px}
-    .audit-list li{padding:9px 0;border-top:1px solid var(--line);color:#c7cedb}
-    .audit-list li:first-child{border-top:0}
-    .audit-list .when{color:var(--muted);font-family:ui-monospace,Consolas,monospace;font-size:11.5px}
-    .tabs-inline{display:flex;gap:6px;margin-bottom:14px}
-    .tabs-inline button{height:34px;padding:0 14px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-weight:600;font-size:12.5px;cursor:pointer}
-    .tabs-inline button.active{background:var(--primary-soft);border-color:rgba(47,143,224,.45);color:#bfe0fb}
-    .msg-cell{max-width:420px;font-size:12.5px;color:#c7cedb;word-break:break-word}
-    @media(max-width:980px){.review-summary{grid-template-columns:repeat(2,1fr)}}
-
-    /* Action select / checkboxes */
-    .action-select{height:36px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.04);padding:0 10px;font-weight:600;font-size:13px;color:var(--ink);cursor:pointer;min-width:140px}
+    .action-select{height:36px;border:1px solid var(--line-strong);border-radius:10px;background:var(--card);padding:0 10px;font-weight:600;font-size:13px;color:var(--ink);cursor:pointer;min-width:140px}
+    .action-select:focus{outline:0;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
     .check-cell{width:44px;text-align:center}
     .mini-check{width:15px;height:15px;accent-color:var(--primary);cursor:pointer}
-    .select-all-wrap{display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:12px;font-weight:600;color:var(--muted)}
-    .selected-counter{font-size:12.5px;color:var(--muted);font-weight:600;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:7px;padding:8px 11px}
-    .progress-wide{display:none;margin:0 0 14px;background:var(--primary-soft);border:1px solid rgba(47,143,224,.35);color:#7fc0f2;border-radius:8px;padding:10px 12px;font-size:13px;font-weight:600}
-
-    /* Log / errors */
-    .log-panel{margin-top:14px;background:#000;color:#cbd5e1;border:1px solid var(--line);border-radius:8px;padding:12px;white-space:pre-wrap;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.5;display:none}
+    .select-all-wrap{display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:11px;font-weight:700;color:var(--muted)}
+    .selected-counter{font-size:12.5px;color:var(--ink-2);font-weight:600;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:7px 11px}
+    .bulk-bar{align-items:center;justify-content:space-between;gap:12px;background:var(--primary-soft);border:1px solid #c4def4;border-radius:12px;padding:9px 11px;margin:-4px 0 14px;flex-wrap:wrap;animation:cardIn .35s var(--ease) both}
+    .progress-wide{display:none;margin:0 0 14px;background:var(--primary-soft);border:1px solid #c4def4;color:var(--primary-dark);border-radius:10px;padding:10px 12px;font-size:13px;font-weight:600;position:relative;overflow:hidden}
+    .progress-wide:after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.7),transparent);transform:translateX(-100%);animation:shimmer 1.4s infinite}
+    @keyframes shimmer{to{transform:translateX(100%)}}
+    .log-panel{margin-top:14px;background:var(--navy);color:#cbd5e1;border-radius:10px;padding:12px;white-space:pre-wrap;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.5;display:none}
     .log-panel.show{display:block}
+    .notice-info{margin-top:14px;background:var(--primary-soft);border:1px solid #c4def4;color:var(--primary-dark);border-radius:12px;padding:14px;font-size:13px}
+    .notice-error{margin-top:14px;background:var(--red-soft);border:1px solid #f3c6c8;color:#a8282e;border-radius:12px;padding:14px;font-size:13px;font-weight:600}
+    .soft-box{background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+    .text-2{color:var(--ink-2)}
 
-    /* Modals */
-    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;padding:20px;z-index:80}
-    .modal-bg.show{display:flex}
-    .modal{width:min(820px,100%);max-height:92vh;overflow:auto;background:var(--surface-solid);border:1px solid var(--line-strong);border-radius:16px;box-shadow:0 30px 70px rgba(0,0,0,.55);padding:22px;animation:pop .14s ease;color:var(--ink)}
+    /* ===== Modales ===== */
+    .modal-bg{position:fixed;inset:0;background:rgba(11,20,38,.42);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;z-index:80;opacity:0;pointer-events:none;transition:opacity .22s}
+    .modal-bg.show{opacity:1;pointer-events:auto}
+    .modal{width:min(820px,100%);max-height:92vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:0 40px 80px -30px rgba(11,20,38,.55);padding:22px;color:var(--ink);transform:translateY(14px) scale(.98);transition:transform .32s var(--ease)}
+    .modal-bg.show .modal{transform:none}
     .modal.small{width:min(480px,100%)}
-    @keyframes pop{from{transform:scale(.98);opacity:.6}to{transform:scale(1);opacity:1}}
+    .modal.wide{width:min(1120px,100%)}
     .modal-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:16px}
     .modal-head h3{margin:0 0 4px;font-size:18px;font-weight:700}
     .modal-head p{margin:0;color:var(--muted);line-height:1.45;font-size:13px}
-    .close{width:32px;height:32px;border:0;border-radius:8px;background:rgba(255,255,255,.06);font-size:18px;cursor:pointer;color:var(--muted)}
-    .close:hover{background:rgba(255,255,255,.12)}
+    .close{width:32px;height:32px;border:0;border-radius:9px;background:var(--surface-2);font-size:18px;cursor:pointer;color:var(--muted);transition:background .2s,color .2s,transform .2s}
+    .close:hover{background:var(--red-soft);color:var(--red);transform:rotate(90deg)}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .export-title{display:flex;align-items:center;gap:12px}
-    .export-title img{width:36px;height:36px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;padding:5px}
+    .export-title img{width:36px;height:36px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:9px;padding:5px}
 
-    /* Toast */
-    .toast{position:fixed;right:20px;bottom:20px;background:var(--surface-solid);border:1px solid var(--line-strong);color:#fff;border-radius:10px;padding:12px 15px;box-shadow:0 20px 44px rgba(0,0,0,.5);font-weight:600;font-size:13.5px;display:none;z-index:100;max-width:380px}
-    .toast.show{display:block}
+    .toast{position:fixed;right:22px;bottom:22px;background:var(--navy);color:#fff;border-radius:12px;padding:12px 16px;box-shadow:0 20px 44px -12px rgba(11,20,38,.5);font-weight:600;font-size:13.5px;z-index:100;max-width:380px;opacity:0;transform:translateY(12px);pointer-events:none;transition:opacity .25s,transform .35s var(--ease)}
+    .toast.show{opacity:1;transform:none}
 
-    /* Invoice / entry detail */
-    .invoice-hero{border-radius:10px;background:rgba(255,255,255,.03);border:1px solid var(--line);color:var(--ink);padding:16px;margin-bottom:14px}
+    /* Detalle de factura */
+    .invoice-hero{border-radius:12px;background:linear-gradient(135deg,var(--primary-soft),#f4f8fc);border:1px solid #d3e6f6;padding:16px;margin-bottom:14px}
     .invoice-hero h2{margin:0 0 4px;font-size:19px;font-weight:700}
-    .invoice-hero p{margin:0;color:var(--muted);font-size:13px}
+    .invoice-hero p{margin:0;color:var(--ink-2);font-size:13px}
     .detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
-    .detail-box{border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.03);padding:12px}
+    .detail-box{border:1px solid var(--line);border-radius:12px;background:#f8fafc;padding:12px}
     .detail-box.span2{grid-column:span 2}
-    .detail-box span{display:block;color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+    .detail-box span{display:block;color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
     .detail-box strong{display:block;margin-top:5px;font-size:14px;line-height:1.35}
     .money-highlight{font-size:18px!important;color:var(--green)}
-    .support-box{border:1px dashed var(--line);background:rgba(255,255,255,.03);border-radius:10px;padding:12px;margin-top:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    .support-box{border:1px dashed var(--line-strong);background:#f8fafc;border-radius:12px;padding:12px;margin-top:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
     .support-box p{margin:0;color:var(--muted);font-size:12.5px}
     .xml-box{display:none}
 
+    /* Revisión contable */
+    .review-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px}
+    .review-note{font-size:12px;color:var(--muted);margin:0 0 14px}
+    .check-box{border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:13px;line-height:1.5;animation:cardIn .35s var(--ease) both}
+    .check-box ul{margin:6px 0 0;padding-left:18px}
+    .check-ok{background:var(--green-soft);border:1px solid #bfe7d8;color:#0b7556}
+    .check-err{background:var(--red-soft);border:1px solid #f3c6c8;color:#a8282e}
+    .check-warn{background:var(--amber-soft);border:1px solid #f3dfb0;color:#8a5b05}
+    .check-info{background:var(--violet-soft);border:1px solid #d9cffb;color:#4f36a8}
+    .entry-table{min-width:900px}
+    .entry-table td{padding:6px 8px}
+    .entry-table input{width:100%;height:34px;border:1px solid var(--line-strong);border-radius:8px;background:var(--card);color:var(--ink);padding:0 9px;font-size:13px;outline:0;transition:border-color .2s,box-shadow .2s}
+    .entry-table input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+    .entry-table input.num{text-align:right;font-family:ui-monospace,Consolas,monospace}
+    .entry-table input[readonly]{background:transparent;border-color:transparent;box-shadow:none}
+    .entry-table tfoot td{font-weight:700;font-family:ui-monospace,Consolas,monospace;border-top:1px solid var(--line-strong);padding:10px 8px;background:#f8fafc}
+    .acc-name{display:block;font-size:11px;color:var(--muted);margin-top:3px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .row-del{width:30px;height:30px;border:0;border-radius:8px;background:var(--red-soft);color:var(--red);cursor:pointer;font-size:15px;transition:transform .15s}
+    .row-del:hover{transform:scale(1.08)}
+    .diff-bad{color:var(--red)}
+    .diff-ok{color:var(--green)}
+    .audit-list{margin:0;padding:0;list-style:none;font-size:12.5px}
+    .audit-list li{padding:9px 0;border-top:1px solid var(--line);color:var(--ink-2)}
+    .audit-list li:first-child{border-top:0}
+    .audit-list .when{color:var(--muted);font-family:ui-monospace,Consolas,monospace;font-size:11.5px}
+    .tabs-inline{display:inline-flex;gap:4px;margin-bottom:14px;background:#e8edf4;padding:4px;border-radius:12px}
+    .tabs-inline button{height:32px;padding:0 14px;border-radius:9px;border:0;background:transparent;color:var(--muted);font-weight:600;font-size:12.5px;cursor:pointer;transition:background .2s,color .2s,box-shadow .2s}
+    .tabs-inline button.active{background:var(--card);color:var(--primary-dark);box-shadow:0 2px 8px -3px rgba(13,27,46,.25)}
+    .msg-cell{max-width:420px;font-size:12.5px;color:var(--ink-2);word-break:break-word}
+
+    /* ===== Responsive ===== */
+    @media(max-width:1180px){.kpis{grid-template-columns:repeat(2,1fr)}.dash-grid{grid-template-columns:1fr}.review-summary{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:980px){
-      .nav{height:auto;padding:10px 14px;flex-wrap:wrap;gap:8px}
-      .hero,.product-hero{grid-template-columns:1fr}
-      .hero-visual{border-left:0;border-top:1px solid var(--line)}
-      .stats,.metrics-grid{grid-template-columns:repeat(2,1fr)}
+      .shell{padding:0;display:block;background:var(--panel)}
+      .sidebar{position:fixed;left:0;top:0;bottom:0;height:100vh;z-index:90;width:262px;padding:16px 14px;background:linear-gradient(165deg,#2b9be6 0%,#1478c8 42%,#0b4f94 100%);transform:translateX(-102%);transition:transform .35s var(--ease);box-shadow:20px 0 40px -20px rgba(0,0,0,.4)}
+      body.sb-open .sidebar{transform:none}
+      .sb-scrim{position:fixed;inset:0;background:rgba(11,20,38,.4);z-index:85;opacity:0;pointer-events:none;transition:opacity .25s}
+      body.sb-open .sb-scrim{opacity:1;pointer-events:auto}
+      .main-panel{border-radius:0;box-shadow:none;padding:16px 16px 40px;min-height:100vh}
+      .mobile-toggle{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:11px;border:1px solid var(--line-strong);background:var(--card);color:var(--ink);cursor:pointer;margin-right:4px}
+      .mobile-toggle svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+      .main-head{align-items:center}
+      .main-head h1{font-size:22px}
+      .stats,.metrics-grid{grid-template-columns:repeat(3,1fr)}
     }
     @media(max-width:640px){
-      .page{width:min(100% - 20px,1280px)}
-      .stats,.metrics-grid,.grid2{grid-template-columns:1fr}
-      .btn{width:100%}
-      .toolbar,.board-toolbar{display:block}
-      .search{min-width:0;margin-bottom:8px}
-      .hero h1,.product-hero h1{font-size:24px}
-      .fab{right:16px;bottom:16px}
+      .kpis,.stats,.metrics-grid,.grid2,.detail-grid{grid-template-columns:1fr 1fr}
+      .detail-box.span2{grid-column:span 2}
+      .toolbar,.board-toolbar{display:flex}
+      .search{min-width:0;flex-basis:100%}
+      .head-actions{width:100%}
+      .company-btn{flex:1;max-width:none}
+      .dropdown{width:min(340px,calc(100vw - 32px))}
+      .card-head,.board-head,.card-body{padding-left:14px;padding-right:14px}
+      .review-summary{grid-template-columns:1fr}
     }
   </style>
 <script src="config.js"></script>
 <script src="xlsx.full.min.js"></script>
 </head>
 <body>
-<div class="page app-shell">
-  <nav class="nav topbar-modern">
-    <div class="brand brand-icon-only"><img class="brand-symbol" src="contapilot-symbol-transparent.png" alt="ContaPilot"></div>
-    <div class="nav-center nav-center-modern">
-      <div class="menu" id="companyMenu"><button class="menu-btn" onclick="toggleMenu('companyMenu')">Empresas ▾</button><div class="dropdown wide"><div class="field"><label>Empresa activa</label><select id="companySelect" onchange="onCompanyChange()"></select></div><div class="actions"><button class="btn btn-primary" onclick="openCompanyModal()">+ Agregar empresa</button><button class="btn btn-light" onclick="openEditCompanyModal()">Editar</button><button class="btn btn-danger-light" onclick="deleteCompany()">Eliminar</button><button class="btn btn-light" onclick="loadCompanies()">Actualizar</button></div><div class="sub" id="companyHint" style="margin-top:10px">Agrega una empresa para iniciar.</div></div></div>
-      <div class="menu" id="configMenu"><button class="menu-btn" onclick="toggleMenu('configMenu')">Configuración ▾</button><div class="dropdown"><button class="btn btn-light btn-full btn-siigo" onclick="openSiigoModal();closeMenus()">Siigo Nube</button><button class="btn btn-light btn-full" onclick="openSettings();closeMenus()" style="margin-top:8px">Config. contable</button><button class="btn btn-light btn-full" onclick="openRules();closeMenus()" style="margin-top:8px">Reglas contables</button><button class="btn btn-light btn-full" onclick="openChartModal();closeMenus()" style="margin-top:8px">Plan de cuentas</button><button class="btn btn-light btn-full" onclick="openImportHistory();closeMenus()" style="margin-top:8px">Historial de cargas</button><button class="btn btn-light btn-full" onclick="openSiigoHistory();closeMenus()" style="margin-top:8px">Historial de exportaciones Siigo</button></div></div>
-    </div>
-    <div class="topbar-user"><span class="user" id="userLabel">admin@contapilot.com</span><button class="btn btn-red" onclick="logout()">Salir</button></div>
-  </nav>
+<div class="shell">
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand"><img src="contapilot-symbol-transparent-160.png" alt="ContaPilot"><div><strong>ContaPilot</strong><span id="sbCompany">Contaduría que te guía</span></div></div>
+    <nav class="sb-nav" id="sbNav">
+      <div class="sb-indicator" id="sbIndicator"></div>
+      <button class="sb-item" data-view="dashboard" onclick="showView('dashboard')"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg>Dashboard</button>
+      <button class="sb-item" data-view="facturas" onclick="showView('facturas')"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>Facturas<span class="count" id="sbCountAll">0</span></button>
+      <button class="sb-item" data-view="pendientes" onclick="showView('pendientes')"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg>Por confirmar<span class="count warn" id="sbCountPend">0</span></button>
+      <button class="sb-item" data-view="historial" onclick="showView('historial')"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>Historial Siigo</button>
+      <div class="sb-label">Acciones</div>
+      <button class="sb-item" onclick="closeSidebar();openDian()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>Importar facturas</button>
+      <button class="sb-item" onclick="closeSidebar();openExport()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Exportar CSV / PDF</button>
+      <div class="sb-label">Configuración</div>
+      <button class="sb-item" onclick="closeSidebar();openSiigoModal()"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>Conexión Siigo</button>
+      <button class="sb-item" onclick="closeSidebar();openSettings()"><svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>Config. contable</button>
+      <button class="sb-item" onclick="closeSidebar();openRules()"><svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Reglas contables</button>
+      <button class="sb-item" onclick="closeSidebar();openChartModal()"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>Plan de cuentas</button>
+      <button class="sb-item" onclick="closeSidebar();openImportHistory()"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9M10 13h4"/></svg>Historial de cargas</button>
+    </nav>
+    <div class="sb-progress"><div class="top"><span>Exportadas a Siigo</span><span id="sbProgressPct">0%</span></div><div class="bar"><i id="sbProgressBar"></i></div><small id="sbProgressText">Centro activo</small></div>
+    <div class="sb-user"><div class="sb-avatar" id="sbAvatar">C</div><div class="who"><b id="userLabel">usuario</b><span>Contador</span></div><button class="sb-logout" title="Salir" onclick="logout()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button></div>
+  </aside>
+  <div class="sb-scrim" onclick="closeSidebar()"></div>
 
-  <section class="hero-strip">
-    <div><h1>Centro de facturas</h1><p>Importa, causa y exporta tus facturas electrónicas.</p></div>
-    <div class="actions"><input id="fileInput" type="file" multiple accept=".xml,.zip,.html,.htm,.txt" style="display:none" onchange="upload()"><button class="btn btn-primary" onclick="openDian()">+ Importar facturas</button></div>
-  </section>
+  <main class="main-panel">
+    <header class="main-head">
+      <div style="display:flex;align-items:center;gap:8px"><button class="mobile-toggle" onclick="document.body.classList.add('sb-open')" aria-label="Menú"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><div><h1 id="viewTitle">Dashboard</h1><p id="viewSub">Resumen del centro de facturas activo.</p></div></div>
+      <div class="head-actions">
+        <div class="menu" id="companyMenu"><button class="company-btn" onclick="toggleMenu('companyMenu')"><span class="cb-ic">E</span><span id="companyBtnLabel">Empresa</span>▾</button><div class="dropdown"><div class="field"><label>Empresa activa</label><select id="companySelect" onchange="onCompanyChange()"></select></div><div class="actions"><button class="btn btn-primary" onclick="openCompanyModal()">+ Agregar</button><button class="btn btn-light" onclick="openEditCompanyModal()">Editar</button><button class="btn btn-danger-light" onclick="deleteCompany()">Eliminar</button></div><div class="sub" id="companyHint" style="margin-top:10px">Agrega una empresa para iniciar.</div></div></div>
+        <input id="fileInput" type="file" multiple accept=".xml,.zip,.html,.htm,.txt" style="display:none" onchange="upload()">
+        <button class="btn btn-primary" onclick="openDian()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Importar facturas</button>
+      </div>
+    </header>
 
-  <div class="batch-bar"><div id="batchTabs" class="batch-tabs"></div><button class="btn-batch-add" onclick="createBatch()" title="Nuevo centro de facturas">+ Centro</button></div>
+    <div class="batch-bar"><div id="batchTabs" class="batch-tabs"></div><button class="btn-batch-add" onclick="createBatch()" title="Nuevo centro de facturas">+ Centro</button></div>
 
-  <section class="stats metrics-grid"><div class="stat"><span>Facturas</span><strong id="mTotal">0</strong></div><div class="stat"><span>Recibidas</span><strong id="mReceived">0</strong></div><div class="stat"><span>Causadas</span><strong id="mAccounted">0</strong></div><div class="stat"><span>Confirmadas</span><strong id="mApproved">0</strong></div><div class="stat"><span>Exportadas</span><strong id="mExported">0</strong></div></section>
+    <section class="view" id="view-dashboard">
+      <div class="kpis" id="kpis"></div>
+      <div class="dash-grid">
+        <div class="panel reveal" style="--i:4"><div class="panel-head"><div><h3>Compras por mes</h3><p>Subtotal e IVA de las facturas del centro activo, por fecha de emisión</p></div><div class="legend"><span><i style="background:var(--primary)"></i>Subtotal</span><span><i style="background:#9fcdf2"></i>IVA</span></div></div><svg class="bars-chart" id="monthChart" viewBox="0 0 640 230" preserveAspectRatio="none"></svg></div>
+        <div class="panel reveal" style="--i:5"><div class="panel-head"><div><h3>Estado de la contabilización</h3><p>Avance de las facturas en el flujo</p></div></div><div class="donut-wrap"><svg class="donut" id="statusDonut" viewBox="0 0 120 120"></svg><div class="donut-legend" id="statusLegend"></div></div></div>
+      </div>
+      <div class="dash-grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)">
+        <div class="panel reveal" style="--i:6"><div class="panel-head"><div><h3>Principales proveedores</h3><p>Por valor total facturado</p></div></div><div class="hbars" id="topSuppliers"></div></div>
+        <div class="panel reveal" style="--i:7"><div class="panel-head"><div><h3>Por confirmar</h3><p>Causadas que esperan revisión</p></div><button class="link-btn" onclick="showView('pendientes')">Ver todas</button></div><ul class="mini-list" id="pendingList"></ul></div>
+        <div class="panel reveal" style="--i:8"><div class="panel-head"><div><h3>Últimas exportaciones</h3><p>Operaciones recientes hacia Siigo</p></div><button class="link-btn" onclick="showView('historial')">Historial</button></div><ul class="mini-list" id="recentExports"></ul></div>
+      </div>
+    </section>
 
-  <div class="fab" id="fab">
-    <div class="fab-menu" id="fabMenu">
-      <button class="fab-item" onclick="closeFab();openExport()"><span class="ic">⭳</span>Exportar</button>
-      <button class="fab-item" onclick="closeFab();openSiigoModal()"><span class="ic">$</span>Siigo Nube</button>
-      <button class="fab-item" onclick="closeFab();fileInput.click()"><span class="ic">＋</span>Subir ZIP/XML</button>
-    </div>
-    <button class="fab-main" id="fabMain" onclick="toggleFab()">＋</button>
-  </div>
-  <section class="card invoice-board"><div class="card-head board-head"><div><span class="section-label">Operación</span><h2>Bandeja de facturas</h2><p>Causa, revisa y confirma cada contabilización; solo las confirmadas se pueden subir a Siigo.</p></div><div class="actions"><button class="btn btn-light" onclick="openSiigoHistory()">Historial Siigo</button><button class="btn btn-light" onclick="openExport()">Exportar</button><button class="btn btn-light" onclick="loadInvoices()">Actualizar</button></div></div><div class="card-body"><div class="toolbar board-toolbar"><div class="search">⌕ <input id="search" oninput="renderInvoices()" placeholder="Buscar factura, proveedor, receptor o NIT"></div><select id="statusFilter" class="action-select" onchange="renderInvoices()"><option value="all">Todos los estados</option><option value="received">Recibidas</option><option value="accounted">Causadas</option><option value="approved">Confirmadas</option><option value="exported">Exportadas a Siigo</option></select><span id="progressBox" class="selected-counter" style="display:none;background:var(--primary-soft);color:#7fc0f2">Listo</span></div><div id="bulkBar" class="bulk-bar" style="display:none"><span id="selectedCounter" class="selected-counter">0 seleccionadas</span><div class="actions"><button id="causeSelectedBtn" class="btn btn-green" onclick="causeSelectedInvoices()">Causar</button><button id="approveSelectedBtn" class="btn btn-green" onclick="approveSelectedInvoices()">Confirmar</button><button id="pdfSelectedBtn" class="btn btn-light" onclick="downloadInvoicesPdf([...selectedInvoiceIds])">PDF</button><button id="uploadSiigoBtn" class="btn btn-blue btn-siigo" onclick="uploadSelectedToSiigo()"><img src="siigo-nube-logo.png" alt="Siigo">Subir a Siigo</button><button id="deleteSelectedBtn" class="btn btn-danger-light" onclick="deleteSelectedInvoices()">Eliminar</button></div></div><div id="wideProgress" class="progress-wide">Listo</div><div class="table-wrap"><table><thead><tr><th class="check-cell"><label class="select-all-wrap"><input id="selectAllBox" class="mini-check" type="checkbox" onchange="toggleSelectAll(this.checked)"><span>Seleccionar todas</span></label></th><th>Factura</th><th>Fecha</th><th>Proveedor</th><th>Receptor</th><th>Total</th><th>Estado</th><th>Gestión</th></tr></thead><tbody id="rows"><tr><td colspan="8">Sin facturas</td></tr></tbody></table></div><div id="uploadNotices" style="display:none;margin-top:14px;background:var(--primary-soft);border:1px solid rgba(47,143,224,.35);color:#bfe0fb;border-radius:14px;padding:14px;font-size:13px"></div><div id="uploadErrors" style="display:none;margin-top:14px;background:rgba(242,85,90,.12);border:1px solid rgba(242,85,90,.35);color:#ff9498;border-radius:14px;padding:14px;font-size:13px;font-weight:750"></div><div id="log" class="log-panel">Listo.</div></div></section>
+    <section class="view" id="view-facturas">
+      <section class="stats metrics-grid"><div class="stat reveal" style="--i:0" onclick="quickFilter('all')"><span>Facturas</span><strong id="mTotal">0</strong></div><div class="stat reveal" style="--i:1" onclick="quickFilter('received')"><span>Recibidas</span><strong id="mReceived">0</strong></div><div class="stat reveal" style="--i:2" onclick="quickFilter('accounted')"><span>Por confirmar</span><strong id="mAccounted">0</strong></div><div class="stat reveal" style="--i:3" onclick="quickFilter('approved')"><span>Confirmadas</span><strong id="mApproved">0</strong></div><div class="stat reveal" style="--i:4" onclick="quickFilter('exported')"><span>Exportadas</span><strong id="mExported">0</strong></div></section>
+      <section class="card invoice-board reveal" style="--i:5"><div class="card-head board-head"><div><span class="section-label">Operación</span><h2>Bandeja de facturas</h2><p>Causa, revisa y confirma cada contabilización; solo las confirmadas se pueden subir a Siigo.</p></div><div class="actions"><button class="btn btn-light" onclick="openExport()">Exportar</button><button class="btn btn-light" onclick="loadInvoices()">Actualizar</button></div></div><div class="card-body"><div class="toolbar board-toolbar"><div class="search">⌕ <input id="search" oninput="renderInvoices()" placeholder="Buscar factura, proveedor, receptor o NIT"></div><select id="statusFilter" class="action-select" onchange="renderInvoices()"><option value="all">Todos los estados</option><option value="received">Recibidas</option><option value="accounted">Causadas</option><option value="approved">Confirmadas</option><option value="exported">Exportadas a Siigo</option></select><span id="progressBox" class="selected-counter" style="display:none;background:var(--primary-soft);color:var(--primary-dark)">Listo</span></div><div id="bulkBar" class="bulk-bar" style="display:none"><span id="selectedCounter" class="selected-counter">0 seleccionadas</span><div class="actions"><button id="causeSelectedBtn" class="btn btn-green" onclick="causeSelectedInvoices()">Causar</button><button id="approveSelectedBtn" class="btn btn-green" onclick="approveSelectedInvoices()">Confirmar</button><button id="pdfSelectedBtn" class="btn btn-light" onclick="downloadInvoicesPdf([...selectedInvoiceIds])">PDF</button><button id="uploadSiigoBtn" class="btn btn-blue btn-siigo" onclick="uploadSelectedToSiigo()"><img src="siigo-nube-logo.png" alt="Siigo">Subir a Siigo</button><button id="deleteSelectedBtn" class="btn btn-danger-light" onclick="deleteSelectedInvoices()">Eliminar</button></div></div><div id="wideProgress" class="progress-wide">Listo</div><div class="table-wrap"><table><thead><tr><th class="check-cell"><label class="select-all-wrap"><input id="selectAllBox" class="mini-check" type="checkbox" onchange="toggleSelectAll(this.checked)"><span>Seleccionar todas</span></label></th><th>Factura</th><th>Fecha</th><th>Proveedor</th><th>Receptor</th><th>Total</th><th>Estado</th><th>Gestión</th></tr></thead><tbody id="rows"><tr><td colspan="8">Sin facturas</td></tr></tbody></table></div><div id="uploadNotices" class="notice-info" style="display:none"></div><div id="uploadErrors" class="notice-error" style="display:none"></div><div id="log" class="log-panel">Listo.</div></div></section>
+    </section>
+
+    <section class="view" id="view-historial">
+      <div class="panel reveal" style="--i:0"><div class="tabs-inline"><button id="histTabExports" class="active" onclick="setHistoryTab('exports')">Exportaciones a Siigo</button><button id="histTabAudit" onclick="setHistoryTab('audit')">Cambios contables (auditoría)</button></div>
+  <div class="toolbar"><div class="search">⌕ <input id="histSearch" placeholder="Factura, proveedor, NIT, documento Siigo" onkeydown="if(event.key==='Enter')loadSiigoHistory()"></div><select id="histStatus" class="action-select" onchange="loadSiigoHistory()"><option value="all">Todos los estados</option><option value="success">Exitosas</option><option value="error">Fallidas</option><option value="blocked">Bloqueadas (duplicado)</option></select><input id="histFrom" type="date" class="action-select" onchange="loadSiigoHistory()" title="Desde"><input id="histTo" type="date" class="action-select" onchange="loadSiigoHistory()" title="Hasta"><button class="btn btn-light" onclick="loadSiigoHistory()">Buscar</button><button class="btn btn-light" onclick="downloadHistoryPdf()">Descargar PDF</button></div>
+  <p id="histSummary" style="margin:0 0 10px;color:var(--muted);font-size:13px"></p>
+  <div class="table-wrap"><table style="min-width:980px"><thead id="histHead"></thead><tbody id="histRows"><tr><td>Cargando...</td></tr></tbody></table></div>
 </div>
+    </section>
+  </main>
+</div>
+<div class="chart-tip" id="chartTip"></div>
 
 <div id="companyModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div><h3 id="companyModalTitle">Agregar empresa</h3><p id="companyModalText">El NIT debe coincidir con el receptor de las facturas.</p></div><button class="close" onclick="closeModal('companyModal')">×</button></div><div class="field"><label>Empresa</label><input id="companyName" value=""></div><div class="field"><label>NIT receptor</label><input id="companyNit" value=""></div><button id="companySaveButton" class="btn btn-green btn-full" onclick="saveCompany()">Guardar empresa</button></div></div>
-<div id="dianModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Importar facturas DIAN</h3><p>Flujo simple: descarga en DIAN, sube a ContaPilot y causa todas.</p></div><button class="close" onclick="closeModal('dianModal')">×</button></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px">
+<div id="dianModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Importar facturas DIAN</h3><p>Flujo simple: descarga en DIAN, sube a ContaPilot y causa todas.</p></div><button class="close" onclick="closeModal('dianModal')">×</button></div><div style="background:var(--surface-2);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px">
   <strong>Pasos para el contador</strong>
-  <ol style="margin:10px 0 0;padding-left:18px;line-height:1.65;color:#c7cedb;font-size:14px">
+  <ol style="margin:10px 0 0;padding-left:18px;line-height:1.65;color:var(--ink-2);font-size:14px">
     <li>Entra al portal de la DIAN.</li>
     <li>Busca <strong>Documentos recibidos</strong> y filtra el mes o los meses que quieres causar.</li>
     <li>Descarga el archivo que entrega la DIAN: puede ser <strong>ZIP</strong> o <strong>XML</strong>.</li>
@@ -269,7 +393,7 @@
     <li>Cuando ContaPilot liste las facturas, selecciona una, varias o todas y presiona <strong>Causar Factura</strong>.</li>
     <li>Finalmente exporta el resultado para Siigo Nube o CSV.</li>
   </ol>
-  <div style="margin-top:12px;padding:12px;border-radius:14px;background:rgba(31,185,138,.14);border:1px solid rgba(31,185,138,.35);color:#3ddba3;font-weight:850;font-size:13px">ContaPilot revisa el ZIP, localiza los XML de factura, valida el NIT receptor y prepara la causación masiva.</div>
+  <div style="margin-top:12px;padding:12px;border-radius:14px;background:rgba(31,185,138,.14);border:1px solid rgba(31,185,138,.35);color:var(--green);font-weight:850;font-size:13px">ContaPilot revisa el ZIP, localiza los XML de factura, valida el NIT receptor y prepara la causación masiva.</div>
   <div class="actions" style="margin-top:14px">
     <button class="btn btn-light" onclick="openDianPortal()">Abrir portal DIAN</button>
     <button class="btn btn-green" onclick="closeModal('dianModal'); fileInput.click()">Subir ZIP/XML</button>
@@ -300,7 +424,7 @@
     <div class="table-wrap"><table style="min-width:720px"><thead><tr><th>Fecha</th><th>Proveedor</th><th>Documento</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody id="dianDocsRows"></tbody></table></div>
     <button class="btn btn-primary btn-full" style="margin-top:12px" onclick="generateDianConnector()">Generar conector de descarga automática</button>
     <div id="dianConnectorBox" style="display:none;margin-top:12px">
-      <div style="background:var(--primary-soft);border:1px solid rgba(47,143,224,.35);border-radius:8px;padding:12px;margin-bottom:10px;color:#bfe0fb;font-size:13px;line-height:1.6">
+      <div style="background:var(--primary-soft);border:1px solid rgba(47,143,224,.35);border-radius:8px;padding:12px;margin-bottom:10px;color:var(--primary-dark);font-size:13px;line-height:1.6">
         <strong>Cómo usarlo:</strong>
         <ol style="margin:6px 0 0;padding-left:18px">
           <li>Ve a la pestaña donde tienes abierto el portal de la DIAN (o ábrelo con "Abrir portal DIAN").</li>
@@ -321,11 +445,11 @@
   <div class="field"><label>Clave de acceso (Access Key)</label><input id="siigoAccessKey" type="password" placeholder="Déjalo vacío para conservar la actual"></div>
   <button class="btn btn-green btn-full" onclick="saveSiigoCredentials()">Guardar credenciales</button>
   <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
-  <div class="actions"><button class="btn btn-blue btn-full btn-siigo" onclick="testSiigoConnection()"><img src="siigo-nube-logo.png" alt="Siigo">Probar conexión Siigo</button><button class="btn btn-light btn-full" onclick="loadSiigoCatalogs()" style="margin-top:8px">Consultar catálogos básicos</button></div><div id="siigoResult" style="margin-top:14px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:16px;padding:12px;font-size:13px;white-space:pre-wrap;display:none"></div></div></div>
+  <div class="actions"><button class="btn btn-blue btn-full btn-siigo" onclick="testSiigoConnection()"><img src="siigo-nube-logo.png" alt="Siigo">Probar conexión Siigo</button><button class="btn btn-light btn-full" onclick="loadSiigoCatalogs()" style="margin-top:8px">Consultar catálogos básicos</button></div><div id="siigoResult" style="margin-top:14px;background:var(--surface-2);border:1px solid var(--line);border-radius:16px;padding:12px;font-size:13px;white-space:pre-wrap;display:none"></div></div></div>
 <div id="settingsModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Configuración contable</h3><p>Cuentas base de la empresa activa.</p></div><button class="close" onclick="closeModal('settingsModal')">×</button></div><div class="grid2"><div class="field"><label>IVA 19%</label><input id="setVatAccount" list="accountsDatalist"></div><div class="field"><label>Descripción IVA 19%</label><input id="setVatDescription"></div><div class="field"><label>IVA 5%</label><input id="setVat5Account" list="accountsDatalist"></div><div class="field"><label>Descripción IVA 5%</label><input id="setVat5Description"></div><div class="field"><label>Proveedores</label><input id="setPayableAccount" list="accountsDatalist"></div><div class="field"><label>Descripción proveedores</label><input id="setPayableDescription"></div><div class="field"><label>Retención</label><input id="setWithholdingAccount" list="accountsDatalist"></div><div class="field"><label>Descripción retención</label><input id="setWithholdingDescription"></div><div class="field"><label>Centro costo default</label><input id="setDefaultCostCenter"></div><div class="field"><label>Cuenta gasto default</label><input id="setDefaultExpenseAccount" list="accountsDatalist"></div></div><div class="field"><label>Descripción gasto default</label><input id="setDefaultExpenseDescription"></div><div class="actions" style="justify-content:flex-end"><button class="btn btn-green" onclick="saveSettings()">Guardar</button></div></div></div>
 <datalist id="accountsDatalist"></datalist>
 <div id="rulesModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Reglas contables</h3><p>Reglas por empresa: proveedor/descripcion → cuenta.</p></div><button class="close" onclick="closeModal('rulesModal')">×</button></div><div class="grid2"><div class="field"><label>Tipo</label><select id="ruleType"><option value="supplier">Proveedor contiene</option><option value="description">Descripción contiene</option><option value="default">Default</option></select></div><div class="field"><label>Texto</label><input id="ruleValue" placeholder="CLASSIC JEANS"></div><div class="field"><label>Cuenta</label><input id="ruleAccount" placeholder="519525" list="accountsDatalist"></div><div class="field"><label>Descripción</label><input id="ruleDescription" placeholder="Vestuario"></div><div class="field"><label>Centro costo</label><input id="ruleCostCenter" placeholder="Administración"></div><div class="field"><label>Prioridad</label><input id="rulePriority" type="number" value="50"></div></div><div class="actions" style="justify-content:flex-end"><button class="btn btn-green" onclick="createRule()">Crear regla</button></div><hr style="border:0;border-top:1px solid var(--line);margin:16px 0"><div class="table-wrap"><table style="min-width:700px"><thead><tr><th>Tipo</th><th>Texto</th><th>Cuenta</th><th>Descripción</th><th>Prioridad</th></tr></thead><tbody id="rulesRows"></tbody></table></div></div></div>
-<div id="chartModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Plan de cuentas</h3><p>Importa el Excel o CSV del plan de cuentas exportado de Siigo Nube para validar las cuentas que se usan en reglas y configuración contable.</p></div><button class="close" onclick="closeModal('chartModal')">×</button></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px"><input id="chartFileInput" type="file" accept=".csv,.xlsx,.xls" style="display:none" onchange="uploadChartCsv()"><div class="actions"><button class="btn btn-green" onclick="chartFileInput.click()">Subir plan de cuentas (Excel o CSV)</button></div><div id="chartImportResult" style="margin-top:10px;font-size:13px;color:#c7cedb;font-weight:750"></div></div><div class="field"><label>Buscar cuenta</label><input id="chartSearch" oninput="renderChartAccountsList()" placeholder="Código o nombre"></div><div class="table-wrap"><table style="min-width:600px"><thead><tr><th>Código</th><th>Nombre</th><th>Clase</th></tr></thead><tbody id="chartRows"><tr><td colspan="3">Sin cuentas importadas</td></tr></tbody></table></div></div></div>
+<div id="chartModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Plan de cuentas</h3><p>Importa el Excel o CSV del plan de cuentas exportado de Siigo Nube para validar las cuentas que se usan en reglas y configuración contable.</p></div><button class="close" onclick="closeModal('chartModal')">×</button></div><div style="background:var(--surface-2);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px"><input id="chartFileInput" type="file" accept=".csv,.xlsx,.xls" style="display:none" onchange="uploadChartCsv()"><div class="actions"><button class="btn btn-green" onclick="chartFileInput.click()">Subir plan de cuentas (Excel o CSV)</button></div><div id="chartImportResult" style="margin-top:10px;font-size:13px;color:var(--ink-2);font-weight:750"></div></div><div class="field"><label>Buscar cuenta</label><input id="chartSearch" oninput="renderChartAccountsList()" placeholder="Código o nombre"></div><div class="table-wrap"><table style="min-width:600px"><thead><tr><th>Código</th><th>Nombre</th><th>Clase</th></tr></thead><tbody id="chartRows"><tr><td colspan="3">Sin cuentas importadas</td></tr></tbody></table></div></div></div>
 <div id="facturaModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3 id="facturaTitle">Detalle de factura</h3><p id="facturaSubtitle">Información extraída del XML.</p></div><button class="close" onclick="closeModal('facturaModal')">×</button></div><div class="invoice-hero"><h2 id="facturaHeroNumber">Factura</h2><p id="facturaHeroInfo">Proveedor → Receptor</p></div><div id="facturaDetail" class="detail-grid"></div><h3 style="margin:12px 0 8px">Ítems de la factura</h3><div class="table-wrap"><table style="min-width:680px"><thead><tr><th>Descripción</th><th>Cantidad</th><th>Valor línea</th></tr></thead><tbody id="facturaItems"><tr><td colspan="3">Sin ítems</td></tr></tbody></table></div><div class="support-box"><div><strong>Soporte XML original</strong><p>El XML se guarda como respaldo técnico. Puedes descargarlo si necesitas auditar la factura.</p></div><button class="btn btn-light" onclick="downloadCurrentXml()">Descargar XML</button></div><pre id="facturaXml" class="xml-box"></pre></div></div>
 <div id="causacionModal" class="modal-bg"><div class="modal wide"><div class="modal-head"><div><h3 id="causacionTitle">Revisión contable</h3><p id="causacionSubtitle">Revisa, corrige y confirma la contabilización antes de exportarla a Siigo.</p></div><button class="close" onclick="closeReview()">×</button></div>
   <div id="reviewSummary" class="review-summary"></div>
@@ -342,18 +466,12 @@
   <h3 style="margin:20px 0 6px;font-size:15px">Historial de esta factura</h3>
   <ul id="reviewAudit" class="audit-list"><li>Sin movimientos</li></ul>
 </div></div>
-<div id="siigoHistoryModal" class="modal-bg"><div class="modal wide"><div class="modal-head"><div class="export-title"><img src="siigo-nube-logo.png" alt="Siigo"><div><h3>Historial de exportaciones</h3><p>Todas las operaciones de ContaPilot hacia Siigo y los cambios hechos a la contabilización.</p></div></div><button class="close" onclick="closeModal('siigoHistoryModal')">×</button></div>
-  <div class="tabs-inline"><button id="histTabExports" class="active" onclick="setHistoryTab('exports')">Exportaciones a Siigo</button><button id="histTabAudit" onclick="setHistoryTab('audit')">Cambios contables (auditoría)</button></div>
-  <div class="toolbar"><div class="search">⌕ <input id="histSearch" placeholder="Factura, proveedor, NIT, documento Siigo" onkeydown="if(event.key==='Enter')loadSiigoHistory()"></div><select id="histStatus" class="action-select" onchange="loadSiigoHistory()"><option value="all">Todos los estados</option><option value="success">Exitosas</option><option value="error">Fallidas</option><option value="blocked">Bloqueadas (duplicado)</option></select><input id="histFrom" type="date" class="action-select" onchange="loadSiigoHistory()" title="Desde"><input id="histTo" type="date" class="action-select" onchange="loadSiigoHistory()" title="Hasta"><button class="btn btn-light" onclick="loadSiigoHistory()">Buscar</button><button class="btn btn-light" onclick="downloadHistoryPdf()">Descargar PDF</button></div>
-  <p id="histSummary" style="margin:0 0 10px;color:var(--muted);font-size:13px"></p>
-  <div class="table-wrap"><table style="min-width:980px"><thead id="histHead"></thead><tbody id="histRows"><tr><td>Cargando...</td></tr></tbody></table></div>
-</div></div>
 <div id="historyModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Historial de importaciones</h3><p>Registro de cargas XML/ZIP realizadas para la empresa activa.</p></div><button class="close" onclick="closeModal('historyModal')">×</button></div><div class="table-wrap"><table style="min-width:780px"><thead><tr><th>Fecha</th><th>Archivos</th><th>Estado</th><th>Importadas</th><th>Errores</th><th>Detalle</th></tr></thead><tbody id="historyRows"><tr><td colspan="6">Sin historial</td></tr></tbody></table></div></div></div>
 <div id="exportModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div class="export-title"><img src="siigo-nube-logo.png" alt="Siigo Nube"><div><h3>Exportar a Siigo Nube</h3><p>Descarga las causaciones listas para revisión o carga en Siigo.</p></div></div><button class="close" onclick="closeModal('exportModal')">×</button></div><div class="field"><label>Formato</label><select id="exportFormat"><option value="siigo">Siigo Nube</option><option value="general">General contable</option><option value="invoices">Resumen facturas</option></select></div><button class="btn btn-blue btn-full btn-siigo" onclick="exportCsv()"><img src="siigo-nube-logo.png" alt="Siigo Nube">Descargar CSV para Siigo</button><hr style="border:0;border-top:1px solid var(--line);margin:16px 0"><p style="margin:0 0 10px;color:var(--muted);font-size:13px">Informe en PDF con la contabilización de cada factura: usa las facturas seleccionadas o, si no hay ninguna, las que se ven en la bandeja con el filtro actual.</p><button class="btn btn-light btn-full" onclick="closeModal('exportModal');downloadInvoicesPdf(selectedInvoiceIds.size?[...selectedInvoiceIds]:filteredInvoices().map(i=>i.id))">Descargar informe PDF</button></div></div><div id="toast" class="toast"></div>
 <script>
 let token=localStorage.getItem('cp_token')||'';let invoices=[];let companies=[];let selectedInvoiceIds=new Set();let editingCompanyId='';let lastDianDocs=[];let batches=[];let activeBatchId='';if(!token)location.href='app.html';const user=JSON.parse(localStorage.getItem('cp_user')||'{}');userLabel.textContent=user.email||'admin@contapilot.com';function base(){return localStorage.getItem('cp_api_base')||window.CONTAPILOT_API_BASE||''}function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),4500)}function log(m,o){const el=document.getElementById('log');el.textContent=m+(o?'\n'+JSON.stringify(o,null,2):'')}function sleep(ms){return new Promise(r=>setTimeout(r,ms))}function setProgress(m){const p=document.getElementById('progressBox');if(p){p.style.display=m?'inline-flex':'none';p.textContent=m||''}const w=document.getElementById('wideProgress');if(w){w.style.display=m?'block':'none';w.textContent=m||''}}function setBusy(v){document.body.style.cursor=v?'progress':'';['causeSelectedBtn','approveSelectedBtn','deleteSelectedBtn','uploadSiigoBtn','pdfSelectedBtn'].forEach(id=>{const b=document.getElementById(id);if(b)b.disabled=!!v});document.querySelectorAll('.action-select,.mini-check,#statusFilter,#search').forEach(el=>{el.disabled=!!v})}function chunks(arr,size){const out=[];for(let i=0;i<arr.length;i+=size)out.push(arr.slice(i,i+size));return out}
 function showUploadErrors(errors){const box=document.getElementById('uploadErrors'); if(!box)return; if(!errors||!errors.length){box.style.display='none';box.innerHTML='';return} box.style.display='block'; box.innerHTML='<strong>Observaciones:</strong><ul style="margin:8px 0 0;padding-left:18px">'+errors.map(e=>'<li><strong>'+String(e.file||'archivo')+':</strong> '+String(e.error||e)+'</li>').join('')+'</ul>';}
-function showUploadNotices(notices){const box=document.getElementById('uploadNotices'); if(!box)return; if(!notices||!notices.length){box.style.display='none';box.innerHTML='';return} box.style.display='block'; box.innerHTML='<strong>Resumen de lectura de ZIP:</strong><ul style="margin:8px 0 0;padding-left:18px">'+notices.map(n=>'<li>'+String(n)+'</li>').join('')+'</ul><p style="margin:8px 0 0;color:var(--muted)">Los PDF se omiten a propósito: la DIAN suele incluir el PDF junto al XML de cada factura, y solo el XML se puede importar.</p>';}function toggleLog(){document.getElementById('log').classList.toggle('show');closeMenus()}async function api(path,opts={}){const headers=opts.headers||{};headers.Authorization='Bearer '+token;const r=await fetch(base()+path,{...opts,headers});const ct=r.headers.get('content-type')||'';const data=ct.includes('json')?await r.json():await r.text();if(!r.ok){const d=typeof data==='string'?data:(data.detail||data.error||data);throw new Error(typeof d==='string'?d:JSON.stringify(d))}return data}function cid(){return companySelect.value}function openModal(id){closeMenus();document.getElementById(id).classList.add('show')}function closeModal(id){document.getElementById(id).classList.remove('show')}function closeMenus(){document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'))}function toggleFab(){fabMenu.classList.toggle('show');fabMain.classList.toggle('open')}function closeFab(){fabMenu.classList.remove('show');fabMain.classList.remove('open')}function toggleMenu(id){document.querySelectorAll('.menu').forEach(m=>{if(m.id!==id)m.classList.remove('open')});document.getElementById(id).classList.toggle('open')}document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.modal-bg.show').forEach(m=>{if(m.id==='causacionModal')closeReview();else m.classList.remove('show')});closeMenus();closeFab()}});document.addEventListener('click',e=>{if(!e.target.closest('.menu'))closeMenus();if(!e.target.closest('.fab'))closeFab()});document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('mousedown',e=>{if(e.target===bg){if(bg.id==='causacionModal')closeReview();else bg.classList.remove('show')}}));function money(v){return new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP'}).format(v||0)}function statusClass(s){return s==='exported'||s==='exporting'?'exported':s==='approved'?'approved':s==='accounted'?'accounted':'received'}function statusLabel(s){return {received:'Recibida',accounted:'Causada',approved:'Confirmada',exporting:'Enviando a Siigo',exported:'Exportada a Siigo'}[s]||s||''}function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function showUploadNotices(notices){const box=document.getElementById('uploadNotices'); if(!box)return; if(!notices||!notices.length){box.style.display='none';box.innerHTML='';return} box.style.display='block'; box.innerHTML='<strong>Resumen de lectura de ZIP:</strong><ul style="margin:8px 0 0;padding-left:18px">'+notices.map(n=>'<li>'+String(n)+'</li>').join('')+'</ul><p style="margin:8px 0 0;color:var(--muted)">Los PDF se omiten a propósito: la DIAN suele incluir el PDF junto al XML de cada factura, y solo el XML se puede importar.</p>';}function toggleLog(){document.getElementById('log').classList.toggle('show');closeMenus()}async function api(path,opts={}){const headers=opts.headers||{};headers.Authorization='Bearer '+token;const r=await fetch(base()+path,{...opts,headers});const ct=r.headers.get('content-type')||'';const data=ct.includes('json')?await r.json():await r.text();if(!r.ok){const d=typeof data==='string'?data:(data.detail||data.error||data);throw new Error(typeof d==='string'?d:JSON.stringify(d))}return data}function cid(){return companySelect.value}function openModal(id){closeMenus();document.getElementById(id).classList.add('show')}function closeModal(id){document.getElementById(id).classList.remove('show')}function closeMenus(){document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'))}function toggleFab(){}function closeFab(){}function toggleMenu(id){document.querySelectorAll('.menu').forEach(m=>{if(m.id!==id)m.classList.remove('open')});document.getElementById(id).classList.toggle('open')}document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.modal-bg.show').forEach(m=>{if(m.id==='causacionModal')closeReview();else m.classList.remove('show')});closeMenus();closeFab()}});document.addEventListener('click',e=>{if(!e.target.closest('.menu'))closeMenus();if(!e.target.closest('.fab'))closeFab()});document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('mousedown',e=>{if(e.target===bg){if(bg.id==='causacionModal')closeReview();else bg.classList.remove('show')}}));function money(v){return new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP'}).format(v||0)}function statusClass(s){return s==='exported'||s==='exporting'?'exported':s==='approved'?'approved':s==='accounted'?'accounted':'received'}function statusLabel(s){return {received:'Recibida',accounted:'Causada',approved:'Confirmada',exporting:'Enviando a Siigo',exported:'Exportada a Siigo'}[s]||s||''}function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function u16c(bytes,pos){return bytes[pos]|(bytes[pos+1]<<8)}
 function u32c(bytes,pos){return (bytes[pos]|(bytes[pos+1]<<8)|(bytes[pos+2]<<16)|(bytes[pos+3]<<24))>>>0}
 async function inflateRawClient(bytes){
@@ -412,7 +530,7 @@ function renderBatchTabs(){
   const box=document.getElementById('batchTabs'); if(!box)return;
   box.innerHTML=batches.map(b=>`<button class="batch-tab ${b.id===activeBatchId?'active':''}" onclick="selectBatch('${b.id}')">${b.name}${b.id===activeBatchId?' <span class="edit-ic" onclick="event.stopPropagation();renameBatch(\''+b.id+'\')">✎</span>':''}</button>`).join('');
 }
-function selectBatch(batchId){activeBatchId=batchId;renderBatchTabs();renderInvoices()}
+function selectBatch(batchId){activeBatchId=batchId;renderBatchTabs();renderInvoices();if(currentView==='dashboard')renderDashboard()}
 async function createBatch(){
   if(!cid())return toast('Selecciona empresa');
   const name=prompt('Nombre del nuevo centro de facturas (ej. Septiembre 2026):');
@@ -492,7 +610,7 @@ function filteredInvoices(){const q=(search.value||'').toLowerCase();const sf=(d
 function syncSelectedInfo(data=filteredInvoices()){const counter=document.getElementById('selectedCounter');if(counter)counter.textContent=`${selectedInvoiceIds.size} seleccionada${selectedInvoiceIds.size===1?'':'s'}`;const bar=document.getElementById('bulkBar');if(bar)bar.style.display=selectedInvoiceIds.size?'flex':'none';const box=document.getElementById('selectAllBox');if(box){box.checked=data.length>0&&data.every(i=>selectedInvoiceIds.has(i.id));box.indeterminate=data.some(i=>selectedInvoiceIds.has(i.id))&&!box.checked;}}
 function onInvoiceCheck(id,checked){if(checked)selectedInvoiceIds.add(id);else selectedInvoiceIds.delete(id);syncSelectedInfo()}
 function toggleSelectAll(checked){const data=filteredInvoices();for(const i of data){if(checked)selectedInvoiceIds.add(i.id);else selectedInvoiceIds.delete(i.id)}renderInvoices()}
-function renderInvoices(){const data=filteredInvoices();const scoped=batchInvoices();mTotal.textContent=scoped.length;mReceived.textContent=scoped.filter(i=>i.status==='received').length;mAccounted.textContent=scoped.filter(i=>i.status==='accounted').length;mApproved.textContent=scoped.filter(i=>i.status==='approved').length;if(document.getElementById('mExported'))mExported.textContent=scoped.filter(i=>i.status==='exported').length;rows.innerHTML=data.map(i=>`<tr><td class="check-cell"><input class="mini-check" type="checkbox" ${selectedInvoiceIds.has(i.id)?'checked':''} onchange="onInvoiceCheck('${i.id}',this.checked)"></td><td><strong>${i.invoice_number}</strong><span class="sub mono">${(i.cufe||'').slice(0,22)}</span></td><td>${i.issue_date||''}</td><td><span class="supplier">${i.supplier_name||''}</span><span class="sub">NIT ${i.supplier_nit||''}</span></td><td><span class="supplier">${i.customer_name||''}</span><span class="sub">NIT ${i.customer_nit||''}</span></td><td><strong>${money(i.payable_amount)}</strong></td><td><span class="pill ${statusClass(i.status)}">${statusLabel(i.status)}</span></td><td><select class="action-select" onchange="handleInvoiceAction(this,'${i.id}')"><option value="">Acción</option><option value="entry">Revisar contabilización</option><option value="invoice">Ver factura</option>${i.status==='exported'||i.status==='exporting'?'':'<option value="cause">Causar</option><option value="approve">Confirmar</option>'}<option value="pdf">Descargar PDF</option></select></td></tr>`).join('')||'<tr><td colspan="8">Sin facturas</td></tr>';syncSelectedInfo(data)}
+function renderInvoices(){const data=filteredInvoices();const scoped=batchInvoices();mTotal.textContent=scoped.length;mReceived.textContent=scoped.filter(i=>i.status==='received').length;mAccounted.textContent=scoped.filter(i=>i.status==='accounted').length;mApproved.textContent=scoped.filter(i=>i.status==='approved').length;if(document.getElementById('mExported'))mExported.textContent=scoped.filter(i=>i.status==='exported').length;rows.innerHTML=data.map(i=>`<tr><td class="check-cell"><input class="mini-check" type="checkbox" ${selectedInvoiceIds.has(i.id)?'checked':''} onchange="onInvoiceCheck('${i.id}',this.checked)"></td><td><strong>${i.invoice_number}</strong><span class="sub mono">${(i.cufe||'').slice(0,22)}</span></td><td>${i.issue_date||''}</td><td><span class="supplier">${i.supplier_name||''}</span><span class="sub">NIT ${i.supplier_nit||''}</span></td><td><span class="supplier">${i.customer_name||''}</span><span class="sub">NIT ${i.customer_nit||''}</span></td><td><strong>${money(i.payable_amount)}</strong></td><td><span class="pill ${statusClass(i.status)}">${statusLabel(i.status)}</span></td><td><select class="action-select" onchange="handleInvoiceAction(this,'${i.id}')"><option value="">Acción</option><option value="entry">Revisar contabilización</option><option value="invoice">Ver factura</option>${i.status==='exported'||i.status==='exporting'?'':'<option value="cause">Causar</option><option value="approve">Confirmar</option>'}<option value="pdf">Descargar PDF</option></select></td></tr>`).join('')||'<tr><td colspan="8">Sin facturas</td></tr>';syncSelectedInfo(data);updateSidebar()}
 function handleInvoiceAction(select,id){const value=select.value;select.value='';if(value==='invoice')return viewInvoice(id);if(value==='cause')return cause(id);if(value==='entry')return viewEntry(id);if(value==='approve')return approve(id);if(value==='pdf')return downloadInvoicesPdf([id])}async function cause(id){try{log('Causación',await api(`/api/invoices/${id}/generate-entry`,{method:'POST'}));await loadInvoices();toast('Factura causada. Revisa y confirma la contabilización.')}catch(e){log('Error causar',{error:e.message});toast(e.message)}}async function approve(id){try{const r=await api(`/api/invoices/${id}/approve`,{method:'POST'});log('Confirmada',r);await loadInvoices();toast((r.validation&&r.validation.warnings&&r.validation.warnings.length)?`Confirmada con ${r.validation.warnings.length} advertencia(s). Revísalas en "Revisar contabilización".`:'Contabilización confirmada.')}catch(e){log('Error confirmar',{error:e.message});toast(e.message);showUploadErrors([{file:'Confirmar',error:e.message}])}}let currentXmlDownload={name:'factura.xml',xml:''};
 async function viewInvoice(id){
   try{
@@ -628,7 +746,7 @@ function downloadReviewPdf(){if(reviewDirty)toast('El PDF usa la última versió
 
 // ---------- Historial de exportaciones y auditoría ----------
 let historyTab='exports',lastHistory=[];
-function openSiigoHistory(){if(!cid())return toast('Selecciona empresa');setHistoryTab('exports');openModal('siigoHistoryModal')}
+function openSiigoHistory(){showView('historial')}
 function setHistoryTab(tab){historyTab=tab;histTabExports.classList.toggle('active',tab==='exports');histTabAudit.classList.toggle('active',tab==='audit');histStatus.style.display=tab==='exports'?'':'none';histFrom.style.display=histTo.style.display=tab==='exports'?'':'none';loadSiigoHistory()}
 const exportStatusLabel={success:'Exitosa',error:'Fallida',blocked:'Bloqueada (duplicado)'};
 const exportChannelLabel={api:'Envío directo (API)',csv:'Descarga CSV',legacy:'Anterior al historial'};
@@ -1031,7 +1149,175 @@ function renderChartAccountsList(){
   const q=(document.getElementById('chartSearch')?.value||'').toLowerCase();
   const data=chartAccounts.filter(a=>!q||`${a.code} ${a.name}`.toLowerCase().includes(q));
   chartRows.innerHTML=data.slice(0,300).map(a=>`<tr><td class="mono">${a.code}</td><td>${a.name}</td><td>${a.clase||''}</td></tr>`).join('')||'<tr><td colspan="3">Sin cuentas importadas</td></tr>';
-}async function openImportHistory(){try{if(!cid())return toast('Selecciona empresa');const rows=await api(`/api/companies/${cid()}/import-logs`);historyRows.innerHTML=rows.map(r=>{let msg={};try{msg=JSON.parse(r.message||'{}')}catch(e){}const detail=(msg.errors||[]).map(e=>`${e.file}: ${e.error}`).join('<br>') || (msg.imported||[]).map(i=>i.invoice_number).join(', ');return `<tr><td>${r.created_at||''}</td><td>${r.file_name||''}</td><td><span class="pill ${r.status==='success'?'approved':r.status==='partial'?'accounted':'received'}">${r.status}</span></td><td>${r.imported_count||0}</td><td>${r.error_count||0}</td><td>${detail||''}</td></tr>`}).join('')||'<tr><td colspan="6">Sin historial</td></tr>';openModal('historyModal')}catch(e){log('Error historial',{error:e.message});toast('No pude cargar historial.')}}function openExport(){if(!cid())return toast('Selecciona empresa');openModal('exportModal')}async function exportCsv(){try{const txt=await api(`/api/companies/${cid()}/export.csv?format=${exportFormat.value}`);const blob=new Blob(['\ufeff'+txt],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='contapilot_'+exportFormat.value+'.csv';a.click();URL.revokeObjectURL(a.href);closeModal('exportModal');if(confirm('¿Vas a cargar este CSV en Siigo?\n\nSi aceptas, las facturas con contabilización CONFIRMADA quedan marcadas como exportadas y ya no se podrán enviar a Siigo por el botón "Subir a Siigo" (para evitar duplicados).')){const res=await api(`/api/companies/${cid()}/mark-exported`,{method:'POST'});toast((res.changed||0)+' factura(s) marcadas como exportadas.');await loadInvoices();}}catch(e){log('Error exportar',{error:e.message})}}loadCompanies();
+}async function openImportHistory(){try{if(!cid())return toast('Selecciona empresa');const rows=await api(`/api/companies/${cid()}/import-logs`);historyRows.innerHTML=rows.map(r=>{let msg={};try{msg=JSON.parse(r.message||'{}')}catch(e){}const detail=(msg.errors||[]).map(e=>`${e.file}: ${e.error}`).join('<br>') || (msg.imported||[]).map(i=>i.invoice_number).join(', ');return `<tr><td>${r.created_at||''}</td><td>${r.file_name||''}</td><td><span class="pill ${r.status==='success'?'approved':r.status==='partial'?'accounted':'received'}">${r.status}</span></td><td>${r.imported_count||0}</td><td>${r.error_count||0}</td><td>${detail||''}</td></tr>`}).join('')||'<tr><td colspan="6">Sin historial</td></tr>';openModal('historyModal')}catch(e){log('Error historial',{error:e.message});toast('No pude cargar historial.')}}function openExport(){if(!cid())return toast('Selecciona empresa');openModal('exportModal')}async function exportCsv(){try{const txt=await api(`/api/companies/${cid()}/export.csv?format=${exportFormat.value}`);const blob=new Blob(['\ufeff'+txt],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='contapilot_'+exportFormat.value+'.csv';a.click();URL.revokeObjectURL(a.href);closeModal('exportModal');if(confirm('¿Vas a cargar este CSV en Siigo?\n\nSi aceptas, las facturas con contabilización CONFIRMADA quedan marcadas como exportadas y ya no se podrán enviar a Siigo por el botón "Subir a Siigo" (para evitar duplicados).')){const res=await api(`/api/companies/${cid()}/mark-exported`,{method:'POST'});toast((res.changed||0)+' factura(s) marcadas como exportadas.');await loadInvoices();}}catch(e){log('Error exportar',{error:e.message})}}
+// ---------- Navegación por vistas (sin recargar la página) ----------
+let currentView='dashboard';
+const viewMeta={
+  dashboard:{title:'Dashboard',sub:'Resumen del centro de facturas activo.'},
+  facturas:{title:'Facturas',sub:'Importa, causa, revisa y exporta tus facturas electrónicas.'},
+  pendientes:{title:'Por confirmar',sub:'Facturas causadas que esperan revisión antes de subir a Siigo.'},
+  historial:{title:'Historial Siigo',sub:'Exportaciones hacia Siigo y cambios hechos a la contabilización.'}
+};
+function closeSidebar(){document.body.classList.remove('sb-open')}
+function moveIndicator(){
+  const ind=document.getElementById('sbIndicator');const nav=document.getElementById('sbNav');
+  const act=nav&&nav.querySelector('.sb-item.active');
+  if(!ind||!act){if(ind)ind.style.opacity=0;return}
+  ind.style.transform=`translateY(${act.offsetTop}px)`;ind.style.height=act.offsetHeight+'px';ind.style.opacity=1;
+}
+function showView(name,opts={}){
+  if(!viewMeta[name])name='dashboard';
+  const sectionId=name==='pendientes'?'facturas':name;
+  const changed=currentView!==name;
+  currentView=name;
+  try{localStorage.setItem('cp_view',name)}catch(e){}
+  document.querySelectorAll('.sb-item[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===name));
+  moveIndicator();
+  viewTitle.textContent=viewMeta[name].title;viewSub.textContent=viewMeta[name].sub;
+  const bb=document.querySelector('.batch-bar');if(bb)bb.style.display=name==='historial'?'none':'';
+  document.querySelectorAll('.view').forEach(v=>{
+    const on=v.id==='view-'+sectionId;
+    if(on){ if(changed||!v.classList.contains('active')||opts.force){ v.classList.remove('active'); void v.offsetWidth; v.classList.add('active'); } }
+    else v.classList.remove('active');
+  });
+  if(sectionId==='facturas'){
+    const sf=document.getElementById('statusFilter');
+    if(name==='pendientes') sf.value='accounted'; else if(changed && sf.value==='accounted' && !opts.keepFilter) sf.value='all';
+    renderInvoices();
+    const tb=document.getElementById('rows');tb.classList.remove('rows-in');void tb.offsetWidth;tb.classList.add('rows-in');
+    setTimeout(()=>tb.classList.remove('rows-in'),900);
+  }
+  if(name==='dashboard') renderDashboard();
+  if(name==='historial' && cid()) loadSiigoHistory();
+  closeSidebar();
+  if(changed) window.scrollTo({top:0,behavior:'smooth'});
+}
+function quickFilter(s){const sf=document.getElementById('statusFilter');sf.value=s;if(currentView==='pendientes'&&s!=='accounted'){currentView='facturas';document.querySelectorAll('.sb-item[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view==='facturas'));moveIndicator();viewTitle.textContent=viewMeta.facturas.title;viewSub.textContent=viewMeta.facturas.sub}renderInvoices()}
+window.addEventListener('resize',()=>{moveIndicator();if(currentView==='dashboard')drawMonthChart(false)});
+
+// ---------- Menú lateral: contadores y progreso ----------
+function updateSidebar(){
+  const scoped=batchInvoices();
+  const total=scoped.length, pend=scoped.filter(i=>i.status==='accounted').length, exp=scoped.filter(i=>i.status==='exported').length;
+  sbCountAll.textContent=total; sbCountPend.textContent=pend; sbCountPend.style.display=pend?'':'none';
+  const pct=total?Math.round(exp*100/total):0;
+  sbProgressPct.textContent=pct+'%'; sbProgressBar.style.width=pct+'%';
+  const b=batches.find(x=>x.id===activeBatchId);
+  sbProgressText.textContent=`${exp} de ${total} factura(s) · ${b?b.name:'Centro activo'}`;
+  const c=companies.find(x=>x.id===cid());
+  companyBtnLabel.textContent=c?c.name:'Sin empresa'; sbCompany.textContent=c?('NIT '+c.nit):'Contaduría que te guía';
+  document.querySelectorAll('.stat').forEach((s,i)=>s.classList.toggle('on',['all','received','accounted','approved','exported'][i]===(document.getElementById('statusFilter')?.value||'all')));
+  if(currentView==='dashboard') renderDashboard(true);
+}
+
+// ---------- Dashboard ----------
+const statusColors={received:'#e0a72f',accounted:'#1478c8',approved:'#119a72',exported:'#6d4fd6'};
+function animateNumber(el,to,fmt,dur=900){
+  if(!el)return;const from=Number(el.dataset.v||0);el.dataset.v=to;
+  if(from===to){el.textContent=fmt(to);return}
+  const t0=performance.now();
+  const step=t=>{const p=Math.min(1,(t-t0)/dur);const e=1-Math.pow(1-p,3);el.textContent=fmt(from+(to-from)*e);if(p<1)requestAnimationFrame(step)};
+  requestAnimationFrame(step);
+}
+const fmtInt=n=>Math.round(n).toLocaleString('es-CO');
+function fmtShort(n){n=Number(n)||0;const a=Math.abs(n);if(a>=1e9)return '$'+(n/1e9).toFixed(1).replace('.',',')+' mil M';if(a>=1e6)return '$'+(n/1e6).toFixed(1).replace('.',',')+' M';if(a>=1e3)return '$'+Math.round(n/1e3)+' mil';return '$'+Math.round(n)}
+function monthKey(d){const m=String(d||'').match(/^(\d{4})-(\d{2})/);return m?m[1]+'-'+m[2]:''}
+const monthNames=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function lastMonths(data,n=6){
+  const keys=[...new Set(data.map(i=>monthKey(i.issue_date)).filter(Boolean))].sort();
+  const end=keys.length?keys[keys.length-1]:new Date().toISOString().slice(0,7);
+  let [y,m]=end.split('-').map(Number);const out=[];
+  for(let i=0;i<n;i++){out.unshift(`${y}-${String(m).padStart(2,'0')}`);m--;if(!m){m=12;y--}}
+  return out;
+}
+function sparkPath(vals,w=200,h=34){
+  const max=Math.max(1,...vals);const step=vals.length>1?w/(vals.length-1):w;
+  const pts=vals.map((v,i)=>[i*step,h-3-(v/max)*(h-8)]);
+  let d=`M${pts[0][0]},${pts[0][1]}`;
+  for(let i=1;i<pts.length;i++){const [x0,y0]=pts[i-1],[x1,y1]=pts[i];const cx=(x0+x1)/2;d+=` C${cx},${y0} ${cx},${y1} ${x1},${y1}`}
+  return {line:d,area:d+` L${w},${h} L0,${h} Z`};
+}
+let dashBuilt=false;
+function renderDashboard(soft){
+  const data=batchInvoices();
+  const months=lastMonths(data);
+  const by=s=>data.filter(i=>s==='all'||i.status===s);
+  const series=s=>months.map(k=>by(s).filter(i=>monthKey(i.issue_date)===k).length);
+  const sum=(arr,k)=>arr.reduce((a,i)=>a+Number(i[k]||0),0);
+  const total=data.length, exp=by('exported').length;
+  const kp=[
+    {key:'all',tone:'blue',label:'Facturas del centro',val:total,sub:fmtShort(sum(data,'payable_amount'))+' en compras',badge:total?'100%':'—',icon:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',color:'#1478c8'},
+    {key:'received',tone:'amber',label:'Por causar',val:by('received').length,sub:fmtShort(sum(by('received'),'payable_amount')),badge:total?Math.round(by('received').length*100/total)+'%':'—',icon:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',color:'#e0a72f'},
+    {key:'accounted',tone:'violet',label:'Por confirmar',val:by('accounted').length,sub:'Causadas sin revisión',badge:total?Math.round(by('accounted').length*100/total)+'%':'—',icon:'<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>',color:'#6d4fd6'},
+    {key:'exported',tone:'green',label:'Exportadas a Siigo',val:exp,sub:by('approved').length+' confirmada(s) listas para subir',badge:total?Math.round(exp*100/total)+'%':'—',icon:'<path d="M5 12l5 5L20 7"/>',color:'#119a72'}
+  ];
+  const box=document.getElementById('kpis');
+  if(!soft||!dashBuilt||box.children.length!==4){
+    box.innerHTML=kp.map((k,i)=>{const sp=sparkPath(series(k.key));return `<div class="kpi lift reveal tone-${k.tone}" style="--i:${i}" onclick="${k.key==='accounted'?"showView('pendientes')":`showView('facturas');quickFilter('${k.key}')`}"><div class="k-top"><span class="k-ic"><svg viewBox="0 0 24 24">${k.icon}</svg></span>${k.label}<span class="k-badge">${k.badge}</span></div><div class="k-val" data-v="0">0</div><div class="k-sub">${esc(k.sub)}</div><svg class="spark" viewBox="0 0 200 34" preserveAspectRatio="none"><defs><linearGradient id="sg${i}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${k.color}" stop-opacity=".22"/><stop offset="1" stop-color="${k.color}" stop-opacity="0"/></linearGradient></defs><path d="${sp.area}" fill="url(#sg${i})"/><path d="${sp.line}" fill="none" stroke="${k.color}" stroke-width="2" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"><animate attributeName="stroke-dashoffset" from="1" to="0" dur=".9s" begin="${.15+i*.06}s" fill="freeze" calcMode="spline" keySplines=".22 1 .36 1" keyTimes="0;1"/></path></svg></div>`}).join('');
+    dashBuilt=true;
+  } else {
+    [...box.children].forEach((el,i)=>{el.querySelector('.k-badge').textContent=kp[i].badge;el.querySelector('.k-sub').textContent=kp[i].sub});
+  }
+  [...box.children].forEach((el,i)=>animateNumber(el.querySelector('.k-val'),kp[i].val,fmtInt));
+  drawMonthChart(!soft);drawDonut(data);drawSuppliers(data);drawPending(data);
+  if(!soft)loadRecentExports();
+}
+function drawMonthChart(animate){
+  const svg=document.getElementById('monthChart');if(!svg)return;
+  const data=batchInvoices();const months=lastMonths(data);
+  const W=Math.max(320,svg.clientWidth||640),H=230,padL=58,padB=28,padT=10;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+  const vals=months.map(k=>{const r=data.filter(i=>monthKey(i.issue_date)===k);return {k,sub:r.reduce((a,i)=>a+Number(i.subtotal||0),0),iva:r.reduce((a,i)=>a+Number(i.tax_amount||0),0),n:r.length}});
+  const max=Math.max(1,...vals.map(v=>v.sub+v.iva));
+  const nice=(()=>{const p=Math.pow(10,Math.floor(Math.log10(max)));const f=max/p;return (f<=2?2:f<=5?5:10)*p})();
+  const plotH=H-padB-padT, plotW=W-padL-10, slot=plotW/vals.length, bw=Math.min(46,slot*.46);
+  let out='';
+  for(let g=0;g<=4;g++){const y=padT+plotH-(g/4)*plotH;out+=`<line x1="${padL}" x2="${W-10}" y1="${y}" y2="${y}" stroke="#e2e8f0" stroke-dasharray="${g?'3 4':''}"/><text x="${padL-8}" y="${y+4}" text-anchor="end" font-size="11" fill="#6b7a90">${fmtShort(nice*g/4)}</text>`}
+  vals.forEach((v,i)=>{
+    const x=padL+slot*i+(slot-bw)/2;const hs=(v.sub/nice)*plotH, hi=(v.iva/nice)*plotH;const y0=padT+plotH;
+    const [yy,mm]=v.k.split('-');const label=monthNames[Number(mm)-1]+' '+yy.slice(2);
+    const tip=`${label}: ${v.n} factura(s) · Subtotal ${money(v.sub)} · IVA ${money(v.iva)}`;
+    const delay=animate?`animation-delay:${i*70}ms`:'animation:none';
+    out+=`<g data-tip="${esc(tip)}" style="cursor:pointer"><rect x="${x-4}" y="${padT}" width="${bw+8}" height="${plotH}" fill="transparent"/><rect class="bar" style="${delay}" x="${x}" y="${y0-hs}" width="${bw}" height="${Math.max(0,hs)}" rx="6" fill="url(#mgrad)"/>${hi>0.5?`<rect class="bar" style="${delay}" x="${x}" y="${y0-hs-hi-2}" width="${bw}" height="${hi}" rx="5" fill="#9fcdf2"/>`:''}</g><text x="${x+bw/2}" y="${H-8}" text-anchor="middle" font-size="11.5" fill="#6b7a90">${label}</text>`;
+  });
+  svg.innerHTML=`<defs><linearGradient id="mgrad" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2b9be6"/><stop offset="1" stop-color="#0b5fa5"/></linearGradient></defs>`+out;
+  const tipEl=document.getElementById('chartTip');
+  svg.querySelectorAll('g[data-tip]').forEach(g=>{g.onmousemove=e=>{tipEl.textContent=g.dataset.tip;tipEl.style.left=(e.clientX+14)+'px';tipEl.style.top=(e.clientY-36)+'px';tipEl.classList.add('show')};g.onmouseleave=()=>tipEl.classList.remove('show')});
+}
+function drawDonut(data){
+  const svg=document.getElementById('statusDonut');const leg=document.getElementById('statusLegend');if(!svg)return;
+  const parts=[['received','Por causar'],['accounted','Por confirmar'],['approved','Confirmadas'],['exported','Exportadas a Siigo']].map(([k,l])=>({k,l,n:data.filter(i=>i.status===k||(k==='exported'&&i.status==='exporting')).length}));
+  const total=data.length||0, C=2*Math.PI*46;
+  let acc=0;
+  const segs=parts.map(p=>{const len=total?p.n/total*C:0;const s=`<circle class="seg" cx="60" cy="60" r="46" fill="none" stroke="${statusColors[p.k]}" stroke-width="14" stroke-dasharray="0 ${C}" data-len="${len}" stroke-dashoffset="${-acc}" transform="rotate(-90 60 60)"/>`;acc+=len;return s}).join('');
+  const pct=total?Math.round(parts[3].n*100/total):0;
+  svg.innerHTML=`<circle cx="60" cy="60" r="46" fill="none" stroke="#edf1f6" stroke-width="14"/>${segs}<text x="60" y="58" text-anchor="middle" font-size="22" font-weight="750" fill="#0d1b2e">${pct}%</text><text x="60" y="75" text-anchor="middle" font-size="9.5" fill="#6b7a90">exportadas</text>`;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>svg.querySelectorAll('circle.seg').forEach(c=>{const l=Number(c.dataset.len);c.setAttribute('stroke-dasharray',`${Math.max(0,l-(l>3?2:0))} ${C}`)})));
+  leg.innerHTML=parts.map(p=>`<div><i style="background:${statusColors[p.k]}"></i>${p.l}<b>${p.n}</b></div>`).join('')+`<div style="border-top:1px solid var(--line);padding-top:8px;margin-top:2px;color:var(--muted)">Total<b style="color:var(--ink)">${total}</b></div>`;
+}
+function drawSuppliers(data){
+  const box=document.getElementById('topSuppliers');if(!box)return;
+  const map=new Map();for(const i of data){const k=i.supplier_nit||i.supplier_name||'?';const r=map.get(k)||{name:i.supplier_name||k,v:0,n:0};r.v+=Number(i.payable_amount||0);r.n++;map.set(k,r)}
+  const top=[...map.values()].sort((a,b)=>b.v-a.v).slice(0,5);const max=Math.max(1,...top.map(t=>t.v));
+  box.innerHTML=top.map(t=>`<div class="hbar"><div class="row"><span title="${esc(t.name)}">${esc(t.name)}</span><b>${fmtShort(t.v)}</b></div><div class="track"><i data-w="${(t.v/max*100).toFixed(1)}"></i></div></div>`).join('')||'<div class="empty-note">Aún no hay facturas en este centro.</div>';
+  requestAnimationFrame(()=>requestAnimationFrame(()=>box.querySelectorAll('.track i').forEach(el=>el.style.width=el.dataset.w+'%')));
+}
+function drawPending(data){
+  const box=document.getElementById('pendingList');if(!box)return;
+  const rows=data.filter(i=>i.status==='accounted').slice(0,5);
+  box.innerHTML=rows.map(i=>`<li><span class="dot" style="background:${statusColors.accounted}"></span><div class="ml-main"><b>${esc(i.supplier_name||'')}</b><span>${esc(i.invoice_number)} · ${money(i.payable_amount)}</span></div><button class="link-btn" onclick="viewEntry('${i.id}')">Revisar</button></li>`).join('')||'<li class="empty-note">No hay facturas pendientes de confirmar. 🎉</li>';
+}
+async function loadRecentExports(){
+  const box=document.getElementById('recentExports');if(!box||!cid())return;
+  try{
+    const rows=await api(`/api/companies/${cid()}/siigo-exports?limit=6`);
+    const col={success:'#119a72',error:'#d23f45',blocked:'#b7790b'};
+    box.innerHTML=rows.slice(0,6).map(r=>`<li><span class="dot" style="background:${col[r.status]||'#6b7a90'}"></span><div class="ml-main"><b>${esc(r.invoice_number)} · ${esc(r.supplier_name||'')}</b><span>${esc(fmtWhen(r.created_at))} · ${esc(exportStatusLabel[r.status]||r.status)}${r.siigo_name?' · '+esc(r.siigo_name):''}</span></div></li>`).join('')||'<li class="empty-note">Todavía no hay exportaciones a Siigo.</li>';
+  }catch(e){box.innerHTML=`<li class="empty-note">${esc(e.message)}</li>`}
+}
+
+try{sbAvatar.textContent=(user.name||user.email||'C').trim().charAt(0).toUpperCase()}catch(e){}
+(async()=>{let v='dashboard';try{v=localStorage.getItem('cp_view')||'dashboard'}catch(e){}showView(v);await loadCompanies();showView(currentView,{force:true})})();
 </script>
 </body>
 </html>

@@ -1133,7 +1133,8 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     const from=url.searchParams.get('from'); if(from){ sql+=' AND created_at>=?'; args.push(from); }
     const to=url.searchParams.get('to'); if(to){ sql+=' AND created_at<?'; args.push(to+'T99'); }
     const q=String(url.searchParams.get('q')||'').trim(); if(q){ sql+=' AND (invoice_number LIKE ? OR supplier_name LIKE ? OR supplier_nit LIKE ? OR cufe LIKE ? OR siigo_name LIKE ?)'; for(let i=0;i<5;i++) args.push(`%${q}%`); }
-    sql+=' ORDER BY created_at DESC LIMIT 2000';
+    const lim=Math.min(2000,Math.max(1,parseInt(url.searchParams.get('limit')||'2000',10)||2000));
+    sql+=` ORDER BY created_at DESC LIMIT ${lim}`;
     return json((await env.DB.prepare(sql).bind(...args).all()).results||[]);
   }
   m=p.match(/^\/companies\/([^/]+)\/audit-log$/); if(m && request.method==='GET'){

@@ -1,0 +1,182 @@
+/**
+ * ContaPilot · Sincronización automática desde Google Drive
+ *
+ * Qué hace: una vez al día revisa las carpetas de facturas de cada empresa
+ * (ej. FACTURAS DIAN > 2026 > RECIBIDOS > 10. OCTUBRE), toma los archivos nuevos
+ * (ZIP o XML de la DIAN), abre los ZIP y envía las facturas a ContaPilot.
+ * ContaPilot ubica cada factura en su empresa por el NIT del receptor, la deja en el
+ * centro del mes (ej. "Octubre 2026") y la causa. Confirmar y subir a Siigo sigue
+ * siendo manual. Este programa NO mueve, borra ni cambia nada en tu Drive.
+ *
+ * Instalación (una sola vez):
+ *   1. Pega abajo, en CARPETAS_FACTURAS, el enlace de la carpeta principal de facturas
+ *      de cada empresa (la que contiene las carpetas de los años). Uno por línea.
+ *   2. Guarda (icono de disquete).
+ *   3. Arriba elige la función "instalar" y presiona "Ejecutar". Acepta los permisos de Google.
+ * Para sincronizar en cualquier momento: elige "sincronizar" y presiona "Ejecutar".
+ */
+
+const CARPETAS_FACTURAS = [
+  'PEGA_AQUI_EL_ENLACE_DE_LA_CARPETA_DE_LA_EMPRESA_1',
+  'PEGA_AQUI_EL_ENLACE_DE_LA_CARPETA_DE_LA_EMPRESA_2',
+];
+const SINCRONIZAR_DESDE = '__DESDE__'; // año-mes (AAAA-MM): se ignoran carpetas de meses anteriores
+const SOLO_RECIBIDOS = true;           // solo facturas de compra: carpetas "RECIBIDOS" (se ignoran "ENVIADOS")
+const HORA_DIARIA = 6;                 // hora del día (0-23) en que se revisan las carpetas
+
+// --- No modificar desde aquí ---
+const CONTAPILOT_API = '__API__';
+const CONTAPILOT_KEY = '__KEY__';
+const MAX_MS = 4.5 * 60 * 1000; // Google corta cada ejecución a los 6 minutos
+const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const TIPOS_OK = ['application/zip','application/x-zip-compressed','application/x-zip','multipart/x-zip','text/xml','application/xml','application/octet-stream','text/plain'];
+
+function instalar() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('sincronizar').timeBased().everyDays(1).atHour(HORA_DIARIA).create();
+  carpetasRaiz_().forEach(function (c) { Logger.log('Carpeta encontrada: ' + c.getName()); });
+  Logger.log('Instalado: se revisarán las carpetas todos los días a las ' + HORA_DIARIA + ':00. Haciendo la primera sincronización...');
+  sincronizar();
+}
+
+function continuar() { sincronizar(); }
+
+function sincronizar() {
+  const inicio = Date.now();
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'continuar') ScriptApp.deleteTrigger(t); });
+  const resumen = { started_at: new Date().toISOString(), files_seen: 0, files_pending: 0, files_done: 0, imported: 0, duplicates: 0, errors: 0, continues: false, message: '' };
+  try {
+    const archivos = [];
+    carpetasRaiz_().forEach(function (raiz) { recorrer_(raiz, [], archivos, 0, {}); });
+    resumen.files_seen = archivos.length;
+
+    const pendientes = [];
+    for (let i = 0; i < archivos.length; i += 250) {
+      const lote = archivos.slice(i, i + 250);
+      const r = api_('/drive-sync/check', { files: lote.map(function (a) { return { id: a.id, updated: a.updated }; }) });
+      const set = {}; (r.pending || []).forEach(function (id) { set[id] = true; });
+      lote.forEach(function (a) { if (set[a.id]) pendientes.push(a); });
+    }
+    resumen.files_pending = pendientes.length;
+
+    for (let i = 0; i < pendientes.length; i++) {
+      if (Date.now() - inicio > MAX_MS) {
+        ScriptApp.newTrigger('continuar').timeBased().after(60 * 1000).create();
+        resumen.continues = true;
+        resumen.message = 'Quedan ' + (pendientes.length - i) + ' archivo(s); se continúa en 1 minuto.';
+        break;
+      }
+      const r = procesarArchivo_(pendientes[i]);
+      resumen.files_done++; resumen.imported += r.imported; resumen.duplicates += r.duplicates; resumen.errors += r.errors;
+    }
+  } catch (e) {
+    resumen.errors++;
+    resumen.message = 'Error: ' + (e && e.message ? e.message : e);
+  }
+  try { api_('/drive-sync/run', resumen); } catch (e) { Logger.log('No pude registrar la ejecución: ' + e); }
+  Logger.log(JSON.stringify(resumen));
+}
+
+function procesarArchivo_(a) {
+  const r = { imported: 0, duplicates: 0, errors: 0, mensajes: [] };
+  try {
+    const blob = DriveApp.getFileById(a.id).getBlob();
+    const bytes = blob.getBytes();
+    let xmls;
+    if (bytes.length > 1 && bytes[0] === 0x50 && bytes[1] === 0x4B) xmls = xmlsDeZip_(blob, 0);          // "PK": es un ZIP
+    else {
+      const texto = blob.getDataAsString('UTF-8').replace(/^﻿/, '');
+      if (/^\s*</.test(texto)) xmls = [{ name: a.name, text: texto }];
+      else xmls = null;
+    }
+    if (xmls === null) { r.errors++; r.mensajes.push('No es un ZIP ni un XML de factura'); }
+    else if (!xmls.length) { r.errors++; r.mensajes.push('El ZIP no trae XML (solo PDF u otros archivos)'); }
+    (xmls || []).forEach(function (x) {
+      try {
+        const res = api_('/drive-sync/upload', { file_name: x.name, path: a.path, xml: x.text, desde: SINCRONIZAR_DESDE });
+        if (res.status === 'imported') r.imported++;
+        else if (res.status === 'duplicate' || res.status === 'skipped') r.duplicates++;
+        else { r.errors++; r.mensajes.push(x.name + ': ' + (res.error || 'error')); }
+      } catch (e) { r.errors++; r.mensajes.push(x.name + ': ' + e.message); }
+    });
+  } catch (e) { r.errors++; r.mensajes.push(e.message); }
+  try {
+    api_('/drive-sync/done', { file_id: a.id, file_name: a.name, path: a.path, updated: a.updated, imported: r.imported, duplicates: r.duplicates, errors: r.errors, message: r.mensajes.join(' | ').slice(0, 1900) });
+  } catch (e) { r.errors++; Logger.log('No pude registrar ' + a.name + ': ' + e.message); }
+  return r;
+}
+
+function xmlsDeZip_(blob, nivel) {
+  const out = [];
+  let partes = [];
+  try { partes = Utilities.unzip(blob.setContentType('application/zip')); } catch (e) { throw new Error('No pude abrir el ZIP: ' + e.message); }
+  partes.forEach(function (p) {
+    const n = p.getName() || '';
+    if (/\.zip$/i.test(n) && nivel < 3) out.push.apply(out, xmlsDeZip_(p, nivel + 1));
+    else if (/\.xml$/i.test(n)) out.push({ name: n, text: p.getDataAsString('UTF-8').replace(/^﻿/, '') });
+  });
+  return out;
+}
+
+// Año de una carpeta ("2026") y número de mes ("10. OCTUBRE" -> 10)
+function anioDe_(nombre) { const m = String(nombre).match(/(?:^|\D)((?:19|20)\d{2})(?:\D|$)/); return m ? Number(m[1]) : 0; }
+function mesDe_(nombre) {
+  const n = String(nombre).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace('setiembre', 'septiembre');
+  for (let i = 0; i < MESES.length; i++) if (n.indexOf(MESES[i]) >= 0) return i + 1;
+  return 0;
+}
+function antesDeInicio_(anio, mes) {
+  const m = String(SINCRONIZAR_DESDE).match(/^(\d{4})-(\d{1,2})$/);
+  if (!m || !anio) return false;
+  const desde = Number(m[1]) * 100 + Number(m[2]);
+  return mes ? (anio * 100 + mes) < desde : anio < Number(m[1]);
+}
+
+function recorrer_(carpeta, ruta, salida, nivel, ctx) {
+  if (nivel > 6) return;
+  const enRecibidos = !SOLO_RECIBIDOS || ruta.some(function (s) { return /recibid/i.test(s); });
+  if (enRecibidos) {
+    const archivos = carpeta.getFiles();
+    while (archivos.hasNext()) {
+      const f = archivos.next();
+      const n = f.getName();
+      if (/\.pdf$/i.test(n)) continue;
+      if (/\.(xml|zip)$/i.test(n) || TIPOS_OK.indexOf(f.getMimeType()) >= 0) {
+        salida.push({ id: f.getId(), name: n, updated: f.getLastUpdated().toISOString(), path: ruta });
+      }
+    }
+  }
+  const sub = carpeta.getFolders();
+  while (sub.hasNext()) {
+    const c = sub.next();
+    const nombre = c.getName();
+    if (SOLO_RECIBIDOS && /enviad|emitid/i.test(nombre)) continue;
+    const anio = anioDe_(nombre) || ctx.anio || 0;
+    const mes = mesDe_(nombre);
+    if (antesDeInicio_(anio, mes)) continue;
+    recorrer_(c, ruta.concat([nombre]), salida, nivel + 1, { anio: anio });
+  }
+}
+
+function carpetasRaiz_() {
+  const lista = [].concat(CARPETAS_FACTURAS).map(String).filter(function (s) { return s && s.indexOf('PEGA_AQUI') < 0; });
+  if (!lista.length) throw new Error('Pega en CARPETAS_FACTURAS el enlace de la carpeta de facturas de cada empresa.');
+  return lista.map(function (enlace) {
+    const m = enlace.match(/folders\/([\w-]+)/) || enlace.match(/[?&]id=([\w-]+)/) || enlace.match(/^([\w-]{15,})$/);
+    if (!m) throw new Error('Este enlace no parece de una carpeta de Drive: ' + enlace);
+    return DriveApp.getFolderById(m[1]);
+  });
+}
+
+function api_(ruta, cuerpo) {
+  const res = UrlFetchApp.fetch(CONTAPILOT_API + ruta, {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { 'X-ContaPilot-Key': CONTAPILOT_KEY },
+    payload: JSON.stringify(cuerpo)
+  });
+  const code = res.getResponseCode();
+  let data = {}; try { data = JSON.parse(res.getContentText()); } catch (e) {}
+  if (code === 401) throw new Error('ContaPilot rechazó la llave: ' + (data.detail || 'genera una nueva en ContaPilot'));
+  if (code >= 400) throw new Error('ContaPilot respondió ' + code + ': ' + (data.detail || res.getContentText().slice(0, 200)));
+  return data;
+}

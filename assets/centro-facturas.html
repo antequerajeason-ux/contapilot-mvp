@@ -329,6 +329,7 @@
       <div class="sb-label">Acciones</div>
       <button class="sb-item" onclick="closeSidebar();openDian()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>Importar facturas</button>
       <button class="sb-item" onclick="closeSidebar();openExport()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Exportar CSV / PDF</button>
+      <button class="sb-item" onclick="closeSidebar();openDriveSync()"><svg viewBox="0 0 24 24"><path d="M7.7 3.5h8.6l5.2 9-4.3 7.5H6.8L2.5 12.5z"/><path d="M7.7 3.5l8.9 16.5M16.3 3.5L6.8 20M2.5 12.5h19"/></svg>Sincronización Drive<span class="count warn" id="sbDriveWarn" style="display:none">!</span></button>
       <div class="sb-label">Configuración</div>
       <button class="sb-item" onclick="closeSidebar();openSiigoModal()"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>Conexión Siigo</button>
       <button class="sb-item" onclick="closeSidebar();openSettings()"><svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>Config. contable</button>
@@ -465,6 +466,33 @@
   </div>
   <h3 style="margin:20px 0 6px;font-size:15px">Historial de esta factura</h3>
   <ul id="reviewAudit" class="audit-list"><li>Sin movimientos</li></ul>
+</div></div>
+<div id="driveModal" class="modal-bg"><div class="modal wide"><div class="modal-head"><div><h3>Sincronización con Google Drive</h3><p>Las facturas que el contador deja en su carpeta de Drive entran solas a ContaPilot una vez al día, ya causadas. Él solo revisa, confirma y sube a Siigo.</p></div><button class="close" onclick="closeModal('driveModal')">×</button></div>
+  <div id="driveStatus"></div>
+  <div class="dash-grid" style="grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);margin-bottom:0">
+    <div class="soft-box" style="margin:0">
+      <strong>Instalación (una sola vez, unos 10 minutos)</strong>
+      <ol style="margin:10px 0 0;padding-left:18px;line-height:1.7;font-size:13.5px" class="text-2">
+        <li>Presiona <b>Generar llave y programa</b> y luego <b>Copiar programa</b>.</li>
+        <li>Abre <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">Google Apps Script</a> con la cuenta de Google donde están las facturas, borra lo que aparece y <b>pega</b> el programa.</li>
+        <li>En <span class="mono">CARPETAS_FACTURAS</span> pega el enlace de la carpeta <b>FACTURAS DIAN</b> de cada empresa (una por línea, entre comillas). Se abre la carpeta en Drive y se copia el enlace de la barra del navegador.</li>
+        <li>Guarda, elige la función <b>instalar</b> arriba y presiona <b>Ejecutar</b>.</li>
+        <li>Google pedirá permisos y mostrará "Google no ha verificado esta aplicación": es normal porque el programa es tuyo. Entra a <b>Configuración avanzada → Ir a…</b> y acepta.</li>
+      </ol>
+      <p class="sub" style="margin-top:10px">Solo se leen las carpetas <b>RECIBIDOS</b> (compras); las de ENVIADOS se ignoran. Cada factura se ubica en su empresa por el NIT del receptor y queda en el centro del mes (ej. carpeta 2026 › RECIBIDOS › 10. OCTUBRE → centro "Octubre 2026"). Nunca se confirma ni se sube a Siigo de forma automática.</p>
+    </div>
+    <div>
+      <div class="field"><label>Sincronizar facturas desde el mes</label><input id="driveFrom" type="month"><span class="sub">Las carpetas y facturas de meses anteriores se ignoran, para no volver a traer facturas que ya se contabilizaron por fuera de ContaPilot.</span></div>
+      <div class="actions"><button class="btn btn-primary" onclick="generateDriveKey()">Generar llave y programa</button><button class="btn btn-danger-light" id="driveRevokeBtn" onclick="revokeDriveKey()">Anular llave</button></div>
+      <div id="driveScriptBox" style="display:none;margin-top:12px">
+        <div class="check-box check-warn" style="margin-bottom:10px">La llave va dentro del programa y solo se muestra ahora. Si la pierdes, genera una nueva (la anterior deja de funcionar).</div>
+        <textarea id="driveScript" readonly rows="9" style="width:100%;border:1px solid var(--line-strong);border-radius:10px;padding:10px;font-family:ui-monospace,Consolas,monospace;font-size:11.5px;color:var(--ink);background:#f8fafc" onclick="this.select()"></textarea>
+        <div class="actions" style="margin-top:8px"><button class="btn btn-green" onclick="copyDriveScript()">Copiar programa</button><a class="btn btn-light" href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">Abrir Google Apps Script</a></div>
+      </div>
+    </div>
+  </div>
+  <h3 style="margin:20px 0 8px;font-size:15px">Archivos recibidos desde Drive</h3>
+  <div class="table-wrap"><table style="min-width:860px"><thead><tr><th>Última revisión</th><th>Archivo</th><th>Carpeta</th><th>Resultado</th><th>Nuevas</th><th>Ya existían / omitidas</th><th>Detalle</th></tr></thead><tbody id="driveFiles"><tr><td colspan="7">Sin archivos todavía</td></tr></tbody></table></div>
 </div></div>
 <div id="historyModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Historial de importaciones</h3><p>Registro de cargas XML/ZIP realizadas para la empresa activa.</p></div><button class="close" onclick="closeModal('historyModal')">×</button></div><div class="table-wrap"><table style="min-width:780px"><thead><tr><th>Fecha</th><th>Archivos</th><th>Estado</th><th>Importadas</th><th>Errores</th><th>Detalle</th></tr></thead><tbody id="historyRows"><tr><td colspan="6">Sin historial</td></tr></tbody></table></div></div></div>
 <div id="exportModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div class="export-title"><img src="siigo-nube-logo.png" alt="Siigo Nube"><div><h3>Exportar a Siigo Nube</h3><p>Descarga las causaciones listas para revisión o carga en Siigo.</p></div></div><button class="close" onclick="closeModal('exportModal')">×</button></div><div class="field"><label>Formato</label><select id="exportFormat"><option value="siigo">Siigo Nube</option><option value="general">General contable</option><option value="invoices">Resumen facturas</option></select></div><button class="btn btn-blue btn-full btn-siigo" onclick="exportCsv()"><img src="siigo-nube-logo.png" alt="Siigo Nube">Descargar CSV para Siigo</button><hr style="border:0;border-top:1px solid var(--line);margin:16px 0"><p style="margin:0 0 10px;color:var(--muted);font-size:13px">Informe en PDF con la contabilización de cada factura: usa las facturas seleccionadas o, si no hay ninguna, las que se ven en la bandeja con el filtro actual.</p><button class="btn btn-light btn-full" onclick="closeModal('exportModal');downloadInvoicesPdf(selectedInvoiceIds.size?[...selectedInvoiceIds]:filteredInvoices().map(i=>i.id))">Descargar informe PDF</button></div></div><div id="toast" class="toast"></div>
@@ -1316,8 +1344,45 @@ async function loadRecentExports(){
   }catch(e){box.innerHTML=`<li class="empty-note">${esc(e.message)}</li>`}
 }
 
+// ---------- Sincronización con Google Drive ----------
+function daysSince(s){const t=Date.parse(s||'');return Number.isFinite(t)?(Date.now()-t)/86400000:Infinity}
+async function refreshDriveWarn(){try{const s=await api('/api/drive-sync/status');const stale=s.key&&daysSince((s.runs[0]||{}).finished_at)>2;sbDriveWarn.style.display=stale?'':'none';return s}catch(e){return null}}
+async function openDriveSync(){openModal('driveModal');driveScriptBox.style.display='none';if(!driveFrom.value)driveFrom.value=new Date().toISOString().slice(0,7);await loadDriveStatus()}
+async function loadDriveStatus(){
+  driveStatus.innerHTML='<div class="check-box check-info">Cargando estado…</div>';
+  const s=await refreshDriveWarn();
+  if(!s){driveStatus.innerHTML='<div class="check-box check-err">No pude consultar el estado de la sincronización.</div>';return}
+  const run=s.runs[0];const tot=s.totals||{};
+  driveRevokeBtn.style.display=s.key?'':'none';
+  let html='';
+  if(!s.key) html+='<div class="check-box check-warn"><strong>Sin conectar.</strong> Genera la llave y el programa para instalarlo en el Drive del contador.</div>';
+  else if(!run) html+=`<div class="check-box check-info"><strong>Llave activa</strong> (termina en …${esc(s.key.last4)}, creada ${esc(fmtWhen(s.key.created_at))}). Todavía no ha llegado ninguna sincronización: falta instalar el programa en Drive o esperar a la primera ejecución.</div>`;
+  else{
+    const d=daysSince(run.finished_at);const tone=run.errors&&!run.imported?'check-err':d>2?'check-warn':'check-ok';
+    html+=`<div class="check-box ${tone}"><strong>${d>2?`Sin sincronizar hace ${Math.floor(d)} día(s).`:'Sincronización activa.'}</strong> Última revisión: ${esc(fmtWhen(run.finished_at))} · ${run.files_seen} archivo(s) en la carpeta · ${run.files_done} procesado(s) · <b>${run.imported}</b> factura(s) nueva(s) · ${run.duplicates} ya existían · ${run.errors} con error.${run.message?'<br>'+esc(run.message):''}${d>2?'<br>Revisa que el programa siga instalado y autorizado en la cuenta de Google del contador.':''}</div>`;
+  }
+  if(s.key) html+=`<p class="sub" style="margin:-4px 0 14px">Total recibido desde Drive: ${Number(tot.imported||0)} factura(s) en ${Number(tot.files||0)} archivo(s)${Number(tot.errored||0)?` · ${tot.errored} archivo(s) con error se reintentan cada día`:''}.</p>`;
+  driveStatus.innerHTML=html;
+  const lbl={done:['Correcto','approved'],partial:['Parcial','received'],error:['Error','failed']};
+  driveFiles.innerHTML=s.files.map(f=>`<tr><td class="mono" style="white-space:nowrap">${esc(fmtWhen(f.updated_at))}</td><td>${esc(f.file_name)}</td><td class="sub" style="margin:0">${esc(f.folder_path||'')}</td><td><span class="pill ${(lbl[f.status]||[])[1]||'received'}">${esc((lbl[f.status]||[f.status])[0])}</span></td><td>${f.imported}</td><td>${f.duplicates}</td><td class="msg-cell">${esc((f.message||'').slice(0,300))}</td></tr>`).join('')||'<tr><td colspan="7">Sin archivos todavía</td></tr>';
+}
+async function generateDriveKey(){
+  if(document.getElementById('driveRevokeBtn').style.display!=='none'&&!confirm('Ya hay una llave activa. Si generas una nueva, el programa instalado con la anterior deja de funcionar hasta que pegues el nuevo. ¿Continuar?'))return;
+  if(!/^\d{4}-\d{2}$/.test(driveFrom.value))return toast('Elige desde qué mes sincronizar.');
+  try{
+    const r=await api('/api/drive-sync/key',{method:'POST'});
+    const tpl=await fetch('contapilot-drive-sync.gs.txt',{cache:'no-store'}).then(x=>{if(!x.ok)throw new Error('No pude cargar la plantilla del programa');return x.text()});
+    driveScript.value=tpl.replace('__API__',r.api_base).replace('__KEY__',r.key).replace('__DESDE__',driveFrom.value);
+    driveScriptBox.style.display='block';
+    await loadDriveStatus();driveScriptBox.style.display='block';
+    toast('Llave generada. Copia el programa y pégalo en Google Apps Script.');
+  }catch(e){toast(e.message)}
+}
+async function copyDriveScript(){try{await navigator.clipboard.writeText(driveScript.value);toast('Programa copiado.')}catch(e){driveScript.select();document.execCommand('copy');toast('Programa copiado.')}}
+async function revokeDriveKey(){if(!confirm('¿Anular la llave? El programa de Drive dejará de enviar facturas hasta que generes e instales una nueva.'))return;try{await api('/api/drive-sync/key',{method:'DELETE'});driveScriptBox.style.display='none';await loadDriveStatus();toast('Llave anulada.')}catch(e){toast(e.message)}}
+
 try{sbAvatar.textContent=(user.name||user.email||'C').trim().charAt(0).toUpperCase()}catch(e){}
-(async()=>{let v='dashboard';try{v=localStorage.getItem('cp_view')||'dashboard'}catch(e){}showView(v);await loadCompanies();showView(currentView,{force:true})})();
+(async()=>{let v='dashboard';try{v=localStorage.getItem('cp_view')||'dashboard'}catch(e){}showView(v);await loadCompanies();showView(currentView,{force:true});refreshDriveWarn()})();
 </script>
 </body>
 </html>

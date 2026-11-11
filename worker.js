@@ -573,6 +573,108 @@ function priorExportMessage(prior){
   const how=prior.channel==='csv' ? ' (marcada al descargar CSV)' : prior.channel==='legacy' ? ' (antes de activar el historial)' : '';
   return `Ya fue exportada a Siigo el ${when}${how}${prior.siigo_name?` como ${prior.siigo_name}`:''}${prior.user_email?` por ${prior.user_email}`:''}. No se envía de nuevo para evitar duplicados.`;
 }
+// ---------- Sincronización con Google Drive ----------
+const MONTHS_ES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+function normName(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); }
+// Nombre del centro de facturas, siempre "Mes Año" (ej. "Octubre 2026") para que las carpetas
+// "10. OCTUBRE" de distintos años no se mezclen. El mes sale de la carpeta más profunda que lo
+// nombre (ej. 2026 > RECIBIDOS > 10. OCTUBRE) y el año de la ruta; si no hay carpeta de mes
+// (ej. una carpeta "XML"), se usa la fecha de emisión de la factura.
+function monthBatchName(path, issueDate){
+  const segs=(Array.isArray(path)?path:[]).map(s=>String(s||'').trim()).filter(Boolean);
+  const label=(y,m)=>{const n=MONTHS_ES[m-1];return n.charAt(0).toUpperCase()+n.slice(1)+' '+y;};
+  const iss=String(issueDate||'').match(/^(\d{4})-(\d{2})/);
+  let month=0, year=0;
+  for(let i=segs.length-1;i>=0 && !month;i--){
+    const n=normName(segs[i]).replace('setiembre','septiembre');
+    const idx=MONTHS_ES.findIndex(mn=>n.includes(mn));
+    if(idx>=0){ month=idx+1; const y=n.match(/(?:^|\D)((?:19|20)\d{2})(?:\D|$)/); if(y) year=Number(y[1]); continue; }
+    const ym=n.match(/\b((?:19|20)\d{2})\s*[-_./ ]\s*(0?[1-9]|1[0-2])\b/) || n.match(/\b(0?[1-9]|1[0-2])\s*[-_./ ]\s*((?:19|20)\d{2})\b/);
+    if(ym){ const a=Number(ym[1]), b=Number(ym[2]); if(a>1900){year=a;month=b}else{month=a;year=b} }
+  }
+  if(month && !year){ for(let i=segs.length-1;i>=0;i--){ const y=normName(segs[i]).match(/(?:^|\D)((?:19|20)\d{2})(?:\D|$)/); if(y){year=Number(y[1]);break} } }
+  if(month && !year && iss) year=Number(iss[1]);
+  if(month && year) return label(year,month);
+  if(iss) return label(Number(iss[1]),Number(iss[2]));
+  return 'Drive';
+}
+async function batchByName(env, companyId, name){
+  const rows=(await env.DB.prepare('SELECT id,name FROM invoice_batches WHERE company_id=?').bind(companyId).all()).results||[];
+  const found=rows.find(r=>normName(r.name)===normName(name));
+  if(found) return found.id;
+  const bid=id();
+  await env.DB.prepare('INSERT INTO invoice_batches (id,company_id,name,created_at) VALUES (?,?,?,?)').bind(bid,companyId,name,now()).run();
+  return bid;
+}
+async function authDriveKey(env, request){
+  const key=String(request.headers.get('x-contapilot-key')||'').trim();
+  const deny=(msg)=>new Response(JSON.stringify({detail:msg}),{status:401,headers:{'content-type':'application/json; charset=utf-8',...corsHeaders}});
+  if(!key) throw deny('Falta la llave de conexión de ContaPilot');
+  const row=await env.DB.prepare('SELECT k.id key_id, u.* FROM drive_sync_keys k JOIN users u ON u.id=k.user_id WHERE k.key_hash=? AND k.revoked_at IS NULL').bind(await sha256(key)).first();
+  if(!row) throw deny('Llave de conexión inválida o anulada. Genera una nueva en ContaPilot → Sincronización Drive.');
+  await env.DB.prepare('UPDATE drive_sync_keys SET last_used_at=? WHERE id=?').bind(now(),row.key_id).run();
+  return row;
+}
+// Importa un XML que llega desde Drive: ubica la empresa por NIT receptor, no toca facturas ya existentes,
+// lo deja en el centro del mes y lo causa automáticamente (sin confirmar ni exportar).
+async function importDriveXml(env, user, xmlText, fileName, path, desde){
+  const parsed=await parseInvoice(xmlText);
+  const dm=String(desde||'').match(/^(\d{4})-(\d{1,2})$/);
+  if(dm && parsed.issue_date && String(parsed.issue_date).slice(0,7) < `${dm[1]}-${dm[2].padStart(2,'0')}`)
+    return {status:'skipped', invoice_number:parsed.invoice_number, reason:`Emitida el ${parsed.issue_date}, antes del mes de inicio de la sincronización (${desde})`};
+  const nit=nitClean(parsed.customer_nit);
+  const company=await env.DB.prepare('SELECT * FROM companies WHERE owner_user_id=? AND nit=?').bind(user.id,nit).first();
+  if(!company) return {status:'error', invoice_number:parsed.invoice_number, error:`El receptor NIT ${parsed.customer_nit||'(vacío)'} no está creado como empresa en ContaPilot`};
+  const exists=await env.DB.prepare('SELECT id,status FROM invoices WHERE company_id=? AND cufe=?').bind(company.id,parsed.cufe).first();
+  if(exists) return {status:'duplicate', invoice_number:parsed.invoice_number, company:company.name};
+  const batchName=monthBatchName(path, parsed.issue_date);
+  const batchId=await batchByName(env, company.id, batchName);
+  const invId=id();
+  const stmts=[env.DB.prepare('INSERT INTO invoices (id,company_id,invoice_number,cufe,issue_date,document_type,supplier_name,supplier_nit,customer_name,customer_nit,currency,subtotal,tax_amount,withholding_amount,payable_amount,status,raw_xml,created_at,updated_at,tax_breakdown,batch_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .bind(invId,company.id,parsed.invoice_number,parsed.cufe,parsed.issue_date,parsed.document_type,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.currency,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,'received',parsed.invoice_xml,now(),now(),JSON.stringify(parsed.tax_breakdown||{}),batchId)];
+  for(const it of parsed.items) stmts.push(env.DB.prepare('INSERT INTO invoice_items VALUES (?,?,?,?,?)').bind(id(),invId,it.description,it.quantity,it.line_amount));
+  await env.DB.batch(stmts);
+  let caused=true, causeError='';
+  try{ await generateEntry(env, invId, {id:user.id, email:(user.email||'')+' (Drive)'}); }catch(e){ caused=false; causeError=e.message; }
+  return {status:'imported', invoice_number:parsed.invoice_number, company:company.name, batch:batchName, caused, cause_error:causeError};
+}
+async function handleDriveSync(request, env, p){
+  const user=await authDriveKey(env, request);
+  const d=await request.json().catch(()=>({}));
+  if(p==='/drive-sync/check' && request.method==='POST'){
+    const files=(Array.isArray(d.files)?d.files:[]).slice(0,300).filter(f=>f&&f.id);
+    if(!files.length) return json({pending:[]});
+    const rows=(await env.DB.prepare(`SELECT file_id,updated,status FROM drive_files WHERE user_id=? AND file_id IN (${files.map(()=>'?').join(',')})`).bind(user.id,...files.map(f=>String(f.id))).all()).results||[];
+    const byId=new Map(rows.map(r=>[r.file_id,r]));
+    // Pendiente: nunca visto, modificado desde la última vez, o con errores (se reintenta, p. ej. cuando ya se creó la empresa;
+    // las facturas que ya entraron se reconocen por CUFE y no se duplican).
+    const pending=files.filter(f=>{const r=byId.get(String(f.id));return !r || String(r.updated)!==String(f.updated||'') || r.status!=='done'}).map(f=>String(f.id));
+    return json({pending});
+  }
+  if(p==='/drive-sync/upload' && request.method==='POST'){
+    const xml=String(d.xml||'');
+    if(!xml.trim()) return json({status:'error', error:'Archivo vacío'});
+    if(xml.length>8*1024*1024) return json({status:'error', error:'El XML supera 8 MB'});
+    try{ return json(await importDriveXml(env, user, xml, String(d.file_name||''), Array.isArray(d.path)?d.path:[], d.desde)); }
+    catch(e){ return json({status:'error', error:e.message||String(e)}); }
+  }
+  if(p==='/drive-sync/done' && request.method==='POST'){
+    const fileId=String(d.file_id||''); if(!fileId) return json({detail:'Falta file_id'},400);
+    const imported=Number(d.imported||0), dup=Number(d.duplicates||0), errs=Number(d.errors||0);
+    const status=errs && !imported && !dup ? 'error' : errs ? 'partial' : 'done';
+    await env.DB.prepare(`INSERT INTO drive_files (id,user_id,file_id,file_name,folder_path,updated,status,imported,duplicates,errors,message,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(user_id,file_id) DO UPDATE SET file_name=COALESCE(NULLIF(excluded.file_name,''),drive_files.file_name), folder_path=COALESCE(NULLIF(excluded.folder_path,''),drive_files.folder_path), updated=excluded.updated, status=excluded.status, imported=drive_files.imported+excluded.imported, duplicates=excluded.duplicates, errors=excluded.errors, message=excluded.message, updated_at=excluded.updated_at`)
+      .bind(id(),user.id,fileId,String(d.file_name||'').slice(0,250),(Array.isArray(d.path)?d.path.join(' / '):'').slice(0,500),String(d.updated||''),status,imported,dup,errs,String(d.message||'').slice(0,2000),now(),now()).run();
+    return json({ok:true,status});
+  }
+  if(p==='/drive-sync/run' && request.method==='POST'){
+    await env.DB.prepare('INSERT INTO drive_sync_runs (id,user_id,started_at,finished_at,files_seen,files_pending,files_done,imported,duplicates,errors,continues,message) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+      .bind(id(),user.id,String(d.started_at||''),now(),Number(d.files_seen||0),Number(d.files_pending||0),Number(d.files_done||0),Number(d.imported||0),Number(d.duplicates||0),Number(d.errors||0),d.continues?1:0,String(d.message||'').slice(0,2000)).run();
+    return json({ok:true});
+  }
+  return json({detail:'Ruta no encontrada'},404);
+}
+
 async function validateEntry(env, inv, lines){
   const errors=[], warnings=[];
   const debit=round2(lines.reduce((a,l)=>a+Number(l.debit||0),0));
@@ -801,7 +903,28 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
   if(p==='/health') return json({ok:true, service:'contapilot-cloudflare', time:now()});
   if(p==='/auth/register' && request.method==='POST'){ const d=await request.json(); const userId=id(); const token=id()+id(); await env.DB.prepare('INSERT INTO users VALUES (?,?,?,?,?)').bind(userId,d.name||'Contador Demo',String(d.email||'').toLowerCase(),await hashPassword(d.password||''),now()).run(); await env.DB.prepare('INSERT INTO sessions VALUES (?,?,?)').bind(token,userId,now()).run(); return json({token,user:{id:userId,name:d.name||'Contador Demo',email:String(d.email||'').toLowerCase()}}); }
   if(p==='/auth/login' && request.method==='POST'){ const d=await request.json(); const u=await env.DB.prepare('SELECT * FROM users WHERE email=?').bind(String(d.email||'').toLowerCase()).first(); if(!u || !(await verifyPassword(d.password||'', u.password_hash))) return json({detail:'Correo o contraseña inválidos'},401); const token=id()+id(); await env.DB.prepare('INSERT INTO sessions VALUES (?,?,?)').bind(token,u.id,now()).run(); return json({token,user:{id:u.id,name:u.name,email:u.email}}); }
+  // El programa de Google Drive se autentica con su llave de conexión, no con la sesión del navegador.
+  if(request.headers.get('x-contapilot-key') && p.startsWith('/drive-sync/')) return await handleDriveSync(request, env, p);
   const user=await auth(env,request);
+  if(p==='/drive-sync/status' && request.method==='GET'){
+    const key=await env.DB.prepare('SELECT last4, created_at, last_used_at FROM drive_sync_keys WHERE user_id=? AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1').bind(user.id).first();
+    const runs=(await env.DB.prepare('SELECT * FROM drive_sync_runs WHERE user_id=? ORDER BY finished_at DESC LIMIT 10').bind(user.id).all()).results||[];
+    const files=(await env.DB.prepare('SELECT * FROM drive_files WHERE user_id=? ORDER BY updated_at DESC LIMIT 40').bind(user.id).all()).results||[];
+    const totals=await env.DB.prepare("SELECT COUNT(*) files, SUM(imported) imported, SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) errored FROM drive_files WHERE user_id=?").bind(user.id).first();
+    return json({key:key||null, runs, files, totals});
+  }
+  if(p==='/drive-sync/key' && request.method==='POST'){
+    const raw='cpd_'+[...crypto.getRandomValues(new Uint8Array(24))].map(b=>b.toString(16).padStart(2,'0')).join('');
+    await env.DB.batch([
+      env.DB.prepare('UPDATE drive_sync_keys SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL').bind(now(),user.id),
+      env.DB.prepare('INSERT INTO drive_sync_keys (id,user_id,key_hash,last4,created_at) VALUES (?,?,?,?,?)').bind(id(),user.id,await sha256(raw),raw.slice(-4),now())
+    ]);
+    return json({ok:true, key:raw, last4:raw.slice(-4), api_base:new URL(request.url).origin+'/api'});
+  }
+  if(p==='/drive-sync/key' && request.method==='DELETE'){
+    await env.DB.prepare('UPDATE drive_sync_keys SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL').bind(now(),user.id).run();
+    return json({ok:true});
+  }
   if(p==='/admin/accounts' && request.method==='POST'){
     if(!isAdminUser(env,user)) return json({detail:'No autorizado'},403);
     const d=await request.json().catch(()=>({}));

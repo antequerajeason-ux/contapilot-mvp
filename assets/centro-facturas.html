@@ -129,6 +129,39 @@
     .received{background:rgba(224,167,47,.14);color:var(--amber);border-color:rgba(224,167,47,.35)}
     .accounted{background:var(--primary-soft);color:#7fc0f2;border-color:rgba(47,143,224,.35)}
     .approved{background:rgba(31,185,138,.14);color:var(--green);border-color:rgba(31,185,138,.35)}
+    .exported{background:rgba(155,120,240,.16);color:#c3a9ff;border-color:rgba(155,120,240,.4)}
+    .failed{background:rgba(242,85,90,.12);color:#ff9498;border-color:rgba(242,85,90,.35)}
+
+    /* Revisión contable */
+    .modal.wide{width:min(1120px,100%)}
+    .review-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px}
+    .review-note{font-size:12px;color:var(--muted);margin:0 0 14px}
+    .check-box{border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:13px;line-height:1.5}
+    .check-box ul{margin:6px 0 0;padding-left:18px}
+    .check-ok{background:rgba(31,185,138,.12);border:1px solid rgba(31,185,138,.35);color:#5fe0b4}
+    .check-err{background:rgba(242,85,90,.12);border:1px solid rgba(242,85,90,.35);color:#ff9498}
+    .check-warn{background:rgba(224,167,47,.12);border:1px solid rgba(224,167,47,.35);color:#f1c262}
+    .check-info{background:rgba(155,120,240,.12);border:1px solid rgba(155,120,240,.35);color:#cdb8ff}
+    .entry-table{min-width:900px}
+    .entry-table td{padding:6px 8px}
+    .entry-table input{width:100%;height:34px;border:1px solid var(--line);border-radius:7px;background:rgba(255,255,255,.04);color:var(--ink);padding:0 9px;font-size:13px;outline:0}
+    .entry-table input:focus{border-color:var(--primary)}
+    .entry-table input.num{text-align:right;font-family:ui-monospace,Consolas,monospace}
+    .entry-table input[readonly]{background:transparent;border-color:transparent}
+    .entry-table tfoot td{font-weight:700;font-family:ui-monospace,Consolas,monospace;border-top:1px solid var(--line-strong);padding:10px 8px}
+    .acc-name{display:block;font-size:11px;color:var(--muted);margin-top:3px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .row-del{width:30px;height:30px;border:0;border-radius:7px;background:rgba(242,85,90,.12);color:var(--red);cursor:pointer;font-size:15px}
+    .diff-bad{color:var(--red)}
+    .diff-ok{color:var(--green)}
+    .audit-list{margin:0;padding:0;list-style:none;font-size:12.5px}
+    .audit-list li{padding:9px 0;border-top:1px solid var(--line);color:#c7cedb}
+    .audit-list li:first-child{border-top:0}
+    .audit-list .when{color:var(--muted);font-family:ui-monospace,Consolas,monospace;font-size:11.5px}
+    .tabs-inline{display:flex;gap:6px;margin-bottom:14px}
+    .tabs-inline button{height:34px;padding:0 14px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-weight:600;font-size:12.5px;cursor:pointer}
+    .tabs-inline button.active{background:var(--primary-soft);border-color:rgba(47,143,224,.45);color:#bfe0fb}
+    .msg-cell{max-width:420px;font-size:12.5px;color:#c7cedb;word-break:break-word}
+    @media(max-width:980px){.review-summary{grid-template-columns:repeat(2,1fr)}}
 
     /* Action select / checkboxes */
     .action-select{height:36px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.04);padding:0 10px;font-weight:600;font-size:13px;color:var(--ink);cursor:pointer;min-width:140px}
@@ -200,7 +233,7 @@
     <div class="brand brand-icon-only"><img class="brand-symbol" src="contapilot-symbol-transparent.png" alt="ContaPilot"></div>
     <div class="nav-center nav-center-modern">
       <div class="menu" id="companyMenu"><button class="menu-btn" onclick="toggleMenu('companyMenu')">Empresas ▾</button><div class="dropdown wide"><div class="field"><label>Empresa activa</label><select id="companySelect" onchange="onCompanyChange()"></select></div><div class="actions"><button class="btn btn-primary" onclick="openCompanyModal()">+ Agregar empresa</button><button class="btn btn-light" onclick="openEditCompanyModal()">Editar</button><button class="btn btn-danger-light" onclick="deleteCompany()">Eliminar</button><button class="btn btn-light" onclick="loadCompanies()">Actualizar</button></div><div class="sub" id="companyHint" style="margin-top:10px">Agrega una empresa para iniciar.</div></div></div>
-      <div class="menu" id="configMenu"><button class="menu-btn" onclick="toggleMenu('configMenu')">Configuración ▾</button><div class="dropdown"><button class="btn btn-light btn-full btn-siigo" onclick="openSiigoModal();closeMenus()">Siigo Nube</button><button class="btn btn-light btn-full" onclick="openSettings();closeMenus()" style="margin-top:8px">Config. contable</button><button class="btn btn-light btn-full" onclick="openRules();closeMenus()" style="margin-top:8px">Reglas contables</button><button class="btn btn-light btn-full" onclick="openChartModal();closeMenus()" style="margin-top:8px">Plan de cuentas</button><button class="btn btn-light btn-full" onclick="openImportHistory();closeMenus()" style="margin-top:8px">Historial de cargas</button></div></div>
+      <div class="menu" id="configMenu"><button class="menu-btn" onclick="toggleMenu('configMenu')">Configuración ▾</button><div class="dropdown"><button class="btn btn-light btn-full btn-siigo" onclick="openSiigoModal();closeMenus()">Siigo Nube</button><button class="btn btn-light btn-full" onclick="openSettings();closeMenus()" style="margin-top:8px">Config. contable</button><button class="btn btn-light btn-full" onclick="openRules();closeMenus()" style="margin-top:8px">Reglas contables</button><button class="btn btn-light btn-full" onclick="openChartModal();closeMenus()" style="margin-top:8px">Plan de cuentas</button><button class="btn btn-light btn-full" onclick="openImportHistory();closeMenus()" style="margin-top:8px">Historial de cargas</button><button class="btn btn-light btn-full" onclick="openSiigoHistory();closeMenus()" style="margin-top:8px">Historial de exportaciones Siigo</button></div></div>
     </div>
     <div class="topbar-user"><span class="user" id="userLabel">admin@contapilot.com</span><button class="btn btn-red" onclick="logout()">Salir</button></div>
   </nav>
@@ -212,7 +245,7 @@
 
   <div class="batch-bar"><div id="batchTabs" class="batch-tabs"></div><button class="btn-batch-add" onclick="createBatch()" title="Nuevo centro de facturas">+ Centro</button></div>
 
-  <section class="stats metrics-grid"><div class="stat"><span>Facturas</span><strong id="mTotal">0</strong></div><div class="stat"><span>Recibidas</span><strong id="mReceived">0</strong></div><div class="stat"><span>Causadas</span><strong id="mAccounted">0</strong></div><div class="stat"><span>Aprobadas</span><strong id="mApproved">0</strong></div><div class="stat"><span>Exportadas</span><strong id="mExported">0</strong></div></section>
+  <section class="stats metrics-grid"><div class="stat"><span>Facturas</span><strong id="mTotal">0</strong></div><div class="stat"><span>Recibidas</span><strong id="mReceived">0</strong></div><div class="stat"><span>Causadas</span><strong id="mAccounted">0</strong></div><div class="stat"><span>Confirmadas</span><strong id="mApproved">0</strong></div><div class="stat"><span>Exportadas</span><strong id="mExported">0</strong></div></section>
 
   <div class="fab" id="fab">
     <div class="fab-menu" id="fabMenu">
@@ -222,7 +255,7 @@
     </div>
     <button class="fab-main" id="fabMain" onclick="toggleFab()">＋</button>
   </div>
-  <section class="card invoice-board"><div class="card-head board-head"><div><span class="section-label">Operación</span><h2>Bandeja de facturas</h2><p>Selecciona las facturas que quieres causar, aprobar o subir a Siigo.</p></div><div class="actions"><button class="btn btn-light" onclick="openExport()">Exportar</button><button class="btn btn-light" onclick="loadInvoices()">Actualizar</button></div></div><div class="card-body"><div class="toolbar board-toolbar"><div class="search">⌕ <input id="search" oninput="renderInvoices()" placeholder="Buscar factura, proveedor, receptor o NIT"></div><select id="statusFilter" class="action-select" onchange="renderInvoices()"><option value="all">Todos los estados</option><option value="received">Recibidas</option><option value="accounted">Causadas</option><option value="approved">Aprobadas</option><option value="exported">Exportadas</option></select><span id="progressBox" class="selected-counter" style="display:none;background:var(--primary-soft);color:#7fc0f2">Listo</span></div><div id="bulkBar" class="bulk-bar" style="display:none"><span id="selectedCounter" class="selected-counter">0 seleccionadas</span><div class="actions"><button id="causeSelectedBtn" class="btn btn-green" onclick="causeSelectedInvoices()">Causar</button><button id="approveSelectedBtn" class="btn btn-green" onclick="approveSelectedInvoices()">Aprobar</button><button id="uploadSiigoBtn" class="btn btn-blue btn-siigo" onclick="uploadSelectedToSiigo()"><img src="siigo-nube-logo.png" alt="Siigo">Subir a Siigo</button><button id="deleteSelectedBtn" class="btn btn-danger-light" onclick="deleteSelectedInvoices()">Eliminar</button></div></div><div id="wideProgress" class="progress-wide">Listo</div><div class="table-wrap"><table><thead><tr><th class="check-cell"><label class="select-all-wrap"><input id="selectAllBox" class="mini-check" type="checkbox" onchange="toggleSelectAll(this.checked)"><span>Seleccionar todas</span></label></th><th>Factura</th><th>Fecha</th><th>Proveedor</th><th>Receptor</th><th>Total</th><th>Estado</th><th>Gestión</th></tr></thead><tbody id="rows"><tr><td colspan="8">Sin facturas</td></tr></tbody></table></div><div id="uploadNotices" style="display:none;margin-top:14px;background:var(--primary-soft);border:1px solid rgba(47,143,224,.35);color:#bfe0fb;border-radius:14px;padding:14px;font-size:13px"></div><div id="uploadErrors" style="display:none;margin-top:14px;background:rgba(242,85,90,.12);border:1px solid rgba(242,85,90,.35);color:#ff9498;border-radius:14px;padding:14px;font-size:13px;font-weight:750"></div><div id="log" class="log-panel">Listo.</div></div></section>
+  <section class="card invoice-board"><div class="card-head board-head"><div><span class="section-label">Operación</span><h2>Bandeja de facturas</h2><p>Causa, revisa y confirma cada contabilización; solo las confirmadas se pueden subir a Siigo.</p></div><div class="actions"><button class="btn btn-light" onclick="openSiigoHistory()">Historial Siigo</button><button class="btn btn-light" onclick="openExport()">Exportar</button><button class="btn btn-light" onclick="loadInvoices()">Actualizar</button></div></div><div class="card-body"><div class="toolbar board-toolbar"><div class="search">⌕ <input id="search" oninput="renderInvoices()" placeholder="Buscar factura, proveedor, receptor o NIT"></div><select id="statusFilter" class="action-select" onchange="renderInvoices()"><option value="all">Todos los estados</option><option value="received">Recibidas</option><option value="accounted">Causadas</option><option value="approved">Confirmadas</option><option value="exported">Exportadas a Siigo</option></select><span id="progressBox" class="selected-counter" style="display:none;background:var(--primary-soft);color:#7fc0f2">Listo</span></div><div id="bulkBar" class="bulk-bar" style="display:none"><span id="selectedCounter" class="selected-counter">0 seleccionadas</span><div class="actions"><button id="causeSelectedBtn" class="btn btn-green" onclick="causeSelectedInvoices()">Causar</button><button id="approveSelectedBtn" class="btn btn-green" onclick="approveSelectedInvoices()">Confirmar</button><button id="pdfSelectedBtn" class="btn btn-light" onclick="downloadInvoicesPdf([...selectedInvoiceIds])">PDF</button><button id="uploadSiigoBtn" class="btn btn-blue btn-siigo" onclick="uploadSelectedToSiigo()"><img src="siigo-nube-logo.png" alt="Siigo">Subir a Siigo</button><button id="deleteSelectedBtn" class="btn btn-danger-light" onclick="deleteSelectedInvoices()">Eliminar</button></div></div><div id="wideProgress" class="progress-wide">Listo</div><div class="table-wrap"><table><thead><tr><th class="check-cell"><label class="select-all-wrap"><input id="selectAllBox" class="mini-check" type="checkbox" onchange="toggleSelectAll(this.checked)"><span>Seleccionar todas</span></label></th><th>Factura</th><th>Fecha</th><th>Proveedor</th><th>Receptor</th><th>Total</th><th>Estado</th><th>Gestión</th></tr></thead><tbody id="rows"><tr><td colspan="8">Sin facturas</td></tr></tbody></table></div><div id="uploadNotices" style="display:none;margin-top:14px;background:var(--primary-soft);border:1px solid rgba(47,143,224,.35);color:#bfe0fb;border-radius:14px;padding:14px;font-size:13px"></div><div id="uploadErrors" style="display:none;margin-top:14px;background:rgba(242,85,90,.12);border:1px solid rgba(242,85,90,.35);color:#ff9498;border-radius:14px;padding:14px;font-size:13px;font-weight:750"></div><div id="log" class="log-panel">Listo.</div></div></section>
 </div>
 
 <div id="companyModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div><h3 id="companyModalTitle">Agregar empresa</h3><p id="companyModalText">El NIT debe coincidir con el receptor de las facturas.</p></div><button class="close" onclick="closeModal('companyModal')">×</button></div><div class="field"><label>Empresa</label><input id="companyName" value=""></div><div class="field"><label>NIT receptor</label><input id="companyNit" value=""></div><button id="companySaveButton" class="btn btn-green btn-full" onclick="saveCompany()">Guardar empresa</button></div></div>
@@ -294,13 +327,33 @@
 <div id="rulesModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Reglas contables</h3><p>Reglas por empresa: proveedor/descripcion → cuenta.</p></div><button class="close" onclick="closeModal('rulesModal')">×</button></div><div class="grid2"><div class="field"><label>Tipo</label><select id="ruleType"><option value="supplier">Proveedor contiene</option><option value="description">Descripción contiene</option><option value="default">Default</option></select></div><div class="field"><label>Texto</label><input id="ruleValue" placeholder="CLASSIC JEANS"></div><div class="field"><label>Cuenta</label><input id="ruleAccount" placeholder="519525" list="accountsDatalist"></div><div class="field"><label>Descripción</label><input id="ruleDescription" placeholder="Vestuario"></div><div class="field"><label>Centro costo</label><input id="ruleCostCenter" placeholder="Administración"></div><div class="field"><label>Prioridad</label><input id="rulePriority" type="number" value="50"></div></div><div class="actions" style="justify-content:flex-end"><button class="btn btn-green" onclick="createRule()">Crear regla</button></div><hr style="border:0;border-top:1px solid var(--line);margin:16px 0"><div class="table-wrap"><table style="min-width:700px"><thead><tr><th>Tipo</th><th>Texto</th><th>Cuenta</th><th>Descripción</th><th>Prioridad</th></tr></thead><tbody id="rulesRows"></tbody></table></div></div></div>
 <div id="chartModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Plan de cuentas</h3><p>Importa el Excel o CSV del plan de cuentas exportado de Siigo Nube para validar las cuentas que se usan en reglas y configuración contable.</p></div><button class="close" onclick="closeModal('chartModal')">×</button></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px"><input id="chartFileInput" type="file" accept=".csv,.xlsx,.xls" style="display:none" onchange="uploadChartCsv()"><div class="actions"><button class="btn btn-green" onclick="chartFileInput.click()">Subir plan de cuentas (Excel o CSV)</button></div><div id="chartImportResult" style="margin-top:10px;font-size:13px;color:#c7cedb;font-weight:750"></div></div><div class="field"><label>Buscar cuenta</label><input id="chartSearch" oninput="renderChartAccountsList()" placeholder="Código o nombre"></div><div class="table-wrap"><table style="min-width:600px"><thead><tr><th>Código</th><th>Nombre</th><th>Clase</th></tr></thead><tbody id="chartRows"><tr><td colspan="3">Sin cuentas importadas</td></tr></tbody></table></div></div></div>
 <div id="facturaModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3 id="facturaTitle">Detalle de factura</h3><p id="facturaSubtitle">Información extraída del XML.</p></div><button class="close" onclick="closeModal('facturaModal')">×</button></div><div class="invoice-hero"><h2 id="facturaHeroNumber">Factura</h2><p id="facturaHeroInfo">Proveedor → Receptor</p></div><div id="facturaDetail" class="detail-grid"></div><h3 style="margin:12px 0 8px">Ítems de la factura</h3><div class="table-wrap"><table style="min-width:680px"><thead><tr><th>Descripción</th><th>Cantidad</th><th>Valor línea</th></tr></thead><tbody id="facturaItems"><tr><td colspan="3">Sin ítems</td></tr></tbody></table></div><div class="support-box"><div><strong>Soporte XML original</strong><p>El XML se guarda como respaldo técnico. Puedes descargarlo si necesitas auditar la factura.</p></div><button class="btn btn-light" onclick="downloadCurrentXml()">Descargar XML</button></div><pre id="facturaXml" class="xml-box"></pre></div></div>
-<div id="causacionModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3 id="causacionTitle">Causación</h3><p id="causacionSubtitle">Asiento contable generado para la factura.</p></div><button class="close" onclick="closeModal('causacionModal')">×</button></div><div class="table-wrap"><table style="min-width:760px"><thead><tr><th>Cuenta</th><th>Descripción</th><th>Débito</th><th>Crédito</th><th>Centro costo</th></tr></thead><tbody id="causacionRows"><tr><td colspan="5">Sin causación</td></tr></tbody></table></div><div class="actions" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-light" onclick="closeModal('causacionModal')">Cerrar</button></div></div></div>
+<div id="causacionModal" class="modal-bg"><div class="modal wide"><div class="modal-head"><div><h3 id="causacionTitle">Revisión contable</h3><p id="causacionSubtitle">Revisa, corrige y confirma la contabilización antes de exportarla a Siigo.</p></div><button class="close" onclick="closeReview()">×</button></div>
+  <div id="reviewSummary" class="review-summary"></div>
+  <p class="review-note">Los datos de la factura electrónica (proveedor, NIT, valores, IVA, CUFE) vienen del XML original y no se modifican. Solo se edita la contabilización.</p>
+  <div id="reviewStatus"></div>
+  <div id="reviewChecks"></div>
+  <div class="table-wrap"><table class="entry-table"><thead><tr><th style="width:150px">Cuenta</th><th>Descripción / concepto</th><th style="width:150px">Centro de costo</th><th style="width:150px">Débito</th><th style="width:150px">Crédito</th><th style="width:44px"></th></tr></thead><tbody id="causacionRows"><tr><td colspan="6">Sin causación</td></tr></tbody><tfoot><tr><td colspan="3" style="text-align:right">Totales</td><td id="totDebit" style="text-align:right">$ 0</td><td id="totCredit" style="text-align:right">$ 0</td><td></td></tr><tr><td colspan="3" style="text-align:right">Diferencia</td><td colspan="2" id="totDiff" style="text-align:center">$ 0</td><td></td></tr></tfoot></table></div>
+  <div class="actions" id="reviewEditActions" style="margin-top:10px"><button class="btn btn-light" onclick="addEntryLine()">+ Agregar línea</button></div>
+  <div class="field" id="reviewReasonWrap" style="margin-top:12px"><label>Motivo de la corrección (queda en el historial de auditoría)</label><input id="reviewReason" placeholder="Ej: la cuenta correcta es inventario, no gasto"></div>
+  <div class="actions" style="justify-content:space-between;margin-top:14px;align-items:center">
+    <div class="actions"><button class="btn btn-light" onclick="downloadReviewPdf()">Descargar PDF</button><button class="btn btn-danger-light" id="reviewRecalcBtn" onclick="recalcEntry()">Recalcular automática</button></div>
+    <div class="actions"><button class="btn btn-light" id="reviewSaveBtn" onclick="saveEntryEdits()">Guardar cambios</button><button class="btn btn-green" id="reviewConfirmBtn" onclick="confirmEntry()">Confirmar contabilización</button></div>
+  </div>
+  <h3 style="margin:20px 0 6px;font-size:15px">Historial de esta factura</h3>
+  <ul id="reviewAudit" class="audit-list"><li>Sin movimientos</li></ul>
+</div></div>
+<div id="siigoHistoryModal" class="modal-bg"><div class="modal wide"><div class="modal-head"><div class="export-title"><img src="siigo-nube-logo.png" alt="Siigo"><div><h3>Historial de exportaciones</h3><p>Todas las operaciones de ContaPilot hacia Siigo y los cambios hechos a la contabilización.</p></div></div><button class="close" onclick="closeModal('siigoHistoryModal')">×</button></div>
+  <div class="tabs-inline"><button id="histTabExports" class="active" onclick="setHistoryTab('exports')">Exportaciones a Siigo</button><button id="histTabAudit" onclick="setHistoryTab('audit')">Cambios contables (auditoría)</button></div>
+  <div class="toolbar"><div class="search">⌕ <input id="histSearch" placeholder="Factura, proveedor, NIT, documento Siigo" onkeydown="if(event.key==='Enter')loadSiigoHistory()"></div><select id="histStatus" class="action-select" onchange="loadSiigoHistory()"><option value="all">Todos los estados</option><option value="success">Exitosas</option><option value="error">Fallidas</option><option value="blocked">Bloqueadas (duplicado)</option></select><input id="histFrom" type="date" class="action-select" onchange="loadSiigoHistory()" title="Desde"><input id="histTo" type="date" class="action-select" onchange="loadSiigoHistory()" title="Hasta"><button class="btn btn-light" onclick="loadSiigoHistory()">Buscar</button><button class="btn btn-light" onclick="downloadHistoryPdf()">Descargar PDF</button></div>
+  <p id="histSummary" style="margin:0 0 10px;color:var(--muted);font-size:13px"></p>
+  <div class="table-wrap"><table style="min-width:980px"><thead id="histHead"></thead><tbody id="histRows"><tr><td>Cargando...</td></tr></tbody></table></div>
+</div></div>
 <div id="historyModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Historial de importaciones</h3><p>Registro de cargas XML/ZIP realizadas para la empresa activa.</p></div><button class="close" onclick="closeModal('historyModal')">×</button></div><div class="table-wrap"><table style="min-width:780px"><thead><tr><th>Fecha</th><th>Archivos</th><th>Estado</th><th>Importadas</th><th>Errores</th><th>Detalle</th></tr></thead><tbody id="historyRows"><tr><td colspan="6">Sin historial</td></tr></tbody></table></div></div></div>
-<div id="exportModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div class="export-title"><img src="siigo-nube-logo.png" alt="Siigo Nube"><div><h3>Exportar a Siigo Nube</h3><p>Descarga las causaciones listas para revisión o carga en Siigo.</p></div></div><button class="close" onclick="closeModal('exportModal')">×</button></div><div class="field"><label>Formato</label><select id="exportFormat"><option value="siigo">Siigo Nube</option><option value="general">General contable</option><option value="invoices">Resumen facturas</option></select></div><button class="btn btn-blue btn-full btn-siigo" onclick="exportCsv()"><img src="siigo-nube-logo.png" alt="Siigo Nube">Descargar CSV para Siigo</button></div></div><div id="toast" class="toast"></div>
+<div id="exportModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div class="export-title"><img src="siigo-nube-logo.png" alt="Siigo Nube"><div><h3>Exportar a Siigo Nube</h3><p>Descarga las causaciones listas para revisión o carga en Siigo.</p></div></div><button class="close" onclick="closeModal('exportModal')">×</button></div><div class="field"><label>Formato</label><select id="exportFormat"><option value="siigo">Siigo Nube</option><option value="general">General contable</option><option value="invoices">Resumen facturas</option></select></div><button class="btn btn-blue btn-full btn-siigo" onclick="exportCsv()"><img src="siigo-nube-logo.png" alt="Siigo Nube">Descargar CSV para Siigo</button><hr style="border:0;border-top:1px solid var(--line);margin:16px 0"><p style="margin:0 0 10px;color:var(--muted);font-size:13px">Informe en PDF con la contabilización de cada factura: usa las facturas seleccionadas o, si no hay ninguna, las que se ven en la bandeja con el filtro actual.</p><button class="btn btn-light btn-full" onclick="closeModal('exportModal');downloadInvoicesPdf(selectedInvoiceIds.size?[...selectedInvoiceIds]:filteredInvoices().map(i=>i.id))">Descargar informe PDF</button></div></div><div id="toast" class="toast"></div>
 <script>
-let token=localStorage.getItem('cp_token')||'';let invoices=[];let companies=[];let selectedInvoiceIds=new Set();let editingCompanyId='';let lastDianDocs=[];let batches=[];let activeBatchId='';if(!token)location.href='app.html';const user=JSON.parse(localStorage.getItem('cp_user')||'{}');userLabel.textContent=user.email||'admin@contapilot.com';function base(){return localStorage.getItem('cp_api_base')||window.CONTAPILOT_API_BASE||''}function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),4500)}function log(m,o){const el=document.getElementById('log');el.textContent=m+(o?'\n'+JSON.stringify(o,null,2):'')}function sleep(ms){return new Promise(r=>setTimeout(r,ms))}function setProgress(m){const p=document.getElementById('progressBox');if(p){p.style.display=m?'inline-flex':'none';p.textContent=m||''}const w=document.getElementById('wideProgress');if(w){w.style.display=m?'block':'none';w.textContent=m||''}}function setBusy(v){document.body.style.cursor=v?'progress':'';['causeSelectedBtn','approveSelectedBtn','deleteSelectedBtn','uploadSiigoBtn'].forEach(id=>{const b=document.getElementById(id);if(b)b.disabled=!!v});document.querySelectorAll('.action-select,.mini-check,#statusFilter,#search').forEach(el=>{el.disabled=!!v})}function chunks(arr,size){const out=[];for(let i=0;i<arr.length;i+=size)out.push(arr.slice(i,i+size));return out}
+let token=localStorage.getItem('cp_token')||'';let invoices=[];let companies=[];let selectedInvoiceIds=new Set();let editingCompanyId='';let lastDianDocs=[];let batches=[];let activeBatchId='';if(!token)location.href='app.html';const user=JSON.parse(localStorage.getItem('cp_user')||'{}');userLabel.textContent=user.email||'admin@contapilot.com';function base(){return localStorage.getItem('cp_api_base')||window.CONTAPILOT_API_BASE||''}function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),4500)}function log(m,o){const el=document.getElementById('log');el.textContent=m+(o?'\n'+JSON.stringify(o,null,2):'')}function sleep(ms){return new Promise(r=>setTimeout(r,ms))}function setProgress(m){const p=document.getElementById('progressBox');if(p){p.style.display=m?'inline-flex':'none';p.textContent=m||''}const w=document.getElementById('wideProgress');if(w){w.style.display=m?'block':'none';w.textContent=m||''}}function setBusy(v){document.body.style.cursor=v?'progress':'';['causeSelectedBtn','approveSelectedBtn','deleteSelectedBtn','uploadSiigoBtn','pdfSelectedBtn'].forEach(id=>{const b=document.getElementById(id);if(b)b.disabled=!!v});document.querySelectorAll('.action-select,.mini-check,#statusFilter,#search').forEach(el=>{el.disabled=!!v})}function chunks(arr,size){const out=[];for(let i=0;i<arr.length;i+=size)out.push(arr.slice(i,i+size));return out}
 function showUploadErrors(errors){const box=document.getElementById('uploadErrors'); if(!box)return; if(!errors||!errors.length){box.style.display='none';box.innerHTML='';return} box.style.display='block'; box.innerHTML='<strong>Observaciones:</strong><ul style="margin:8px 0 0;padding-left:18px">'+errors.map(e=>'<li><strong>'+String(e.file||'archivo')+':</strong> '+String(e.error||e)+'</li>').join('')+'</ul>';}
-function showUploadNotices(notices){const box=document.getElementById('uploadNotices'); if(!box)return; if(!notices||!notices.length){box.style.display='none';box.innerHTML='';return} box.style.display='block'; box.innerHTML='<strong>Resumen de lectura de ZIP:</strong><ul style="margin:8px 0 0;padding-left:18px">'+notices.map(n=>'<li>'+String(n)+'</li>').join('')+'</ul><p style="margin:8px 0 0;color:var(--muted)">Los PDF se omiten a propósito: la DIAN suele incluir el PDF junto al XML de cada factura, y solo el XML se puede importar.</p>';}function toggleLog(){document.getElementById('log').classList.toggle('show');closeMenus()}async function api(path,opts={}){const headers=opts.headers||{};headers.Authorization='Bearer '+token;const r=await fetch(base()+path,{...opts,headers});const ct=r.headers.get('content-type')||'';const data=ct.includes('json')?await r.json():await r.text();if(!r.ok){const d=typeof data==='string'?data:(data.detail||data.error||data);throw new Error(typeof d==='string'?d:JSON.stringify(d))}return data}function cid(){return companySelect.value}function openModal(id){closeMenus();document.getElementById(id).classList.add('show')}function closeModal(id){document.getElementById(id).classList.remove('show')}function closeMenus(){document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'))}function toggleFab(){fabMenu.classList.toggle('show');fabMain.classList.toggle('open')}function closeFab(){fabMenu.classList.remove('show');fabMain.classList.remove('open')}function toggleMenu(id){document.querySelectorAll('.menu').forEach(m=>{if(m.id!==id)m.classList.remove('open')});document.getElementById(id).classList.toggle('open')}document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.modal-bg.show').forEach(m=>m.classList.remove('show'));closeMenus();closeFab()}});document.addEventListener('click',e=>{if(!e.target.closest('.menu'))closeMenus();if(!e.target.closest('.fab'))closeFab()});document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('mousedown',e=>{if(e.target===bg)bg.classList.remove('show')}));function money(v){return new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP'}).format(v||0)}function statusClass(s){return s==='exported'?'approved':s==='approved'?'approved':s==='accounted'?'accounted':'received'}
+function showUploadNotices(notices){const box=document.getElementById('uploadNotices'); if(!box)return; if(!notices||!notices.length){box.style.display='none';box.innerHTML='';return} box.style.display='block'; box.innerHTML='<strong>Resumen de lectura de ZIP:</strong><ul style="margin:8px 0 0;padding-left:18px">'+notices.map(n=>'<li>'+String(n)+'</li>').join('')+'</ul><p style="margin:8px 0 0;color:var(--muted)">Los PDF se omiten a propósito: la DIAN suele incluir el PDF junto al XML de cada factura, y solo el XML se puede importar.</p>';}function toggleLog(){document.getElementById('log').classList.toggle('show');closeMenus()}async function api(path,opts={}){const headers=opts.headers||{};headers.Authorization='Bearer '+token;const r=await fetch(base()+path,{...opts,headers});const ct=r.headers.get('content-type')||'';const data=ct.includes('json')?await r.json():await r.text();if(!r.ok){const d=typeof data==='string'?data:(data.detail||data.error||data);throw new Error(typeof d==='string'?d:JSON.stringify(d))}return data}function cid(){return companySelect.value}function openModal(id){closeMenus();document.getElementById(id).classList.add('show')}function closeModal(id){document.getElementById(id).classList.remove('show')}function closeMenus(){document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'))}function toggleFab(){fabMenu.classList.toggle('show');fabMain.classList.toggle('open')}function closeFab(){fabMenu.classList.remove('show');fabMain.classList.remove('open')}function toggleMenu(id){document.querySelectorAll('.menu').forEach(m=>{if(m.id!==id)m.classList.remove('open')});document.getElementById(id).classList.toggle('open')}document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.modal-bg.show').forEach(m=>{if(m.id==='causacionModal')closeReview();else m.classList.remove('show')});closeMenus();closeFab()}});document.addEventListener('click',e=>{if(!e.target.closest('.menu'))closeMenus();if(!e.target.closest('.fab'))closeFab()});document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('mousedown',e=>{if(e.target===bg){if(bg.id==='causacionModal')closeReview();else bg.classList.remove('show')}}));function money(v){return new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP'}).format(v||0)}function statusClass(s){return s==='exported'||s==='exporting'?'exported':s==='approved'?'approved':s==='accounted'?'accounted':'received'}function statusLabel(s){return {received:'Recibida',accounted:'Causada',approved:'Confirmada',exporting:'Enviando a Siigo',exported:'Exportada a Siigo'}[s]||s||''}function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function u16c(bytes,pos){return bytes[pos]|(bytes[pos+1]<<8)}
 function u32c(bytes,pos){return (bytes[pos]|(bytes[pos+1]<<8)|(bytes[pos+2]<<16)|(bytes[pos+3]<<24))>>>0}
 async function inflateRawClient(bytes){
@@ -439,8 +492,8 @@ function filteredInvoices(){const q=(search.value||'').toLowerCase();const sf=(d
 function syncSelectedInfo(data=filteredInvoices()){const counter=document.getElementById('selectedCounter');if(counter)counter.textContent=`${selectedInvoiceIds.size} seleccionada${selectedInvoiceIds.size===1?'':'s'}`;const bar=document.getElementById('bulkBar');if(bar)bar.style.display=selectedInvoiceIds.size?'flex':'none';const box=document.getElementById('selectAllBox');if(box){box.checked=data.length>0&&data.every(i=>selectedInvoiceIds.has(i.id));box.indeterminate=data.some(i=>selectedInvoiceIds.has(i.id))&&!box.checked;}}
 function onInvoiceCheck(id,checked){if(checked)selectedInvoiceIds.add(id);else selectedInvoiceIds.delete(id);syncSelectedInfo()}
 function toggleSelectAll(checked){const data=filteredInvoices();for(const i of data){if(checked)selectedInvoiceIds.add(i.id);else selectedInvoiceIds.delete(i.id)}renderInvoices()}
-function renderInvoices(){const data=filteredInvoices();const scoped=batchInvoices();mTotal.textContent=scoped.length;mReceived.textContent=scoped.filter(i=>i.status==='received').length;mAccounted.textContent=scoped.filter(i=>i.status==='accounted').length;mApproved.textContent=scoped.filter(i=>i.status==='approved').length;if(document.getElementById('mExported'))mExported.textContent=scoped.filter(i=>i.status==='exported').length;rows.innerHTML=data.map(i=>`<tr><td class="check-cell"><input class="mini-check" type="checkbox" ${selectedInvoiceIds.has(i.id)?'checked':''} onchange="onInvoiceCheck('${i.id}',this.checked)"></td><td><strong>${i.invoice_number}</strong><span class="sub mono">${(i.cufe||'').slice(0,22)}</span></td><td>${i.issue_date||''}</td><td><span class="supplier">${i.supplier_name||''}</span><span class="sub">NIT ${i.supplier_nit||''}</span></td><td><span class="supplier">${i.customer_name||''}</span><span class="sub">NIT ${i.customer_nit||''}</span></td><td><strong>${money(i.payable_amount)}</strong></td><td><span class="pill ${statusClass(i.status)}">${i.status}</span></td><td><select class="action-select" onchange="handleInvoiceAction(this,'${i.id}')"><option value="">Acción</option><option value="invoice">Ver factura</option><option value="cause">Causar</option><option value="entry">Ver causación</option><option value="approve">Aprobar</option></select></td></tr>`).join('')||'<tr><td colspan="8">Sin facturas</td></tr>';syncSelectedInfo(data)}
-function handleInvoiceAction(select,id){const value=select.value;select.value='';if(value==='invoice')return viewInvoice(id);if(value==='cause')return cause(id);if(value==='entry')return viewEntry(id);if(value==='approve')return approve(id)}async function cause(id){try{log('Causación',await api(`/api/invoices/${id}/generate-entry`,{method:'POST'}));await loadInvoices()}catch(e){log('Error causar',{error:e.message})}}async function approve(id){try{log('Aprobada',await api(`/api/invoices/${id}/approve`,{method:'POST'}));await loadInvoices()}catch(e){log('Error aprobar',{error:e.message})}}let currentXmlDownload={name:'factura.xml',xml:''};
+function renderInvoices(){const data=filteredInvoices();const scoped=batchInvoices();mTotal.textContent=scoped.length;mReceived.textContent=scoped.filter(i=>i.status==='received').length;mAccounted.textContent=scoped.filter(i=>i.status==='accounted').length;mApproved.textContent=scoped.filter(i=>i.status==='approved').length;if(document.getElementById('mExported'))mExported.textContent=scoped.filter(i=>i.status==='exported').length;rows.innerHTML=data.map(i=>`<tr><td class="check-cell"><input class="mini-check" type="checkbox" ${selectedInvoiceIds.has(i.id)?'checked':''} onchange="onInvoiceCheck('${i.id}',this.checked)"></td><td><strong>${i.invoice_number}</strong><span class="sub mono">${(i.cufe||'').slice(0,22)}</span></td><td>${i.issue_date||''}</td><td><span class="supplier">${i.supplier_name||''}</span><span class="sub">NIT ${i.supplier_nit||''}</span></td><td><span class="supplier">${i.customer_name||''}</span><span class="sub">NIT ${i.customer_nit||''}</span></td><td><strong>${money(i.payable_amount)}</strong></td><td><span class="pill ${statusClass(i.status)}">${statusLabel(i.status)}</span></td><td><select class="action-select" onchange="handleInvoiceAction(this,'${i.id}')"><option value="">Acción</option><option value="entry">Revisar contabilización</option><option value="invoice">Ver factura</option>${i.status==='exported'||i.status==='exporting'?'':'<option value="cause">Causar</option><option value="approve">Confirmar</option>'}<option value="pdf">Descargar PDF</option></select></td></tr>`).join('')||'<tr><td colspan="8">Sin facturas</td></tr>';syncSelectedInfo(data)}
+function handleInvoiceAction(select,id){const value=select.value;select.value='';if(value==='invoice')return viewInvoice(id);if(value==='cause')return cause(id);if(value==='entry')return viewEntry(id);if(value==='approve')return approve(id);if(value==='pdf')return downloadInvoicesPdf([id])}async function cause(id){try{log('Causación',await api(`/api/invoices/${id}/generate-entry`,{method:'POST'}));await loadInvoices();toast('Factura causada. Revisa y confirma la contabilización.')}catch(e){log('Error causar',{error:e.message});toast(e.message)}}async function approve(id){try{const r=await api(`/api/invoices/${id}/approve`,{method:'POST'});log('Confirmada',r);await loadInvoices();toast((r.validation&&r.validation.warnings&&r.validation.warnings.length)?`Confirmada con ${r.validation.warnings.length} advertencia(s). Revísalas en "Revisar contabilización".`:'Contabilización confirmada.')}catch(e){log('Error confirmar',{error:e.message});toast(e.message);showUploadErrors([{file:'Confirmar',error:e.message}])}}let currentXmlDownload={name:'factura.xml',xml:''};
 async function viewInvoice(id){
   try{
     const data=await api(`/api/invoices/${id}`);
@@ -458,19 +511,220 @@ async function viewInvoice(id){
   }catch(e){log('Error ver factura',{error:e.message});toast('No pude cargar el detalle de factura.');}
 }
 function downloadCurrentXml(){const blob=new Blob([currentXmlDownload.xml||''],{type:'text/xml;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=currentXmlDownload.name||'factura.xml';a.click();URL.revokeObjectURL(a.href);}
+// ---------- Revisión, validación y edición de la contabilización ----------
+let reviewInvoiceId='',reviewData=null,reviewLines=[],reviewDirty=false,reviewReadOnly=false,reviewServerValidation=null;
+function r2(n){return Math.round((Number(n)||0)*100)/100}
+function accountName(code){const a=(typeof chartAccounts!=='undefined'?chartAccounts:[]).find(x=>String(x.code)===String(code||'').trim());return a?a.name:''}
+function fmtWhen(s){const d=new Date(s);if(!s||isNaN(d))return String(s||'').replace('T',' ').slice(0,16);const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`}
+const auditLabels={generate:'Causación automática generada',regenerate:'Causación recalculada automáticamente',edit:'Contabilización corregida manualmente',approve:'Contabilización confirmada',export:'Exportada a Siigo'};
 async function viewEntry(id){
   try{
     const data=await api(`/api/invoices/${id}`);
-    const inv=data.invoice||{};
-    causacionTitle.textContent='Causación: '+(inv.invoice_number||'');
-    causacionSubtitle.textContent=`${inv.supplier_name||''} · Total ${money(inv.payable_amount||0)} · Estado ${inv.status||''}`;
-    if(!data.entry || !data.lines || !data.lines.length){
-      causacionRows.innerHTML='<tr><td colspan="5">Esta factura todavía no tiene causación. Presiona “Causar” primero.</td></tr>';
-    }else{
-      causacionRows.innerHTML=data.lines.map(l=>`<tr><td><strong>${l.account}</strong></td><td>${l.description}</td><td>${money(l.debit)}</td><td>${money(l.credit)}</td><td>${l.cost_center||''}</td></tr>`).join('');
-    }
+    reviewInvoiceId=id;reviewData=data;reviewDirty=false;reviewReason.value='';
+    reviewLines=(data.lines||[]).map(l=>({account:l.account||'',description:l.description||'',cost_center:l.cost_center||'',debit:r2(l.debit),credit:r2(l.credit)}));
+    reviewServerValidation=data.validation||null;
+    renderReview();
     openModal('causacionModal');
-  }catch(e){log('Error ver causación',{error:e.message});toast('No pude cargar la causación. Revisa el log.');}
+  }catch(e){log('Error revisión contable',{error:e.message});toast(e.message||'No pude cargar la contabilización.');}
+}
+function renderReview(){
+  const data=reviewData||{};const inv=data.invoice||{};const entry=data.entry;
+  reviewReadOnly=inv.status==='exported'||inv.status==='exporting';
+  causacionTitle.textContent='Revisión contable · Factura '+(inv.invoice_number||'');
+  causacionSubtitle.textContent=`${inv.supplier_name||''} · NIT ${inv.supplier_nit||''} · ${inv.issue_date||''}`;
+  const box=(t,v,s)=>`<div class="detail-box"><span>${t}</span><strong>${v}</strong>${s?`<span class="sub" style="text-transform:none;letter-spacing:0;font-weight:500">${s}</span>`:''}</div>`;
+  reviewSummary.innerHTML=box('Factura',esc(inv.invoice_number),esc(inv.document_type||''))+box('Proveedor (tercero)',esc(inv.supplier_name),'NIT '+esc(inv.supplier_nit))+box('Subtotal',money(inv.subtotal))+box('IVA',money(inv.tax_amount),inv.withholding_amount?('Retención '+money(inv.withholding_amount)):'')+box('Total a pagar',money(inv.payable_amount),'CUFE '+esc((inv.cufe||'').slice(0,18))+'…');
+  const lastOk=(data.exports||[]).find(x=>x.status==='success');
+  let st='';
+  if(reviewReadOnly) st=`<div class="check-box check-info"><strong>${inv.status==='exporting'?'Envío a Siigo en curso o interrumpido.':'Exportada a Siigo.'}</strong> ${lastOk?`El ${esc(fmtWhen(lastOk.created_at))}${lastOk.siigo_name?' como '+esc(lastOk.siigo_name):''}${lastOk.user_email?' por '+esc(lastOk.user_email):''}. `:''}La contabilización queda bloqueada y la factura no se puede volver a enviar.</div>`;
+  else if(!entry) st='<div class="check-box check-warn"><strong>Sin contabilización.</strong> Presiona "Recalcular automática" para generarla o agrega las líneas manualmente.</div>';
+  else if(entry.status==='approved') st=`<div class="check-box check-ok"><strong>Confirmada</strong>${entry.reviewed_by?' por '+esc(entry.reviewed_by):''}${entry.approved_at?' el '+esc(fmtWhen(entry.approved_at)):''}. Lista para exportar a Siigo. Si la modificas, deberás confirmarla de nuevo.</div>`;
+  else st=`<div class="check-box check-warn"><strong>${entry.edited?'Con correcciones manuales':'Sugerida automáticamente'} · pendiente de confirmar.</strong> Revisa cuentas, tercero, impuestos y valores, y presiona "Confirmar contabilización".</div>`;
+  reviewStatus.innerHTML=st;
+  ['reviewEditActions','reviewReasonWrap'].forEach(i=>document.getElementById(i).style.display=reviewReadOnly?'none':'');
+  ['reviewSaveBtn','reviewConfirmBtn','reviewRecalcBtn'].forEach(i=>document.getElementById(i).style.display=reviewReadOnly?'none':'');
+  reviewConfirmBtn.textContent=reviewDirty?'Guardar y confirmar':'Confirmar contabilización';
+  reviewConfirmBtn.disabled=!reviewDirty&&entry&&entry.status==='approved';
+  renderReviewLines();renderReviewChecks();renderReviewAudit();
+}
+function renderReviewLines(){
+  const ro=reviewReadOnly?'readonly':'';
+  causacionRows.innerHTML=reviewLines.map((l,i)=>`<tr>
+    <td><input ${ro} list="accountsDatalist" value="${esc(l.account)}" oninput="onLineInput(${i},'account',this.value)"><span class="acc-name" id="accName${i}">${esc(accountName(l.account))}</span></td>
+    <td><input ${ro} value="${esc(l.description)}" oninput="onLineInput(${i},'description',this.value)"></td>
+    <td><input ${ro} value="${esc(l.cost_center)}" oninput="onLineInput(${i},'cost_center',this.value)"></td>
+    <td><input ${ro} class="num" type="number" min="0" step="0.01" value="${l.debit||''}" oninput="onLineInput(${i},'debit',this.value)"></td>
+    <td><input ${ro} class="num" type="number" min="0" step="0.01" value="${l.credit||''}" oninput="onLineInput(${i},'credit',this.value)"></td>
+    <td>${reviewReadOnly?'':`<button class="row-del" title="Quitar línea" onclick="removeEntryLine(${i})">×</button>`}</td></tr>`).join('')||'<tr><td colspan="6">Sin líneas contables</td></tr>';
+  renderReviewTotals();
+}
+function reviewTotals(){const d=r2(reviewLines.reduce((a,l)=>a+Number(l.debit||0),0)),c=r2(reviewLines.reduce((a,l)=>a+Number(l.credit||0),0));return {debit:d,credit:c,diff:r2(d-c)}}
+function renderReviewTotals(){const t=reviewTotals();totDebit.textContent=money(t.debit);totCredit.textContent=money(t.credit);totDiff.innerHTML=Math.abs(t.diff)<0.01?'<span class="diff-ok">$ 0 · Cuadrado</span>':`<span class="diff-bad">${money(t.diff)} · Descuadrado</span>`}
+function onLineInput(i,field,value){
+  if(reviewReadOnly)return;
+  reviewLines[i][field]=(field==='debit'||field==='credit')?(value===''?0:Number(value)):value;
+  if(field==='account'){const el=document.getElementById('accName'+i);if(el)el.textContent=accountName(value)}
+  if(!reviewDirty){reviewDirty=true;renderReviewChecks();reviewConfirmBtn.textContent='Guardar y confirmar';reviewConfirmBtn.disabled=false}
+  renderReviewTotals();
+}
+function addEntryLine(){reviewLines.push({account:'',description:'',cost_center:'',debit:0,credit:0});reviewDirty=true;renderReviewLines();renderReviewChecks();reviewConfirmBtn.textContent='Guardar y confirmar';reviewConfirmBtn.disabled=false}
+function removeEntryLine(i){reviewLines.splice(i,1);reviewDirty=true;renderReviewLines();renderReviewChecks();reviewConfirmBtn.textContent='Guardar y confirmar';reviewConfirmBtn.disabled=false}
+function renderReviewChecks(){
+  const v=reviewServerValidation;let html='';
+  if(reviewDirty) html+='<div class="check-box check-warn"><strong>Hay cambios sin guardar.</strong> Al guardar, ContaPilot vuelve a validar la contabilización.</div>';
+  if(v&&!reviewDirty){
+    if(v.errors&&v.errors.length) html+=`<div class="check-box check-err"><strong>Errores que impiden confirmar y exportar (${v.errors.length}):</strong><ul>${v.errors.map(e=>`<li>${esc(e)}</li>`).join('')}</ul></div>`;
+    else html+='<div class="check-box check-ok"><strong>Validación correcta:</strong> débitos y créditos cuadran, las cuentas son válidas y el tercero tiene NIT.</div>';
+    if(v.warnings&&v.warnings.length) html+=`<div class="check-box check-warn"><strong>Advertencias para revisar (${v.warnings.length}):</strong><ul>${v.warnings.map(e=>`<li>${esc(e)}</li>`).join('')}</ul></div>`;
+  }
+  reviewChecks.innerHTML=html;
+}
+function auditDetailHtml(a){
+  let d={};try{d=JSON.parse(a.detail||'{}')}catch(e){}
+  const linesHtml=ls=>(ls||[]).map(l=>`${esc(l.account)} · ${esc(l.description)}${l.cost_center?' · CC '+esc(l.cost_center):''} · D ${money(l.debit)} · C ${money(l.credit)}`).join('<br>');
+  let out='';
+  if(d.reason) out+=`<div>Motivo: <em>${esc(d.reason)}</em></div>`;
+  if(a.action==='export') out+=`<div>${d.channel==='csv'?'Marcada como exportada al descargar el CSV':'Documento Siigo: '+esc(d.siigo_name||d.siigo_id||'—')}</div>`;
+  if(a.action==='approve'&&d.warnings&&d.warnings.length) out+=`<div>Confirmada con ${d.warnings.length} advertencia(s)</div>`;
+  if(d.before||d.after) out+=`<details style="margin-top:4px"><summary style="cursor:pointer;color:var(--muted)">Ver líneas antes / después</summary>${d.before?`<div style="margin-top:6px"><strong>Antes:</strong><br>${linesHtml(d.before)||'—'}</div>`:''}${d.after?`<div style="margin-top:6px"><strong>Después:</strong><br>${linesHtml(d.after)||'—'}</div>`:''}</details>`;
+  return out;
+}
+function renderReviewAudit(){
+  const audit=(reviewData&&reviewData.audit)||[];const exps=(reviewData&&reviewData.exports)||[];
+  const items=[...audit.map(a=>({when:a.created_at,html:`<strong>${esc(auditLabels[a.action]||a.action)}</strong> · ${esc(a.user_email||'')}${auditDetailHtml(a)}`})),
+    ...exps.filter(x=>x.status!=='success').map(x=>({when:x.created_at,html:`<strong style="color:${x.status==='blocked'?'var(--amber)':'var(--red)'}">${x.status==='blocked'?'Envío a Siigo bloqueado (duplicado)':'Envío a Siigo fallido'}</strong> · ${esc(x.user_email||'')}<div>${esc((x.message||'').slice(0,400))}</div>`}))]
+    .sort((a,b)=>String(b.when).localeCompare(String(a.when)));
+  reviewAudit.innerHTML=items.map(i=>`<li><span class="when">${esc(fmtWhen(i.when))}</span> · ${i.html}</li>`).join('')||'<li>Sin movimientos registrados</li>';
+}
+function closeReview(){if(reviewDirty&&!confirm('Tienes cambios sin guardar en la contabilización. ¿Cerrar y descartarlos?'))return;reviewDirty=false;closeModal('causacionModal')}
+async function saveEntryEdits(silent){
+  const t=reviewTotals();
+  if(Math.abs(t.diff)>=0.01){toast('Débitos y créditos no cuadran. Corrige la diferencia antes de guardar.');return false}
+  try{
+    const res=await api(`/api/invoices/${reviewInvoiceId}/entry`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({lines:reviewLines,reason:reviewReason.value.trim()})});
+    reviewDirty=false;await viewEntry(reviewInvoiceId);await loadInvoices();
+    if(!silent)toast('Cambios guardados. La contabilización quedó pendiente de confirmar.');
+    return true;
+  }catch(e){
+    reviewServerValidation=null;
+    reviewChecks.innerHTML=`<div class="check-box check-err"><strong>No se guardó:</strong> ${esc(e.message)}</div>`;
+    toast('No se guardó. Revisa los errores.');return false;
+  }
+}
+async function confirmEntry(){
+  if(reviewDirty){const ok=await saveEntryEdits(true);if(!ok)return}
+  try{
+    const r=await api(`/api/invoices/${reviewInvoiceId}/approve`,{method:'POST'});
+    await viewEntry(reviewInvoiceId);await loadInvoices();
+    toast(r.validation&&r.validation.warnings&&r.validation.warnings.length?`Confirmada con ${r.validation.warnings.length} advertencia(s).`:'Contabilización confirmada. Ya se puede exportar a Siigo.');
+  }catch(e){await viewEntry(reviewInvoiceId);toast('No se pudo confirmar: revisa los errores marcados en rojo.')}
+}
+async function recalcEntry(){
+  const edited=reviewData&&reviewData.entry&&reviewData.entry.edited;
+  if(!confirm(edited?'Se descartarán las correcciones manuales y ContaPilot volverá a calcular la contabilización desde el XML. Las correcciones anteriores quedan en el historial. ¿Continuar?':'ContaPilot volverá a calcular la contabilización desde el XML de la factura. ¿Continuar?'))return;
+  try{await api(`/api/invoices/${reviewInvoiceId}/generate-entry?force=1`,{method:'POST'});reviewDirty=false;await viewEntry(reviewInvoiceId);await loadInvoices();toast('Contabilización recalculada. Revísala y confírmala.')}catch(e){toast(e.message)}
+}
+function downloadReviewPdf(){if(reviewDirty)toast('El PDF usa la última versión guardada; tus cambios sin guardar no aparecen.');downloadInvoicesPdf([reviewInvoiceId])}
+
+// ---------- Historial de exportaciones y auditoría ----------
+let historyTab='exports',lastHistory=[];
+function openSiigoHistory(){if(!cid())return toast('Selecciona empresa');setHistoryTab('exports');openModal('siigoHistoryModal')}
+function setHistoryTab(tab){historyTab=tab;histTabExports.classList.toggle('active',tab==='exports');histTabAudit.classList.toggle('active',tab==='audit');histStatus.style.display=tab==='exports'?'':'none';histFrom.style.display=histTo.style.display=tab==='exports'?'':'none';loadSiigoHistory()}
+const exportStatusLabel={success:'Exitosa',error:'Fallida',blocked:'Bloqueada (duplicado)'};
+const exportChannelLabel={api:'Envío directo (API)',csv:'Descarga CSV',legacy:'Anterior al historial'};
+async function loadSiigoHistory(){
+  try{
+    histRows.innerHTML='<tr><td>Cargando...</td></tr>';
+    const q=encodeURIComponent(histSearch.value.trim());
+    if(historyTab==='exports'){
+      lastHistory=await api(`/api/companies/${cid()}/siigo-exports?status=${histStatus.value}&q=${q}&from=${histFrom.value}&to=${histTo.value}`);
+      histHead.innerHTML='<tr><th>Fecha y hora</th><th>Factura</th><th>Proveedor</th><th>Documento Siigo</th><th>Estado</th><th>Respuesta / mensaje</th><th>Usuario</th></tr>';
+      const ok=lastHistory.filter(r=>r.status==='success').length,err=lastHistory.filter(r=>r.status==='error').length,bl=lastHistory.filter(r=>r.status==='blocked').length;
+      histSummary.textContent=`${lastHistory.length} registro(s) · ${ok} exitosa(s) · ${err} fallida(s) · ${bl} bloqueada(s) por duplicado`;
+      histRows.innerHTML=lastHistory.map(r=>`<tr><td class="mono" style="white-space:nowrap">${esc(fmtWhen(r.created_at))}</td><td><strong>${esc(r.invoice_number)}</strong><span class="sub">${esc(r.issue_date||'')}</span></td><td><span class="supplier">${esc(r.supplier_name)}</span><span class="sub">NIT ${esc(r.supplier_nit)}</span></td><td>${esc(r.siigo_name||(r.siigo_id?('ID '+r.siigo_id):'—'))}<span class="sub">${esc(exportChannelLabel[r.channel]||r.channel||'')}</span></td><td><span class="pill ${r.status==='success'?'approved':r.status==='blocked'?'received':'failed'}">${esc(exportStatusLabel[r.status]||r.status)}</span></td><td class="msg-cell">${esc((r.message||'').slice(0,600))}</td><td>${esc(r.user_email||'—')}</td></tr>`).join('')||'<tr><td colspan="7">Sin exportaciones registradas</td></tr>';
+    }else{
+      lastHistory=await api(`/api/companies/${cid()}/audit-log?q=${q}`);
+      histHead.innerHTML='<tr><th>Fecha y hora</th><th>Factura</th><th>Acción</th><th>Usuario</th><th>Detalle</th></tr>';
+      histSummary.textContent=`${lastHistory.length} cambio(s) registrado(s)`;
+      histRows.innerHTML=lastHistory.map(a=>`<tr><td class="mono" style="white-space:nowrap">${esc(fmtWhen(a.created_at))}</td><td><strong>${esc(a.invoice_number)}</strong></td><td>${esc(auditLabels[a.action]||a.action)}</td><td>${esc(a.user_email||'—')}</td><td class="msg-cell">${auditDetailHtml(a)}</td></tr>`).join('')||'<tr><td colspan="5">Sin cambios registrados</td></tr>';
+    }
+  }catch(e){histRows.innerHTML=`<tr><td>${esc(e.message)}</td></tr>`}
+}
+
+// ---------- Exportación a PDF ----------
+let pdfLibPromise=null;
+function loadScriptOnce(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('No pude cargar el generador de PDF. Revisa tu conexión a internet.'));document.head.appendChild(s)})}
+function loadPdfLib(){if(!pdfLibPromise)pdfLibPromise=loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js').then(()=>loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js')).catch(e=>{pdfLibPromise=null;throw e});return pdfLibPromise}
+function pdfMoney(v){return money(v).replace(/\s/g,'')}
+function pdfText(v){return String(v??'').replace(/[→←]/g,'->').replace(/[–—]/g,'-').replace(/[“”]/g,'"').replace(/[‘’]/g,"'").replace(/…/g,'...')}
+function newPdf(title,subtitle,orientation){
+  const {jsPDF}=window.jspdf;const doc=new jsPDF({orientation:orientation||'portrait',unit:'pt',format:'a4'});
+  const c=companies.find(x=>x.id===cid())||{};const W=doc.internal.pageSize.getWidth();
+  doc.setFillColor(12,17,25);doc.rect(0,0,W,64,'F');
+  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(pdfText(title),40,30);
+  doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.text(pdfText(`${c.name||''}  ·  NIT ${c.nit||''}`),40,47);
+  doc.text(pdfText(`Generado: ${new Date().toLocaleString('es-CO')}  ·  ${user.email||''}`),W-40,47,{align:'right'});
+  doc.setTextColor(40,40,40);
+  if(subtitle){doc.setFontSize(9.5);doc.text(pdfText(subtitle),40,84)}
+  return doc;
+}
+function pdfFooter(doc){const n=doc.internal.getNumberOfPages();const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();for(let i=1;i<=n;i++){doc.setPage(i);doc.setFontSize(8);doc.setTextColor(130,130,130);doc.text('ContaPilot · Informe generado automáticamente',40,H-20);doc.text(`Página ${i} de ${n}`,W-40,H-20,{align:'right'})}}
+function pdfFileName(prefix){const c=companies.find(x=>x.id===cid())||{};return `${prefix}_${String(c.name||'empresa').replace(/[^\w]+/g,'_').slice(0,40)}_${new Date().toISOString().slice(0,10)}.pdf`}
+const tableTheme={theme:'grid',styles:{fontSize:8,cellPadding:4,textColor:[30,30,30],lineColor:[210,214,220],lineWidth:.5},headStyles:{fillColor:[28,111,179],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[246,248,251]},margin:{left:40,right:40}};
+async function downloadInvoicesPdf(ids){
+  try{
+    ids=(ids||[]).filter(Boolean);
+    if(!cid())return toast('Selecciona empresa');
+    if(!ids.length)return toast('No hay facturas para incluir en el PDF.');
+    if(ids.length>500)return toast('Máximo 500 facturas por PDF. Filtra o selecciona menos.');
+    setProgress('Preparando PDF...');
+    await loadPdfLib();
+    const data=[];
+    for(const g of chunks(ids,50)){setProgress(`Preparando PDF · ${data.length}/${ids.length} factura(s)`);data.push(...await api(`/api/companies/${cid()}/report`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({invoice_ids:g})}))}
+    const doc=newPdf('Informe de causación contable',`${data.length} factura(s) · Centro: ${(batches.find(b=>b.id===activeBatchId)||{}).name||'Todos'}`);
+    const sum=k=>data.reduce((a,d)=>a+Number(d.invoice[k]||0),0);
+    doc.autoTable({...tableTheme,startY:96,head:[['Factura','Fecha','Proveedor','NIT','Subtotal','IVA','Retención','Total','Estado']],
+      body:data.map(d=>[d.invoice.invoice_number,d.invoice.issue_date||'',pdfText(d.invoice.supplier_name),d.invoice.supplier_nit,pdfMoney(d.invoice.subtotal),pdfMoney(d.invoice.tax_amount),pdfMoney(d.invoice.withholding_amount),pdfMoney(d.invoice.payable_amount),statusLabel(d.invoice.status)]),
+      foot:[['Totales','','','',pdfMoney(sum('subtotal')),pdfMoney(sum('tax_amount')),pdfMoney(sum('withholding_amount')),pdfMoney(sum('payable_amount')),'']],
+      footStyles:{fillColor:[232,238,245],textColor:20,fontStyle:'bold'},styles:{...tableTheme.styles,fontSize:7.5},columnStyles:{0:{cellWidth:62},1:{cellWidth:50},3:{cellWidth:52},4:{halign:'right',cellWidth:58},5:{halign:'right',cellWidth:52},6:{halign:'right',cellWidth:48},7:{halign:'right',cellWidth:58},8:{cellWidth:52}}});
+    for(const d of data){
+      const inv=d.invoice;let y=doc.lastAutoTable.finalY+26;
+      if(y>doc.internal.pageSize.getHeight()-150){doc.addPage();y=50}
+      doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(20,20,20);doc.text(pdfText(`Factura ${inv.invoice_number} · ${inv.supplier_name||''}`),40,y);
+      doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(90,90,90);
+      const entryState=!d.entry?'Sin contabilización':d.entry.status==='approved'?`Confirmada${d.entry.reviewed_by?' por '+d.entry.reviewed_by:''}${d.entry.edited?' (con correcciones manuales)':''}`:(d.entry.edited?'Con correcciones manuales, pendiente de confirmar':'Sugerida, pendiente de confirmar');
+      doc.text(pdfText(`NIT ${inv.supplier_nit||''} · Fecha ${inv.issue_date||''} · ${inv.document_type||''} · Contabilización: ${entryState}`),40,y+13);
+      doc.text(pdfText(`CUFE ${inv.cufe||''}`),40,y+25,{maxWidth:doc.internal.pageSize.getWidth()-80});
+      if(d.export)doc.text(pdfText(`Exportada a Siigo el ${fmtWhen(d.export.created_at)}${d.export.siigo_name?' como '+d.export.siigo_name:''}${d.export.user_email?' por '+d.export.user_email:''}`),40,y+37);
+      const tD=d.lines.reduce((a,l)=>a+Number(l.debit||0),0),tC=d.lines.reduce((a,l)=>a+Number(l.credit||0),0);
+      doc.autoTable({...tableTheme,startY:y+(d.export?45:33),head:[['Cuenta','Nombre de la cuenta','Descripción','C. costo','Débito','Crédito']],
+        body:d.lines.length?d.lines.map(l=>[l.account,pdfText(accountName(l.account)),pdfText(l.description),pdfText(l.cost_center||''),Number(l.debit)?pdfMoney(l.debit):'',Number(l.credit)?pdfMoney(l.credit):'']):[['','Sin contabilización','','','','']],
+        foot:[['','','','Totales',pdfMoney(tD),pdfMoney(tC)]],footStyles:{fillColor:[232,238,245],textColor:20,fontStyle:'bold'},
+        columnStyles:{0:{cellWidth:62},3:{cellWidth:70},4:{halign:'right',cellWidth:78},5:{halign:'right',cellWidth:78}}});
+    }
+    pdfFooter(doc);doc.save(pdfFileName('contapilot_causacion'));toast('PDF descargado.');
+  }catch(e){log('Error PDF',{error:e.message});toast(e.message||'No pude generar el PDF')}
+  finally{setProgress('')}
+}
+async function downloadHistoryPdf(){
+  try{
+    if(!lastHistory.length)return toast('No hay registros para el PDF.');
+    await loadPdfLib();
+    if(historyTab==='exports'){
+      const doc=newPdf('Historial de exportaciones a Siigo',histSummary.textContent,'landscape');
+      doc.autoTable({...tableTheme,startY:96,head:[['Fecha y hora','Factura','Proveedor','NIT','Documento Siigo','Canal','Estado','Mensaje','Usuario']],
+        body:lastHistory.map(r=>[fmtWhen(r.created_at),r.invoice_number,pdfText(r.supplier_name),r.supplier_nit,r.siigo_name||(r.siigo_id?'ID '+r.siigo_id:''),exportChannelLabel[r.channel]||r.channel||'',exportStatusLabel[r.status]||r.status,pdfText((r.message||'').slice(0,300)),r.user_email||'']),
+        columnStyles:{7:{cellWidth:220}}});
+      pdfFooter(doc);doc.save(pdfFileName('contapilot_historial_siigo'));
+    }else{
+      const doc=newPdf('Auditoría de cambios contables',histSummary.textContent,'landscape');
+      doc.autoTable({...tableTheme,startY:96,head:[['Fecha y hora','Factura','Acción','Usuario','Detalle']],
+        body:lastHistory.map(a=>{let d={};try{d=JSON.parse(a.detail||'{}')}catch(e){};const parts=[];if(d.reason)parts.push('Motivo: '+d.reason);if(d.before)parts.push('Antes: '+d.before.map(l=>`${l.account} D${l.debit} C${l.credit}`).join('; '));if(d.after)parts.push('Después: '+d.after.map(l=>`${l.account} D${l.debit} C${l.credit}`).join('; '));if(d.siigo_name)parts.push('Siigo: '+d.siigo_name);return [fmtWhen(a.created_at),a.invoice_number,auditLabels[a.action]||a.action,a.user_email||'',pdfText(parts.join('\n'))]}),
+        columnStyles:{4:{cellWidth:420}}});
+      pdfFooter(doc);doc.save(pdfFileName('contapilot_auditoria'));
+    }
+    toast('PDF descargado.');
+  }catch(e){toast(e.message||'No pude generar el PDF')}
 }
 async function deleteSelectedInvoices(){
   try{
@@ -537,13 +791,13 @@ async function approveSelectedInvoices(){
       setProgress(`Aprobando lote ${g+1}/${groups.length} · ${approved}/${ids.length} factura(s)`);
       for(const id of groups[g]){
         try{ await api(`/api/invoices/${id}/approve`,{method:'POST'}); approved++; }
-        catch(e){ allErrors.push({id, error:e.message}); }
+        catch(e){ allErrors.push({id:(invoices.find(i=>i.id===id)||{}).invoice_number||id, error:e.message}); }
       }
       await loadInvoices();await sleep(60);
     }
     selectedInvoiceIds.clear();await loadInvoices();
-    if(allErrors.length){showUploadErrors(allErrors.map(e=>({file:e.id||'factura',error:e.error||e})));toast(`Se aprobaron ${approved} factura(s). ${allErrors.length} tuvieron error.`);}
-    else {showUploadErrors([]);toast(`Se aprobaron ${approved} factura(s).`);}
+    if(allErrors.length){showUploadErrors(allErrors.map(e=>({file:e.id||'factura',error:e.error||e})));toast(`Se confirmaron ${approved} factura(s). ${allErrors.length} no se pudieron confirmar (ver panel rojo).`);}
+    else {showUploadErrors([]);toast(`Se confirmaron ${approved} factura(s).`);}
   }catch(e){
     log('Error al aprobar seleccionadas',{error:e.message});toast(e.message||'Hubo un error al aprobar las facturas.');
   }finally{
@@ -692,22 +946,32 @@ async function loadDianLogs(){
 async function uploadSelectedToSiigo(){
   try{
     if(!cid())return toast('Selecciona empresa');
-    const ids=[...selectedInvoiceIds];
+    let ids=[...selectedInvoiceIds];
     if(!ids.length)return toast('Selecciona primero una o varias facturas para subir a Siigo.');
-    const ok=confirm(`¿Subir ${ids.length} factura(s) seleccionada(s) a Siigo Nube?\n\nContaPilot intentará crear factura de compra/gasto en Siigo.`);
+    await loadInvoices();
+    const sel=ids.map(id=>invoices.find(i=>i.id===id)).filter(Boolean);
+    const already=sel.filter(i=>i.status==='exported'||i.status==='exporting');
+    const notConfirmed=sel.filter(i=>i.status!=='approved'&&!already.includes(i));
+    if(already.length) alert(`⚠ ${already.length} factura(s) ya fueron exportadas a Siigo y NO se enviarán de nuevo:\n\n${already.slice(0,25).map(i=>`• ${i.invoice_number} · ${i.supplier_name||''}`).join('\n')}${already.length>25?'\n…':''}\n\nPuedes ver cuándo y por quién en "Historial Siigo".`);
+    if(notConfirmed.length) alert(`${notConfirmed.length} factura(s) no tienen la contabilización confirmada y no se enviarán:\n\n${notConfirmed.slice(0,25).map(i=>`• ${i.invoice_number} · ${statusLabel(i.status)}`).join('\n')}${notConfirmed.length>25?'\n…':''}\n\nÁbrelas con "Revisar contabilización", verifícalas y presiona "Confirmar".`);
+    ids=sel.filter(i=>i.status==='approved').map(i=>i.id);
+    if(!ids.length)return;
+    const ok=confirm(`¿Subir ${ids.length} factura(s) confirmada(s) a Siigo Nube?\n\nSe enviará la contabilización revisada de cada una. Una factura enviada no se puede volver a enviar.`);
     if(!ok)return;
     setBusy(true);showUploadErrors([]);
-    const groups=chunks(ids,1);let uploaded=0,allErrors=[];
+    const groups=chunks(ids,1);let uploaded=0,allErrors=[],allBlocked=[];
     for(let g=0;g<groups.length;g++){
       setProgress(`Subiendo a Siigo ${g+1}/${groups.length}`);
       const res=await api(`/api/companies/${cid()}/siigo-upload-selected`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({invoice_ids:groups[g]})});
-      uploaded += Number(res.count||0);allErrors.push(...(res.errors||[]));
+      uploaded += Number(res.count||0);allErrors.push(...(res.errors||[]));allBlocked.push(...(res.blocked||[]));
       log(`Resultado Siigo ${g+1}/${groups.length}`,res);
       await loadInvoices();await sleep(120);
     }
     selectedInvoiceIds.clear();await loadInvoices();
-    if(allErrors.length){showUploadErrors(allErrors.map(e=>({file:e.id||'factura',error:e.error||e})));toast(`Subidas a Siigo: ${uploaded}. Errores: ${allErrors.length}`);}
-    else {showUploadErrors([]);toast(`Se subieron ${uploaded} factura(s) a Siigo.`);}
+    if(allBlocked.length) alert(`⚠ ${allBlocked.length} factura(s) no se enviaron porque ya habían sido exportadas a Siigo:\n\n${allBlocked.map(b=>`• ${b.invoice_number}: ${b.error}`).join('\n')}`);
+    const shown=[...allBlocked.map(b=>({file:b.invoice_number||'factura',error:b.error})),...allErrors.map(e=>({file:e.invoice_number||e.id||'factura',error:e.error||e}))];
+    showUploadErrors(shown);
+    toast(shown.length?`Subidas a Siigo: ${uploaded}. Con observaciones: ${shown.length}`:`Se subieron ${uploaded} factura(s) a Siigo.`);
   }catch(e){log('Error subiendo a Siigo',{error:e.message});toast(e.message||'No pude subir a Siigo');}
   finally{setBusy(false);setProgress('');}
 }
@@ -767,7 +1031,7 @@ function renderChartAccountsList(){
   const q=(document.getElementById('chartSearch')?.value||'').toLowerCase();
   const data=chartAccounts.filter(a=>!q||`${a.code} ${a.name}`.toLowerCase().includes(q));
   chartRows.innerHTML=data.slice(0,300).map(a=>`<tr><td class="mono">${a.code}</td><td>${a.name}</td><td>${a.clase||''}</td></tr>`).join('')||'<tr><td colspan="3">Sin cuentas importadas</td></tr>';
-}async function openImportHistory(){try{if(!cid())return toast('Selecciona empresa');const rows=await api(`/api/companies/${cid()}/import-logs`);historyRows.innerHTML=rows.map(r=>{let msg={};try{msg=JSON.parse(r.message||'{}')}catch(e){}const detail=(msg.errors||[]).map(e=>`${e.file}: ${e.error}`).join('<br>') || (msg.imported||[]).map(i=>i.invoice_number).join(', ');return `<tr><td>${r.created_at||''}</td><td>${r.file_name||''}</td><td><span class="pill ${r.status==='success'?'approved':r.status==='partial'?'accounted':'received'}">${r.status}</span></td><td>${r.imported_count||0}</td><td>${r.error_count||0}</td><td>${detail||''}</td></tr>`}).join('')||'<tr><td colspan="6">Sin historial</td></tr>';openModal('historyModal')}catch(e){log('Error historial',{error:e.message});toast('No pude cargar historial.')}}function openExport(){if(!cid())return toast('Selecciona empresa');openModal('exportModal')}async function exportCsv(){try{const txt=await api(`/api/companies/${cid()}/export.csv?format=${exportFormat.value}`);const blob=new Blob(['\ufeff'+txt],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='contapilot_'+exportFormat.value+'.csv';a.click();URL.revokeObjectURL(a.href);closeModal('exportModal');if(confirm('¿Marcar facturas causadas/aprobadas como exportadas?')){const res=await api(`/api/companies/${cid()}/mark-exported`,{method:'POST'});toast((res.changed||0)+' factura(s) marcadas como exportadas.');await loadInvoices();}}catch(e){log('Error exportar',{error:e.message})}}loadCompanies();
+}async function openImportHistory(){try{if(!cid())return toast('Selecciona empresa');const rows=await api(`/api/companies/${cid()}/import-logs`);historyRows.innerHTML=rows.map(r=>{let msg={};try{msg=JSON.parse(r.message||'{}')}catch(e){}const detail=(msg.errors||[]).map(e=>`${e.file}: ${e.error}`).join('<br>') || (msg.imported||[]).map(i=>i.invoice_number).join(', ');return `<tr><td>${r.created_at||''}</td><td>${r.file_name||''}</td><td><span class="pill ${r.status==='success'?'approved':r.status==='partial'?'accounted':'received'}">${r.status}</span></td><td>${r.imported_count||0}</td><td>${r.error_count||0}</td><td>${detail||''}</td></tr>`}).join('')||'<tr><td colspan="6">Sin historial</td></tr>';openModal('historyModal')}catch(e){log('Error historial',{error:e.message});toast('No pude cargar historial.')}}function openExport(){if(!cid())return toast('Selecciona empresa');openModal('exportModal')}async function exportCsv(){try{const txt=await api(`/api/companies/${cid()}/export.csv?format=${exportFormat.value}`);const blob=new Blob(['\ufeff'+txt],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='contapilot_'+exportFormat.value+'.csv';a.click();URL.revokeObjectURL(a.href);closeModal('exportModal');if(confirm('¿Vas a cargar este CSV en Siigo?\n\nSi aceptas, las facturas con contabilización CONFIRMADA quedan marcadas como exportadas y ya no se podrán enviar a Siigo por el botón "Subir a Siigo" (para evitar duplicados).')){const res=await api(`/api/companies/${cid()}/mark-exported`,{method:'POST'});toast((res.changed||0)+' factura(s) marcadas como exportadas.');await loadInvoices();}}catch(e){log('Error exportar',{error:e.message})}}loadCompanies();
 </script>
 </body>
 </html>

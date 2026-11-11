@@ -438,9 +438,11 @@ function inferPurchaseAccount(inv, fallbackAccount){
   return normalizeAccountCode(fallbackAccount||'52959505');
 }
 
-async function generateEntry(env, invoiceId){
+async function generateEntry(env, invoiceId, user=null, action='generate'){
   const inv=await env.DB.prepare('SELECT * FROM invoices WHERE id=?').bind(invoiceId).first();
   if(!inv) throw new Error('Factura no encontrada');
+  if(isExportedStatus(inv.status)) throw new Error('La factura ya fue exportada a Siigo; su contabilización no se recalcula');
+  const previous=user ? await entryWithLines(env, invoiceId) : null;
   // Si la factura ya estaba cargada antes de la corrección, recalculamos desde el XML guardado
   // para evitar IVA duplicado u otros valores viejos en la base.
   if(inv.raw_xml){
@@ -471,9 +473,9 @@ async function generateEntry(env, invoiceId){
   let entryId=entry?.id || id();
   if(entry){
     await env.DB.prepare('DELETE FROM accounting_entry_lines WHERE entry_id=?').bind(entryId).run();
-    await env.DB.prepare("UPDATE accounting_entries SET status='suggested', confidence=?, created_at=?, approved_at=NULL WHERE id=?").bind(.88, now(), entryId).run();
+    await env.DB.prepare("UPDATE accounting_entries SET status='suggested', confidence=?, created_at=?, approved_at=NULL, edited=0, reviewed_by=NULL WHERE id=?").bind(.88, now(), entryId).run();
   } else {
-    await env.DB.prepare('INSERT INTO accounting_entries VALUES (?,?,?,?,?,?)').bind(entryId, invoiceId, 'suggested', .88, now(), null).run();
+    await env.DB.prepare('INSERT INTO accounting_entries (id,invoice_id,status,confidence,created_at,approved_at,edited) VALUES (?,?,?,?,?,?,0)').bind(entryId, invoiceId, 'suggested', .88, now(), null).run();
   }
 
   const linesToInsert=[];
@@ -522,9 +524,97 @@ async function generateEntry(env, invoiceId){
   }
 
   await env.DB.prepare("UPDATE invoices SET status='accounted', updated_at=? WHERE id=?").bind(now(), invoiceId).run();
-  const lines=(await env.DB.prepare('SELECT * FROM accounting_entry_lines WHERE entry_id=?').bind(entryId).all()).results||[];
+  const lines=(await env.DB.prepare('SELECT * FROM accounting_entry_lines WHERE entry_id=? ORDER BY rowid').bind(entryId).all()).results||[];
   entry=await env.DB.prepare('SELECT * FROM accounting_entries WHERE id=?').bind(entryId).first();
+  if(user){
+    const detail={after:simpleLines(lines)};
+    if(previous?.entry){ detail.before=simpleLines(previous.lines); detail.before_edited=!!previous.entry.edited; detail.before_status=previous.entry.status; }
+    await auditLog(env, user, inv, previous?.entry ? (action==='generate'?'regenerate':action) : 'generate', detail);
+  }
   return {entry,lines};
+}
+
+// ---------- Revisión, validación, auditoría e historial de exportaciones ----------
+function isExportedStatus(s){ return s==='exported' || s==='exporting'; }
+function fmtCop(n){
+  const v=round2(Number(n)||0); const neg=v<0; const [ent,dec]=Math.abs(v).toFixed(2).split('.');
+  return (neg?'-':'')+'$'+ent.replace(/\B(?=(\d{3})+(?!\d))/g,'.')+','+dec;
+}
+function simpleLines(lines){ return (lines||[]).map(l=>({account:String(l.account||''),description:String(l.description||''),debit:round2(l.debit),credit:round2(l.credit),cost_center:String(l.cost_center||'')})); }
+async function entryWithLines(env, invoiceId){
+  const entry=await env.DB.prepare('SELECT * FROM accounting_entries WHERE invoice_id=?').bind(invoiceId).first();
+  const lines=entry ? ((await env.DB.prepare('SELECT * FROM accounting_entry_lines WHERE entry_id=? ORDER BY rowid').bind(entry.id).all()).results||[]) : [];
+  return {entry,lines};
+}
+async function ensureInvoice(env, user, invoiceId){
+  const inv=await env.DB.prepare('SELECT i.* FROM invoices i JOIN companies c ON c.id=i.company_id WHERE i.id=? AND c.owner_user_id=?').bind(invoiceId,user.id).first();
+  if(!inv) throw new Response(JSON.stringify({detail:'Factura no encontrada'}),{status:404,headers:{'content-type':'application/json; charset=utf-8',...corsHeaders}});
+  return inv;
+}
+async function auditLog(env, user, inv, action, detail){
+  await env.DB.prepare('INSERT INTO entry_audit_log (id,company_id,invoice_id,invoice_number,action,detail,user_id,user_email,created_at) VALUES (?,?,?,?,?,?,?,?,?)')
+    .bind(id(), inv.company_id, inv.id, inv.invoice_number||'', action, JSON.stringify(detail||{}), user?.id||'', user?.email||'', now()).run();
+}
+async function recordExport(env, user, inv, data){
+  await env.DB.prepare('INSERT INTO siigo_exports (id,company_id,invoice_id,invoice_number,cufe,supplier_nit,supplier_name,issue_date,channel,status,siigo_id,siigo_name,message,total,user_id,user_email,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .bind(id(), inv.company_id, inv.id, inv.invoice_number||'', inv.cufe||'', nitClean(inv.supplier_nit), inv.supplier_name||'', inv.issue_date||'', data.channel||'api', data.status,
+      data.siigo_id!=null?String(data.siigo_id):null, data.siigo_name||null, String(data.message||'').slice(0,4000), round2(data.total!=null?data.total:inv.payable_amount), user?.id||'', user?.email||'', now()).run();
+}
+// Busca una exportación exitosa previa de la misma factura: por CUFE, o por NIT proveedor + número
+// (así se detecta aunque la factura se haya borrado y vuelto a cargar).
+async function findPriorExport(env, companyId, inv){
+  return await env.DB.prepare("SELECT * FROM siigo_exports WHERE company_id=? AND status='success' AND ((cufe<>'' AND cufe=?) OR (supplier_nit<>'' AND supplier_nit=? AND invoice_number=?)) ORDER BY created_at DESC LIMIT 1")
+    .bind(companyId, inv.cufe||'', nitClean(inv.supplier_nit), inv.invoice_number||'').first();
+}
+function priorExportMessage(prior){
+  // Hora de Colombia (UTC-5, sin horario de verano) para que el mensaje coincida con lo que ve el contador.
+  const t=Date.parse(prior.created_at||'');
+  const when=Number.isFinite(t) ? new Date(t-5*3600*1000).toISOString().replace('T',' ').slice(0,16) : String(prior.created_at||'').slice(0,16);
+  const how=prior.channel==='csv' ? ' (marcada al descargar CSV)' : prior.channel==='legacy' ? ' (antes de activar el historial)' : '';
+  return `Ya fue exportada a Siigo el ${when}${how}${prior.siigo_name?` como ${prior.siigo_name}`:''}${prior.user_email?` por ${prior.user_email}`:''}. No se envía de nuevo para evitar duplicados.`;
+}
+async function validateEntry(env, inv, lines){
+  const errors=[], warnings=[];
+  const debit=round2(lines.reduce((a,l)=>a+Number(l.debit||0),0));
+  const credit=round2(lines.reduce((a,l)=>a+Number(l.credit||0),0));
+  if(!lines.length) errors.push('La factura no tiene contabilización. Causa la factura primero.');
+  lines.forEach((l,i)=>{
+    const n=i+1, d=Number(l.debit||0), c=Number(l.credit||0);
+    if(!String(l.account||'').trim()) errors.push(`Línea ${n}: falta la cuenta contable`);
+    else if(!/^\d{4,12}$/.test(String(l.account).trim())) errors.push(`Línea ${n}: la cuenta "${l.account}" debe ser solo números (4 a 12 dígitos)`);
+    if(!Number.isFinite(d) || !Number.isFinite(c) || d<0 || c<0) errors.push(`Línea ${n}: los valores deben ser números positivos`);
+    else if(d>0 && c>0) errors.push(`Línea ${n}: tiene débito y crédito al mismo tiempo`);
+    else if(!d && !c) errors.push(`Línea ${n}: no tiene valor débito ni crédito`);
+    if(/diferencia automática/i.test(l.description||'')) warnings.push(`Línea ${n}: ContaPilot agregó un ajuste automático de ${fmtCop(d||c)} para cuadrar el asiento. Revisa si corresponde a una retención, descuento u otro concepto.`);
+  });
+  if(lines.length && Math.abs(debit-credit)>0.009) errors.push(`Débitos (${fmtCop(debit)}) y créditos (${fmtCop(credit)}) no cuadran. Diferencia: ${fmtCop(debit-credit)}`);
+  if(lines.length && !lines.some(l=>Number(l.debit||0)>0 && !String(l.account).startsWith('2408'))) errors.push('No hay ninguna línea de gasto, costo o inventario (débito) para enviar a Siigo');
+  if(!nitClean(inv.supplier_nit)) errors.push('La factura no tiene NIT del proveedor (tercero)');
+  if(!String(inv.supplier_name||'').trim()) warnings.push('La factura no tiene nombre del proveedor');
+  const codes=[...new Set(lines.map(l=>String(l.account||'').trim()).filter(Boolean))];
+  const chart=await env.DB.prepare('SELECT COUNT(*) c FROM chart_of_accounts WHERE company_id=?').bind(inv.company_id).first();
+  if(Number(chart?.c||0)>0){
+    if(codes.length){
+      const rows=(await env.DB.prepare(`SELECT code, name, active FROM chart_of_accounts WHERE company_id=? AND code IN (${codes.map(()=>'?').join(',')})`).bind(inv.company_id,...codes).all()).results||[];
+      const byCode=new Map(rows.map(r=>[String(r.code),r]));
+      for(const code of codes){
+        const r=byCode.get(code);
+        if(!r) errors.push(`La cuenta ${code} no existe en el plan de cuentas cargado`);
+        else if(!Number(r.active)) errors.push(`La cuenta ${code} (${r.name}) está inactiva en el plan de cuentas`);
+      }
+    }
+  } else {
+    warnings.push('No hay plan de cuentas cargado: no se pudo verificar que las cuentas existan en Siigo.');
+  }
+  if(lines.length){
+    const vat=round2(lines.filter(l=>String(l.account).startsWith('2408')).reduce((a,l)=>a+Number(l.debit||0)-Number(l.credit||0),0));
+    if(Math.abs(vat-round2(inv.tax_amount||0))>1) warnings.push(`El IVA contabilizado (${fmtCop(vat)}) no coincide con el IVA de la factura electrónica (${fmtCop(inv.tax_amount)})`);
+    const expense=round2(lines.filter(l=>Number(l.debit||0)>0 && !String(l.account).startsWith('2408')).reduce((a,l)=>a+Number(l.debit||0),0));
+    if(Math.abs(expense-round2(inv.subtotal||0))>1) warnings.push(`El gasto/costo contabilizado (${fmtCop(expense)}) no coincide con el subtotal de la factura (${fmtCop(inv.subtotal)})`);
+    const payable=round2(lines.filter(l=>String(l.account).startsWith('2205')).reduce((a,l)=>a+Number(l.credit||0)-Number(l.debit||0),0));
+    if(Math.abs(payable-round2(inv.payable_amount||0))>1) warnings.push(`La cuenta por pagar al proveedor (${fmtCop(payable)}) no coincide con el total a pagar de la factura (${fmtCop(inv.payable_amount)})`);
+  }
+  return {ok:!errors.length, errors, warnings, totals:{debit, credit, difference:round2(debit-credit)}};
 }
 
 async function siigoAuth(env){
@@ -649,22 +739,23 @@ async function siigoEnsureSupplier(env, invoice){
   await siigoRequest(env,'/customers',{method:'POST',body:JSON.stringify(payload)});
   return {identification:nit, branch_office:0, created:true};
 }
-async function buildSiigoPurchasePayload(env, invoice){
+async function buildSiigoPurchasePayload(env, invoice, lines){
   const cfg=await siigoGetPurchaseConfig(env);
   const supplier=await siigoEnsureSupplier(env, invoice);
   const pn=invoicePrefixNumber(invoice.invoice_number);
-  const settings=await getSettings(env, invoice.company_id);
   const items=(await env.DB.prepare('SELECT * FROM invoice_items WHERE invoice_id=?').bind(invoice.id).all()).results||[];
-  const entry=await env.DB.prepare('SELECT * FROM accounting_entries WHERE invoice_id=?').bind(invoice.id).first();
-  const lines=entry?(await env.DB.prepare('SELECT * FROM accounting_entry_lines WHERE entry_id=?').bind(entry.id).all()).results||[]:[];
-  const expenseLine=lines.find(l=>Number(l.debit)>0 && !String(l.account).startsWith('2408')) || {account:settings.default_expense_account, description:settings.default_expense_description};
-  const description=(items[0]?.description || expenseLine.description || `Factura ${invoice.invoice_number}`).slice(0,250);
-  // Protección fuerte: al subir a Siigo recalculamos la cuenta desde proveedor + descripción.
-  // Así evitamos enviar causaciones viejas que tengan cuentas inactivas como 51959501.
-  let siigoAccount=inferPurchaseAccount({...invoice, descriptions:description}, expenseLine.account||settings.default_expense_account);
-  siigoAccount=normalizeAccountCode(siigoAccount);
-  if(siigoAccount==='51959501' || siigoAccount==='519595') siigoAccount='52959505';
-  const item={type:'Account', code:siigoAccount, description, quantity:1, price:round2(invoice.subtotal||0)};
+  // Se envía exactamente la contabilización que el contador revisó y confirmó en ContaPilot:
+  // cada línea débito de gasto/costo/inventario (no IVA) es un ítem de la compra en Siigo.
+  // Antes se recalculaba la cuenta al subir, lo que pisaba cualquier corrección manual.
+  const expenseLines=(lines||[]).filter(l=>Number(l.debit)>0 && !String(l.account).startsWith('2408'));
+  if(!expenseLines.length) throw new Error('La contabilización no tiene líneas de gasto/costo para enviar a Siigo');
+  const siigoItems=expenseLines.map(l=>{
+    let code=normalizeAccountCode(l.account);
+    if(code==='51959501' || code==='519595') code='52959505';
+    const description=(expenseLines.length===1 ? (items[0]?.description || l.description) : (l.description || items[0]?.description)) || `Factura ${invoice.invoice_number}`;
+    return {type:'Account', code, description:String(description).slice(0,250), quantity:1, price:round2(l.debit)};
+  });
+  const baseTotal=round2(siigoItems.reduce((a,it)=>a+it.price,0));
   // Siigo recalcula el IVA como subtotal*porcentaje en vez de usar el valor exacto que trae la DIAN
   // (que suele venir redondeado a pesos enteros). Si el pago no coincide centavo a centavo con ese
   // cálculo, /purchases falla con "invalid_total_payments". Por eso el pago se calcula igual que Siigo,
@@ -680,13 +771,17 @@ async function buildSiigoPurchasePayload(env, invoice){
     const [dominantPct]=taxEntries[0];
     const taxId = dominantPct==='19' ? cfg.iva_19_tax_id : dominantPct==='5' ? cfg.iva_5_tax_id : null;
     if(taxId){
-      item.taxes=[{id:taxId}];
-      paymentValue=round2(Number(invoice.subtotal||0)*(1+Number(dominantPct)/100));
+      for(const it of siigoItems) it.taxes=[{id:taxId}];
+      paymentValue=round2(siigoItems.reduce((a,it)=>a+round2(it.price*(1+Number(dominantPct)/100)),0));
+    } else {
+      paymentValue=baseTotal;
     }
     if(taxEntries.length>1) mixedRatesNote=` [Factura con varias tarifas de IVA: ${taxEntries.map(([p,a])=>`${p}%=${a}`).join(', ')} — se aplicó ${dominantPct}%, revisar manualmente]`;
   } else if(Number(invoice.tax_amount||0)>0 && cfg.iva_19_tax_id){
-    item.taxes=[{id:cfg.iva_19_tax_id}];
-    paymentValue=round2(Number(invoice.subtotal||0)*1.19);
+    for(const it of siigoItems) it.taxes=[{id:cfg.iva_19_tax_id}];
+    paymentValue=round2(siigoItems.reduce((a,it)=>a+round2(it.price*1.19),0));
+  } else {
+    paymentValue=baseTotal;
   }
   const payload={
     document:{id:cfg.document_id},
@@ -695,7 +790,7 @@ async function buildSiigoPurchasePayload(env, invoice){
     provider_invoice:{prefix:pn.prefix||'', number:String(pn.number||invoice.invoice_number||'').slice(0,20)},
     tax_included:false,
     observations:`Creado desde ContaPilot. Factura ${invoice.invoice_number||''}. CUFE ${(invoice.cufe||'').slice(0,64)}${mixedRatesNote}`,
-    items:[item],
+    items:siigoItems,
     payments:[{id:cfg.payment_type_id, value:paymentValue, due_date:invoice.issue_date || now().slice(0,10)}]
   };
   return {payload,cfg,supplier};
@@ -775,24 +870,54 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     const body=await request.json().catch(()=>({}));
     const invoiceIds=Array.isArray(body.invoice_ids)?body.invoice_ids.map(String).filter(Boolean):[];
     if(!invoiceIds.length) return json({ok:false,count:0,errors:[{error:'No seleccionaste facturas para subir a Siigo'}]},400);
-    const uploaded=[], errors=[];
+    const uploaded=[], errors=[], blocked=[];
     for(const invoiceId of invoiceIds){
+      let inv=null, locked=false, sent=false, attempted=false;
       try{
-        let inv=await env.DB.prepare('SELECT * FROM invoices WHERE id=? AND company_id=?').bind(invoiceId,mm[1]).first();
-        if(!inv) throw new Error('La factura no pertenece a la empresa activa');
-        if(inv.status==='exported') throw new Error('La factura ya está marcada como exportada/subida');
-        await generateEntry(env, invoiceId);
         inv=await env.DB.prepare('SELECT * FROM invoices WHERE id=? AND company_id=?').bind(invoiceId,mm[1]).first();
-        const built=await buildSiigoPurchasePayload(senv, inv);
+        if(!inv) throw new Error('La factura no pertenece a la empresa activa');
+        // 1) Control de duplicados: nunca se envía dos veces la misma factura a Siigo.
+        const prior=await findPriorExport(env, mm[1], inv);
+        if(prior || isExportedStatus(inv.status)){
+          const msg=prior ? priorExportMessage(prior)
+            : inv.status==='exporting' ? 'Hay un envío a Siigo en curso o interrumpido para esta factura. Verifica en Siigo si quedó creada antes de volver a intentarlo.'
+            : 'La factura ya está marcada como exportada. No se envía de nuevo para evitar duplicados.';
+          // Si se borró y se volvió a cargar, la factura se marca de nuevo como exportada en la bandeja.
+          if(prior && !isExportedStatus(inv.status)) await env.DB.prepare("UPDATE invoices SET status='exported', updated_at=? WHERE id=?").bind(now(),invoiceId).run();
+          await recordExport(env, user, inv, {status:'blocked', message:msg});
+          blocked.push({id:invoiceId, invoice_number:inv.invoice_number||'', supplier:inv.supplier_name||'', error:msg});
+          continue;
+        }
+        // 2) Solo se exporta una contabilización revisada y confirmada por el usuario.
+        const {entry,lines}=await entryWithLines(env, invoiceId);
+        if(!entry || entry.status!=='approved' || inv.status!=='approved') throw new Error('La contabilización no ha sido confirmada. Ábrela en "Revisar contabilización", verifícala y presiona "Confirmar" antes de exportar.');
+        const v=await validateEntry(env, inv, lines);
+        if(!v.ok) throw new Error('La contabilización tiene errores: '+v.errors.join(' | '));
+        // 3) Bloqueo: si dos envíos llegan al tiempo, solo uno pasa de 'approved' a 'exporting'.
+        const lock=await env.DB.prepare("UPDATE invoices SET status='exporting', updated_at=? WHERE id=? AND status='approved'").bind(now(),invoiceId).run();
+        if(!(Number(lock.meta?.changes||0)>0)) throw new Error('La factura cambió de estado mientras se preparaba el envío. Actualiza la bandeja e intenta de nuevo.');
+        locked=true; attempted=true;
+        const built=await buildSiigoPurchasePayload(senv, inv, lines);
         const result=await siigoRequest(senv,'/purchases',{method:'POST',body:JSON.stringify(built.payload)});
+        sent=true;
         await env.DB.prepare("UPDATE invoices SET status='exported', updated_at=? WHERE id=?").bind(now(),invoiceId).run();
-        uploaded.push({invoice_id:invoiceId, invoice_number:inv.invoice_number, siigo:result, supplier:built.supplier});
+        locked=false;
+        const total=built.payload.payments?.[0]?.value ?? inv.payable_amount;
+        await recordExport(env, user, inv, {status:'success', siigo_id:result?.id, siigo_name:result?.name, total, message:`Factura de compra creada en Siigo${result?.name?` (${result.name})`:''}${built.supplier?.created?'. Se creó el proveedor en Siigo':''}`});
+        await auditLog(env, user, inv, 'export', {siigo_id:result?.id||null, siigo_name:result?.name||null, total});
+        uploaded.push({invoice_id:invoiceId, invoice_number:inv.invoice_number, siigo_id:result?.id||null, siigo_name:result?.name||null, supplier:built.supplier});
       }catch(e){
-        let invErr=null; try{ invErr=await env.DB.prepare('SELECT invoice_number, supplier_name, supplier_nit FROM invoices WHERE id=?').bind(invoiceId).first(); }catch(_){ }
-        errors.push({id:invoiceId, invoice_number:invErr?.invoice_number||'', supplier:invErr?.supplier_name||'', nit:invErr?.supplier_nit||'', error:e.message});
+        if(locked){
+          // Si Siigo ya respondió OK, la factura sí quedó creada: se deja como exportada aunque falle algo después.
+          try{ await env.DB.prepare(`UPDATE invoices SET status=?, updated_at=? WHERE id=? AND status='exporting'`).bind(sent?'exported':'approved', now(), invoiceId).run(); }catch(_){ }
+        }
+        if(inv && attempted){
+          try{ await recordExport(env, user, inv, sent ? {status:'success', message:'Creada en Siigo, pero hubo un error al registrar el resultado: '+e.message} : {status:'error', message:e.message}); }catch(_){ }
+        }
+        errors.push({id:invoiceId, invoice_number:inv?.invoice_number||'', supplier:inv?.supplier_name||'', nit:inv?.supplier_nit||'', error:e.message});
       }
     }
-    return json({ok:uploaded.length>0, count:uploaded.length, uploaded, errors});
+    return json({ok:uploaded.length>0, count:uploaded.length, uploaded, errors, blocked});
   }}
   if(p==='/companies' && request.method==='GET'){ const rows=(await env.DB.prepare('SELECT * FROM companies WHERE owner_user_id=? ORDER BY created_at DESC').bind(user.id).all()).results||[]; return json(rows.map(publicCompany)); }
   if(p==='/companies' && request.method==='POST'){ const d=await request.json(); const companyId=id(); await env.DB.prepare('INSERT INTO companies (id,owner_user_id,name,nit,created_at) VALUES (?,?,?,?,?)').bind(companyId,user.id,d.name,nitClean(d.nit),now()).run(); await env.DB.prepare('INSERT INTO accounting_settings (company_id) VALUES (?)').bind(companyId).run(); for(const r of [['supplier','CLARO','51353501','Servicios públicos - Teléfono','Administración',10],['supplier','CLASSIC JEANS','51952501','Elementos de aseo y cafetería','Administración',35],['default','*','52959505','Gastos diversos POS','Administración',999]]) await env.DB.prepare('INSERT INTO accounting_rules VALUES (?,?,?,?,?,?,?,?,?,?)').bind(id(),companyId,r[0],r[1],r[2],r[3],r[4],r[5],1,now()).run(); return json(publicCompany(await env.DB.prepare('SELECT * FROM companies WHERE id=?').bind(companyId).first())); }
@@ -820,6 +945,8 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     await env.DB.prepare('DELETE FROM import_logs WHERE company_id=?').bind(m[1]).run();
     await env.DB.prepare('DELETE FROM dian_sync_logs WHERE company_id=?').bind(m[1]).run();
     await env.DB.prepare('DELETE FROM dian_connections WHERE company_id=?').bind(m[1]).run();
+    await env.DB.prepare('DELETE FROM siigo_exports WHERE company_id=?').bind(m[1]).run();
+    await env.DB.prepare('DELETE FROM entry_audit_log WHERE company_id=?').bind(m[1]).run();
     await env.DB.prepare('DELETE FROM companies WHERE id=? AND owner_user_id=?').bind(m[1],user.id).run();
     return json({ok:true, deleted:m[1]});
   }
@@ -902,7 +1029,8 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
       const parsed=await parseInvoice(xml);
       if(nitClean(parsed.customer_nit)!==nitClean(company.nit)) throw new Error(`Factura rechazada: receptor ${parsed.customer_nit} no coincide con empresa ${company.nit}`);
       const invoiceId=id();
-      const exists=await env.DB.prepare('SELECT id FROM invoices WHERE company_id=? AND cufe=?').bind(m[1],parsed.cufe).first();
+      const exists=await env.DB.prepare('SELECT id,status FROM invoices WHERE company_id=? AND cufe=?').bind(m[1],parsed.cufe).first();
+      if(exists && isExportedStatus(exists.status)) throw new Error(`Factura ${parsed.invoice_number}: ya fue exportada a Siigo; no se reemplaza para no perder el control de duplicados`);
       const finalId=exists?.id||invoiceId;
       if(exists) await env.DB.prepare('DELETE FROM invoice_items WHERE invoice_id=?').bind(finalId).run();
       if(exists) await env.DB.prepare('UPDATE invoices SET invoice_number=?, issue_date=?, document_type=?, supplier_name=?, supplier_nit=?, customer_name=?, customer_nit=?, currency=?, subtotal=?, tax_amount=?, withholding_amount=?, payable_amount=?, status=?, raw_xml=?, updated_at=?, tax_breakdown=? WHERE id=?').bind(parsed.invoice_number,parsed.issue_date,parsed.document_type,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.currency,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,'received',parsed.invoice_xml,now(),JSON.stringify(parsed.tax_breakdown||{}),finalId).run();
@@ -939,15 +1067,100 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     return json({imported,errors,zip_notices:zipNotices});
   }
   m=p.match(/^\/invoices\/([^/]+)$/); if(m && request.method==='GET'){
-    const inv=await env.DB.prepare('SELECT * FROM invoices WHERE id=?').bind(m[1]).first();
-    if(!inv) return json({detail:'Factura no encontrada'},404);
+    const inv=await ensureInvoice(env,user,m[1]);
     const items=(await env.DB.prepare('SELECT * FROM invoice_items WHERE invoice_id=?').bind(m[1]).all()).results||[];
-    const entry=await env.DB.prepare('SELECT * FROM accounting_entries WHERE invoice_id=?').bind(m[1]).first();
-    const lines=entry?(await env.DB.prepare('SELECT * FROM accounting_entry_lines WHERE entry_id=?').bind(entry.id).all()).results||[]:[];
-    return json({invoice:inv,items,entry,lines});
+    const {entry,lines}=await entryWithLines(env,m[1]);
+    const validation=entry ? await validateEntry(env,inv,lines) : null;
+    const exports=(await env.DB.prepare("SELECT * FROM siigo_exports WHERE company_id=? AND (invoice_id=? OR (cufe<>'' AND cufe=?)) ORDER BY created_at DESC LIMIT 50").bind(inv.company_id,inv.id,inv.cufe||'').all()).results||[];
+    const audit=(await env.DB.prepare('SELECT * FROM entry_audit_log WHERE invoice_id=? ORDER BY created_at DESC LIMIT 100').bind(m[1]).all()).results||[];
+    return json({invoice:inv,items,entry,lines,validation,exports,audit});
   }
-  m=p.match(/^\/invoices\/([^/]+)\/generate-entry$/); if(m && request.method==='POST') return json(await generateEntry(env,m[1]));
-  m=p.match(/^\/invoices\/([^/]+)\/approve$/); if(m && request.method==='POST'){ const entry=await env.DB.prepare('SELECT * FROM accounting_entries WHERE invoice_id=?').bind(m[1]).first(); if(!entry) await generateEntry(env,m[1]); const e=await env.DB.prepare('SELECT * FROM accounting_entries WHERE invoice_id=?').bind(m[1]).first(); await env.DB.prepare("UPDATE accounting_entries SET status='approved', approved_at=? WHERE id=?").bind(now(),e.id).run(); await env.DB.prepare("UPDATE invoices SET status='approved', updated_at=? WHERE id=?").bind(now(),m[1]).run(); return json({ok:true}); }
+  m=p.match(/^\/invoices\/([^/]+)\/generate-entry$/); if(m && request.method==='POST'){
+    const inv=await ensureInvoice(env,user,m[1]);
+    if(isExportedStatus(inv.status)) return json({detail:'La factura ya fue exportada a Siigo; su contabilización no se puede recalcular.'},409);
+    const current=await env.DB.prepare('SELECT edited FROM accounting_entries WHERE invoice_id=?').bind(m[1]).first();
+    if(current?.edited && url.searchParams.get('force')!=='1') return json({detail:'Esta contabilización tiene correcciones manuales. Para descartarlas y recalcularla, usa "Recalcular automática" dentro de la revisión.'},409);
+    return json(await generateEntry(env,m[1],user));
+  }
+  m=p.match(/^\/invoices\/([^/]+)\/approve$/); if(m && request.method==='POST'){
+    let inv=await ensureInvoice(env,user,m[1]);
+    if(isExportedStatus(inv.status)) return json({detail:'La factura ya fue exportada a Siigo.'},409);
+    let {entry,lines}=await entryWithLines(env,m[1]);
+    if(!entry){ await generateEntry(env,m[1],user); inv=await ensureInvoice(env,user,m[1]); ({entry,lines}=await entryWithLines(env,m[1])); }
+    const validation=await validateEntry(env,inv,lines);
+    if(!validation.ok) return json({detail:`Factura ${inv.invoice_number}: no se puede confirmar. `+validation.errors.join(' | '), validation},400);
+    await env.DB.batch([
+      env.DB.prepare("UPDATE accounting_entries SET status='approved', approved_at=?, reviewed_by=? WHERE id=?").bind(now(),user.email||'',entry.id),
+      env.DB.prepare("UPDATE invoices SET status='approved', updated_at=? WHERE id=?").bind(now(),m[1])
+    ]);
+    await auditLog(env,user,inv,'approve',{warnings:validation.warnings,totals:validation.totals});
+    return json({ok:true, validation});
+  }
+  m=p.match(/^\/invoices\/([^/]+)\/entry$/); if(m && request.method==='PUT'){
+    const inv=await ensureInvoice(env,user,m[1]);
+    if(isExportedStatus(inv.status)) return json({detail:'La factura ya fue exportada a Siigo; su contabilización no se puede modificar.'},409);
+    const d=await request.json().catch(()=>({}));
+    const reason=String(d.reason||'').trim().slice(0,500);
+    const newLines=(Array.isArray(d.lines)?d.lines:[]).map(l=>({
+      account:String(l.account||'').trim(),
+      description:String(l.description||'').trim().slice(0,250),
+      debit:round2(Number(l.debit||0)), credit:round2(Number(l.credit||0)),
+      cost_center:String(l.cost_center||'').trim().slice(0,100)
+    })).filter(l=>l.account||l.description||l.debit||l.credit);
+    if(newLines.length>60) return json({detail:'Máximo 60 líneas por asiento'},400);
+    const validation=await validateEntry(env,inv,newLines);
+    if(!validation.ok) return json({detail:'No se guardó: '+validation.errors.join(' | '), validation},400);
+    const before=await entryWithLines(env,m[1]);
+    const entryId=before.entry?.id || id();
+    const stmts=[];
+    if(before.entry){
+      stmts.push(env.DB.prepare("UPDATE accounting_entries SET status='suggested', approved_at=NULL, reviewed_by=NULL, edited=1 WHERE id=?").bind(entryId));
+      stmts.push(env.DB.prepare('DELETE FROM accounting_entry_lines WHERE entry_id=?').bind(entryId));
+    } else {
+      stmts.push(env.DB.prepare("INSERT INTO accounting_entries (id,invoice_id,status,confidence,created_at,approved_at,edited) VALUES (?,?,'suggested',1,?,NULL,1)").bind(entryId,m[1],now()));
+    }
+    for(const l of newLines) stmts.push(env.DB.prepare('INSERT INTO accounting_entry_lines (id,entry_id,account,description,debit,credit,cost_center) VALUES (?,?,?,?,?,?,?)').bind(id(),entryId,l.account,l.description||'Sin descripción',l.debit,l.credit,l.cost_center));
+    stmts.push(env.DB.prepare("UPDATE invoices SET status='accounted', updated_at=? WHERE id=?").bind(now(),m[1]));
+    await env.DB.batch(stmts);
+    await auditLog(env,user,inv,'edit',{before:simpleLines(before.lines), after:newLines, reason});
+    const after=await entryWithLines(env,m[1]);
+    return json({ok:true, entry:after.entry, lines:after.lines, validation:await validateEntry(env,inv,after.lines)});
+  }
+  m=p.match(/^\/companies\/([^/]+)\/siigo-exports$/); if(m && request.method==='GET'){
+    await ensureCompany(env,user.id,m[1]);
+    let sql='SELECT * FROM siigo_exports WHERE company_id=?'; const args=[m[1]];
+    const st=url.searchParams.get('status'); if(st && st!=='all'){ sql+=' AND status=?'; args.push(st); }
+    const from=url.searchParams.get('from'); if(from){ sql+=' AND created_at>=?'; args.push(from); }
+    const to=url.searchParams.get('to'); if(to){ sql+=' AND created_at<?'; args.push(to+'T99'); }
+    const q=String(url.searchParams.get('q')||'').trim(); if(q){ sql+=' AND (invoice_number LIKE ? OR supplier_name LIKE ? OR supplier_nit LIKE ? OR cufe LIKE ? OR siigo_name LIKE ?)'; for(let i=0;i<5;i++) args.push(`%${q}%`); }
+    sql+=' ORDER BY created_at DESC LIMIT 2000';
+    return json((await env.DB.prepare(sql).bind(...args).all()).results||[]);
+  }
+  m=p.match(/^\/companies\/([^/]+)\/audit-log$/); if(m && request.method==='GET'){
+    await ensureCompany(env,user.id,m[1]);
+    let sql='SELECT * FROM entry_audit_log WHERE company_id=?'; const args=[m[1]];
+    const q=String(url.searchParams.get('q')||'').trim(); if(q){ sql+=' AND (invoice_number LIKE ? OR user_email LIKE ?)'; args.push(`%${q}%`,`%${q}%`); }
+    sql+=' ORDER BY created_at DESC LIMIT 1000';
+    return json((await env.DB.prepare(sql).bind(...args).all()).results||[]);
+  }
+  m=p.match(/^\/companies\/([^/]+)\/report$/); if(m && request.method==='POST'){
+    await ensureCompany(env,user.id,m[1]);
+    const body=await request.json().catch(()=>({}));
+    const ids=(Array.isArray(body.invoice_ids)?body.invoice_ids.map(String).filter(Boolean):[]).slice(0,80);
+    if(!ids.length) return json([]);
+    const ph=ids.map(()=>'?').join(',');
+    const invs=(await env.DB.prepare(`SELECT id,company_id,invoice_number,cufe,issue_date,document_type,supplier_name,supplier_nit,customer_name,customer_nit,subtotal,tax_amount,withholding_amount,payable_amount,status FROM invoices WHERE company_id=? AND id IN (${ph})`).bind(m[1],...ids).all()).results||[];
+    const entries=(await env.DB.prepare(`SELECT * FROM accounting_entries WHERE invoice_id IN (${ph})`).bind(...ids).all()).results||[];
+    const entryIds=entries.map(e=>e.id);
+    const lines=entryIds.length ? ((await env.DB.prepare(`SELECT * FROM accounting_entry_lines WHERE entry_id IN (${entryIds.map(()=>'?').join(',')}) ORDER BY rowid`).bind(...entryIds).all()).results||[]) : [];
+    const exps=(await env.DB.prepare(`SELECT invoice_id,status,siigo_name,created_at,user_email FROM siigo_exports WHERE company_id=? AND status='success' AND invoice_id IN (${ph}) ORDER BY created_at DESC`).bind(m[1],...ids).all()).results||[];
+    const out=invs.map(inv=>{
+      const e=entries.find(x=>x.invoice_id===inv.id)||null;
+      return {invoice:inv, entry:e, lines:e?lines.filter(l=>l.entry_id===e.id):[], export:exps.find(x=>x.invoice_id===inv.id)||null};
+    });
+    out.sort((a,b)=>ids.indexOf(a.invoice.id)-ids.indexOf(b.invoice.id));
+    return json(out);
+  }
   m=p.match(/^\/companies\/([^/]+)\/dian-connection$/); if(m && request.method==='GET'){
     await ensureCompany(env,user.id,m[1]); await ensureExtraSchema(env);
     const row=await env.DB.prepare('SELECT company_id, person_type, representative_id_type, representative_id, company_nit, token_last4, start_date, status, last_test_at, last_sync_at, created_at, updated_at FROM dian_connections WHERE company_id=?').bind(m[1]).first();
@@ -1031,10 +1244,11 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     let count=0, errors=[];
     for(const invoiceId of invoiceIds){
       try{
-        const inv=await env.DB.prepare('SELECT id,status FROM invoices WHERE id=? AND company_id=?').bind(invoiceId,m[1]).first();
+        const inv=await env.DB.prepare('SELECT i.id,i.status,i.invoice_number,e.edited FROM invoices i LEFT JOIN accounting_entries e ON e.invoice_id=i.id WHERE i.id=? AND i.company_id=?').bind(invoiceId,m[1]).first();
         if(!inv) throw new Error('La factura no pertenece a la empresa activa');
-        if(inv.status==='exported') throw new Error('La factura ya está exportada y no se recausa');
-        await generateEntry(env, invoiceId);
+        if(isExportedStatus(inv.status)) throw new Error(`Factura ${inv.invoice_number}: ya está exportada a Siigo y no se recausa`);
+        if(inv.edited) throw new Error(`Factura ${inv.invoice_number}: tiene correcciones manuales y no se recausa automáticamente. Usa "Recalcular automática" dentro de la revisión si quieres descartarlas.`);
+        await generateEntry(env, invoiceId, user);
         count++;
       }catch(e){ errors.push({id:invoiceId, error:e.message}); }
     }
@@ -1042,19 +1256,33 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
   }
   m=p.match(/^\/companies\/([^/]+)\/cause-all$/); if(m && request.method==='POST'){
     await ensureCompany(env,user.id,m[1]);
-    const pending=(await env.DB.prepare('SELECT id FROM invoices WHERE company_id=? AND status="received"').bind(m[1]).all()).results||[];
+    const pending=(await env.DB.prepare("SELECT i.id FROM invoices i LEFT JOIN accounting_entries e ON e.invoice_id=i.id WHERE i.company_id=? AND i.status='received' AND COALESCE(e.edited,0)=0").bind(m[1]).all()).results||[];
     if(!pending.length) return json({ok:true, count:0, message:'No hay facturas pendientes de causación'});
     let count=0, errors=[];
     for(const inv of pending){
-      try{ await generateEntry(env, inv.id); count++; }
+      try{ await generateEntry(env, inv.id, user); count++; }
       catch(e){ errors.push({id:inv.id, error:e.message}); }
     }
     return json({ok:true, count, errors});
   }
   m=p.match(/^\/companies\/([^/]+)\/mark-exported$/); if(m && request.method==='POST'){
     await ensureCompany(env,user.id,m[1]);
-    const result=await env.DB.prepare("UPDATE invoices SET status='exported', updated_at=? WHERE company_id=? AND status IN ('approved','accounted')").bind(now(),m[1]).run();
-    return json({ok:true, changed: result.meta?.changes || 0});
+    // Solo se marcan las facturas con contabilización confirmada, y cada una queda en el historial
+    // para que después no se pueda volver a enviar a Siigo por API (sería un duplicado).
+    const body=await request.json().catch(()=>({}));
+    const onlyIds=Array.isArray(body.invoice_ids)?body.invoice_ids.map(String).filter(Boolean):null;
+    let rows=(await env.DB.prepare("SELECT * FROM invoices WHERE company_id=? AND status='approved'").bind(m[1]).all()).results||[];
+    if(onlyIds) rows=rows.filter(r=>onlyIds.includes(r.id));
+    let changed=0;
+    for(const inv of rows.slice(0,200)){
+      const r=await env.DB.prepare("UPDATE invoices SET status='exported', updated_at=? WHERE id=? AND status='approved'").bind(now(),inv.id).run();
+      if(Number(r.meta?.changes||0)>0){
+        changed++;
+        await recordExport(env, user, inv, {channel:'csv', status:'success', message:'Marcada como exportada al descargar el CSV (no se envió por API).'});
+        await auditLog(env, user, inv, 'export', {channel:'csv'});
+      }
+    }
+    return json({ok:true, changed});
   }
   m=p.match(/^\/companies\/([^/]+)\/export\.csv$/); if(m && request.method==='GET'){
     await ensureCompany(env,user.id,m[1]);
@@ -1116,7 +1344,8 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
 
 async function saveParsedInvoiceForCompany(env, company, parsed, sourceName='email'){
   if(nitClean(parsed.customer_nit)!==nitClean(company.nit)) throw new Error(`Factura rechazada: receptor ${parsed.customer_nit} no coincide con empresa ${company.nit}`);
-  const exists=await env.DB.prepare('SELECT id FROM invoices WHERE company_id=? AND cufe=?').bind(company.id, parsed.cufe).first();
+  const exists=await env.DB.prepare('SELECT id,status FROM invoices WHERE company_id=? AND cufe=?').bind(company.id, parsed.cufe).first();
+  if(exists && isExportedStatus(exists.status)) throw new Error(`Factura ${parsed.invoice_number}: ya fue exportada a Siigo; no se reemplaza`);
   const finalId=exists?.id || id();
   if(exists){
     await env.DB.prepare('DELETE FROM invoice_items WHERE invoice_id=?').bind(finalId).run();

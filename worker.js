@@ -1269,6 +1269,52 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     await env.DB.prepare('UPDATE invoice_batches SET name=? WHERE id=? AND company_id=?').bind(name,mm[2],mm[1]).run();
     return json({ok:true});
   }}
+  // Facturas que pertenecen a un centro, igual que como las muestra la pestaña: las del centro y, si es el primer
+  // centro (General), también las que no tienen centro asignado (o tienen uno que ya no existe).
+  async function batchScope(companyId, batchId){
+    const batch=await env.DB.prepare('SELECT * FROM invoice_batches WHERE id=? AND company_id=?').bind(batchId,companyId).first();
+    if(!batch) return null;
+    const first=await env.DB.prepare('SELECT id FROM invoice_batches WHERE company_id=? ORDER BY created_at LIMIT 1').bind(companyId).first();
+    const isFirst=first?.id===batchId;
+    const where=isFirst
+      ? `company_id=? AND (batch_id=? OR batch_id IS NULL OR batch_id NOT IN (SELECT id FROM invoice_batches WHERE company_id=?))`
+      : `company_id=? AND batch_id=?`;
+    const args=isFirst?[companyId,batchId,companyId]:[companyId,batchId];
+    return {batch,isFirst,where,args};
+  }
+  { const mm=p.match(/^\/companies\/([^/]+)\/batches\/([^/]+)\/summary$/); if(mm && request.method==='GET'){
+    await ensureCompany(env,user.id,mm[1]);
+    const sc=await batchScope(mm[1],mm[2]); if(!sc) return json({detail:'Centro no encontrado'},404);
+    const s=await env.DB.prepare(`SELECT COUNT(*) total, SUM(status='received') received, SUM(status='accounted') accounted, SUM(status='approved') approved, SUM(status IN ('exported','exporting')) exported, SUM(status='exporting') exporting, COALESCE(SUM(payable_amount),0) amount, MIN(issue_date) date_from, MAX(issue_date) date_to FROM invoices WHERE ${sc.where}`).bind(...sc.args).first();
+    const pdfs=await env.DB.prepare(`SELECT COUNT(*) n FROM invoice_pdfs WHERE invoice_id IN (SELECT id FROM invoices WHERE ${sc.where})`).bind(...sc.args).first();
+    const edited=await env.DB.prepare(`SELECT COUNT(*) n FROM accounting_entries WHERE edited=1 AND invoice_id IN (SELECT id FROM invoices WHERE ${sc.where})`).bind(...sc.args).first();
+    const centers=await env.DB.prepare('SELECT COUNT(*) n FROM invoice_batches WHERE company_id=?').bind(mm[1]).first();
+    return json({batch:{id:sc.batch.id,name:sc.batch.name,created_at:sc.batch.created_at}, is_first:sc.isFirst, only_center:Number(centers?.n||0)<=1,
+      invoices:{total:Number(s?.total||0),received:Number(s?.received||0),accounted:Number(s?.accounted||0),approved:Number(s?.approved||0),exported:Number(s?.exported||0),exporting:Number(s?.exporting||0),amount:Number(s?.amount||0),date_from:s?.date_from||'',date_to:s?.date_to||''},
+      pdfs:Number(pdfs?.n||0), edited:Number(edited?.n||0)});
+  }}
+  // Borra un centro y sus facturas (con su causación, ítems y PDF). Se conservan el historial de exportaciones a Siigo
+  // (para que el control de duplicados siga funcionando) y la auditoría.
+  { const mm=p.match(/^\/companies\/([^/]+)\/batches\/([^/]+)$/); if(mm && request.method==='DELETE'){
+    await ensureCompany(env,user.id,mm[1]);
+    const sc=await batchScope(mm[1],mm[2]); if(!sc) return json({detail:'Centro no encontrado'},404);
+    const d=await request.json().catch(()=>({}));
+    if(String(d.confirm||'')!=='BORRAR') return json({detail:'Falta la confirmación'},400);
+    const busy=await env.DB.prepare(`SELECT COUNT(*) n FROM invoices WHERE ${sc.where} AND status='exporting'`).bind(...sc.args).first();
+    if(Number(busy?.n||0)>0) return json({detail:'Hay facturas de este centro enviándose a Siigo en este momento. Espera a que termine e intenta de nuevo.'},409);
+    const cnt=await env.DB.prepare(`SELECT COUNT(*) n FROM invoices WHERE ${sc.where}`).bind(...sc.args).first();
+    const sub=`SELECT id FROM invoices WHERE ${sc.where}`;
+    await env.DB.batch([
+      env.DB.prepare(`DELETE FROM accounting_entry_lines WHERE entry_id IN (SELECT id FROM accounting_entries WHERE invoice_id IN (${sub}))`).bind(...sc.args),
+      env.DB.prepare(`DELETE FROM accounting_entries WHERE invoice_id IN (${sub})`).bind(...sc.args),
+      env.DB.prepare(`DELETE FROM invoice_items WHERE invoice_id IN (${sub})`).bind(...sc.args),
+      env.DB.prepare(`DELETE FROM invoice_pdfs WHERE invoice_id IN (${sub})`).bind(...sc.args),
+      env.DB.prepare(`DELETE FROM invoices WHERE ${sc.where}`).bind(...sc.args),
+      env.DB.prepare('DELETE FROM invoice_batches WHERE id=? AND company_id=?').bind(mm[2],mm[1])
+    ]);
+    await listBatches(env, mm[1]); // si era el único centro, se crea "General" de nuevo
+    return json({ok:true, deleted_invoices:Number(cnt?.n||0), name:sc.batch.name});
+  }}
   m=p.match(/^\/companies\/([^/]+)\/upload$/); if(m && request.method==='POST'){
     const company=await ensureCompany(env,user.id,m[1]);
     const fd=await request.formData();

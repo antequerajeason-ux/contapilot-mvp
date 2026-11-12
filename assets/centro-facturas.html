@@ -179,6 +179,13 @@
     .batch-tab:hover{color:var(--ink)}
     .batch-tab.active{background:var(--card);color:var(--primary-dark);box-shadow:0 2px 8px -3px rgba(13,27,46,.25)}
     .batch-tab .edit-ic{opacity:.55;font-size:11px}
+    .batch-tab .del-ic{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:6px;color:var(--muted);transition:background .2s,color .2s}
+    .batch-tab .del-ic:hover{background:var(--red-soft);color:var(--red)}
+    .batch-tab .del-ic svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .del-summary{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:4px 0 14px}
+    .del-summary div{border:1px solid var(--line);border-radius:12px;background:#f8fafc;padding:10px 12px}
+    .del-summary span{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+    .del-summary b{display:block;font-size:17px;margin-top:3px;font-variant-numeric:tabular-nums}
     .batch-tab .tab-count{min-width:20px;height:18px;padding:0 6px;border-radius:999px;background:rgba(13,27,46,.08);color:var(--ink-2);font-size:10.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
     .batch-tab.active .tab-count{background:var(--primary-soft);color:var(--primary-dark)}
     .btn-batch-add{height:32px;padding:0 13px;border-radius:9px;border:1px dashed var(--line-strong);background:transparent;color:var(--muted);font-weight:600;font-size:12.5px;cursor:pointer}
@@ -436,6 +443,10 @@
   <label class="text-2" style="display:flex;align-items:center;gap:9px;margin:16px 0 4px;font-size:13.5px;cursor:pointer"><input type="checkbox" id="autoMonthBox" class="mini-check" onchange="saveAutoMonth()" checked><b>Repartir por mes automáticamente</b></label>
   <div class="actions" style="justify-content:flex-end;margin-top:10px"><button class="btn btn-light" onclick="closeModal('dianModal'); openImportHistory()">Ver historial de cargas</button></div>
 </div></div>
+<div id="deleteBatchModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div><h3 id="delBatchTitle">Borrar centro</h3><p>Revisa el resumen antes de confirmar. Esta acción no se puede deshacer.</p></div><button class="close" onclick="closeModal('deleteBatchModal')">×</button></div>
+  <div id="delBatchBody">Cargando resumen…</div>
+  <div class="actions" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-light" onclick="closeModal('deleteBatchModal')">Cancelar</button><button class="btn btn-red" id="delBatchBtn" onclick="confirmDeleteBatch()" disabled>Sí, borrar</button></div>
+</div></div>
 <div id="reparseModal" class="modal-bg"><div class="modal wide"><div class="modal-head"><div><h3>Revisar lectura de facturas</h3><p>Vuelve a leer el XML de las facturas ya cargadas con el lector actual y muestra las que tienen datos distintos (número, proveedor, fecha o valores). No se cambia nada hasta que presiones "Corregir".</p></div><button class="close" onclick="closeModal('reparseModal')">×</button></div>
   <div id="reparseStatus"></div>
   <div class="actions" style="margin-bottom:12px"><button class="btn btn-primary" id="reparseScanBtn" onclick="scanReparse()">Buscar facturas con datos mal leídos</button><button class="btn btn-green" id="reparseFixBtn" onclick="applyReparse()" style="display:none">Corregir</button></div>
@@ -629,7 +640,7 @@ function renderBatchTabs(){
   // Orden de las pestañas: el primer centro (General) fijo, luego los "Mes Año" en orden cronológico y al final los demás.
   const key=b=>{const m=String(b.name||'').trim().match(/^(\S+)\s+(\d{4})$/);const mi=m?MONTH_INDEX(m[1]):0;return mi?Number(m[2])*100+mi:999999};
   const ordered=batches.length?[batches[0],...batches.slice(1).sort((a,b)=>key(a)-key(b))]:[];
-  box.innerHTML=ordered.map(b=>`<button class="batch-tab ${b.id===activeBatchId?'active':''}" onclick="selectBatch('${b.id}')">${esc(b.name)}<span class="tab-count">${cnt(b.id)}</span>${b.id===activeBatchId?' <span class="edit-ic" onclick="event.stopPropagation();renameBatch(\''+b.id+'\')">✎</span>':''}</button>`).join('');
+  box.innerHTML=ordered.map(b=>`<button class="batch-tab ${b.id===activeBatchId?'active':''}" onclick="selectBatch('${b.id}')">${esc(b.name)}<span class="tab-count">${cnt(b.id)}</span>${b.id===activeBatchId?' <span class="edit-ic" title="Renombrar centro" onclick="event.stopPropagation();renameBatch(\''+b.id+'\')">✎</span><span class="del-ic" title="Borrar centro" onclick="event.stopPropagation();openDeleteBatch(\''+b.id+'\')"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg></span>':''}</button>`).join('');
 }
 function selectBatch(batchId){activeBatchId=batchId;renderBatchTabs();renderInvoices();if(currentView==='dashboard')renderDashboard()}
 async function createBatch(){
@@ -760,6 +771,44 @@ async function downloadInvoicePdf(id){
     const data=(currentInvoice&&currentInvoice.id===id)?currentInvoice.data:await api(`/api/invoices/${id}`);
     await generateInvoicePdf(data);
   }catch(e){toast(e.message||'No pude descargar el PDF')}
+}
+// ---------- Borrar un centro de facturas ----------
+let deletingBatch=null;
+async function openDeleteBatch(batchId){
+  deletingBatch=null;delBatchBtn.disabled=true;delBatchBtn.textContent='Sí, borrar';
+  delBatchBody.innerHTML='<div class="check-box check-info">Cargando resumen…</div>';openModal('deleteBatchModal');
+  try{
+    const s=await api(`/api/companies/${cid()}/batches/${batchId}/summary`);deletingBatch=s;const n=s.invoices;
+    delBatchTitle.textContent=`Borrar centro "${s.batch.name}"`;
+    const fd=d=>d?fmtDay(String(d).slice(0,10)):'—';
+    let html='';
+    if(!n.total) html+=`<div class="check-box check-info">Este centro <b>no tiene facturas</b>. Solo se borrará la pestaña.</div>`;
+    else{
+      html+=`<p style="margin:0 0 10px;font-size:14px">Se borrarán el centro <b>${esc(s.batch.name)}</b> y sus <b>${n.total} factura(s)</b>, con su causación, ítems y PDF:</p>`;
+      html+=`<div class="del-summary"><div><span>Facturas</span><b>${n.total}</b></div><div><span>Valor total</span><b>${money(n.amount)}</b></div><div><span>Por causar / por confirmar</span><b>${n.received} / ${n.accounted}</b></div><div><span>Confirmadas / exportadas</span><b>${n.approved} / ${n.exported}</b></div><div><span>Fechas de emisión</span><b style="font-size:13.5px">${fd(n.date_from)} – ${fd(n.date_to)}</b></div><div><span>Con PDF / con correcciones</span><b>${s.pdfs} / ${s.edited}</b></div></div>`;
+      const warn=[];
+      if(n.exported) warn.push(`<b>${n.exported}</b> ya se exportaron a Siigo: se borran de ContaPilot, pero <b>no de Siigo</b>. Su historial de exportación se conserva, así que no se podrán volver a subir (control de duplicados).`);
+      if(n.approved) warn.push(`<b>${n.approved}</b> estaban confirmadas y listas para subir a Siigo.`);
+      if(s.edited) warn.push(`<b>${s.edited}</b> tienen correcciones manuales en su contabilización, que se perderán.`);
+      if(s.is_first) warn.push('Este es el primer centro: también incluye las facturas antiguas que no tenían centro asignado.');
+      warn.push('Si las facturas vuelven a llegar (carga manual o sincronización), se importan de nuevo como nuevas.');
+      html+=`<div class="check-box check-warn"><ul style="margin:0;padding-left:18px">${warn.map(w=>`<li>${w}</li>`).join('')}</ul></div>`;
+    }
+    if(s.only_center) html+='<p class="sub">Es el único centro de la empresa: después de borrarlo se creará uno nuevo llamado "General".</p>';
+    if(n.exporting){html+='<div class="check-box check-err">Hay facturas de este centro enviándose a Siigo. Espera a que termine para poder borrarlo.</div>';delBatchBody.innerHTML=html;return}
+    delBatchBody.innerHTML=html;
+    delBatchBtn.textContent=n.total?`Sí, borrar centro y ${n.total} factura(s)`:'Sí, borrar centro';delBatchBtn.disabled=false;
+  }catch(e){delBatchBody.innerHTML=`<div class="check-box check-err">${esc(e.message)}</div>`}
+}
+async function confirmDeleteBatch(){
+  if(!deletingBatch)return;delBatchBtn.disabled=true;delBatchBtn.textContent='Borrando…';
+  try{
+    const r=await api(`/api/companies/${cid()}/batches/${deletingBatch.batch.id}`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:'BORRAR'})});
+    closeModal('deleteBatchModal');
+    if(activeBatchId===deletingBatch.batch.id)activeBatchId='';
+    selectedInvoiceIds.clear();await loadBatches();await loadInvoices();if(currentView==='dashboard')renderDashboard();
+    toast(`Centro "${r.name}" borrado${r.deleted_invoices?` con ${r.deleted_invoices} factura(s)`:''}.`);
+  }catch(e){delBatchBody.insertAdjacentHTML('beforeend',`<div class="check-box check-err">${esc(e.message)}</div>`);delBatchBtn.disabled=false;delBatchBtn.textContent='Reintentar'}
 }
 // ---------- Revisar lectura de facturas ya cargadas ----------
 let reparseFound=[];

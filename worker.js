@@ -874,7 +874,12 @@ function siigoProviderInvoice(invoiceNumber, rawXml){
   }
   const pn=invoicePrefixNumber(raw);
   if(pn.prefix) return {prefix:pn.prefix, number:pn.number, source:'letras'};
-  return {prefix:dianPrefix||'SP', number:raw, source:dianPrefix?'dian':'sin_prefijo'};
+  if(/^\d+$/.test(raw)) return {prefix:dianPrefix||'SP', number:raw, source:dianPrefix?'dian':'sin_prefijo'};
+  // Siigo exige que el consecutivo sea numérico ("Invalid data type: number"). Si el número trae letras en medio
+  // (ej. "639A134908") y no hay prefijo DIAN que lo explique, todo lo anterior a los dígitos finales es el prefijo.
+  const tail=raw.match(/^(.*?)(\d+)$/);
+  if(tail && tail[1]) return {prefix:tail[1].replace(/[-\s]+$/,'')||'SP', number:tail[2], source:'separado'};
+  return {prefix:'SP', number:raw.replace(/\D/g,'')||raw, source:'sin_prefijo'};
 }
 // Los catálogos (comprobante FC, forma de pago, impuestos) casi no cambian: se guardan 12 horas por credencial.
 async function siigoGetPurchaseConfig(env){
@@ -1247,7 +1252,7 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     const total=await env.DB.prepare('SELECT COUNT(*) c, SUM(active) a FROM chart_of_accounts WHERE company_id=?').bind(m[1]).first();
     return json({ok:true, imported, total_accounts:total?.c||0, active_accounts:total?.a||0});
   }
-  m=p.match(/^\/companies\/([^/]+)\/invoices$/); if(m && request.method==='GET'){ await ensureCompany(env,user.id,m[1]); return json((await env.DB.prepare('SELECT invoices.*, EXISTS(SELECT 1 FROM invoice_pdfs p WHERE p.invoice_id=invoices.id) AS has_pdf FROM invoices WHERE company_id=? ORDER BY issue_date DESC').bind(m[1]).all()).results||[]); }
+  m=p.match(/^\/companies\/([^/]+)\/invoices$/); if(m && request.method==='GET'){ await ensureCompany(env,user.id,m[1]); return json((await env.DB.prepare('SELECT id,company_id,invoice_number,cufe,issue_date,document_type,supplier_name,supplier_nit,customer_name,customer_nit,currency,subtotal,tax_amount,withholding_amount,payable_amount,status,created_at,updated_at,tax_breakdown,batch_id, EXISTS(SELECT 1 FROM invoice_pdfs p WHERE p.invoice_id=invoices.id) AS has_pdf FROM invoices WHERE company_id=? ORDER BY issue_date DESC').bind(m[1]).all()).results||[]); }
   { const mm=p.match(/^\/companies\/([^/]+)\/batches$/); if(mm && request.method==='GET'){
     await ensureCompany(env,user.id,mm[1]);
     return json(await listBatches(env,mm[1]));
@@ -1517,6 +1522,21 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     await auditLog(env,user,inv,'approve',{warnings:validation.warnings,totals:validation.totals});
     return json({ok:true, validation});
   }
+  // Factura que quedó "Enviando a Siigo" porque el envío se interrumpió: el usuario revisa en Siigo y confirma.
+  //  in_siigo=true  → sí quedó creada: se marca exportada (y no se puede volver a enviar).
+  //  in_siigo=false → no llegó: vuelve a "Confirmada" para enviarla de nuevo.
+  m=p.match(/^\/invoices\/([^/]+)\/resolve-exporting$/); if(m && request.method==='POST'){
+    const inv=await ensureInvoice(env,user,m[1]);
+    if(inv.status!=='exporting') return json({detail:'La factura no está en estado "Enviando a Siigo".'},409);
+    const d=await request.json().catch(()=>({}));
+    const inSiigo=!!d.in_siigo;
+    await env.DB.prepare("UPDATE invoices SET status=?, updated_at=? WHERE id=? AND status='exporting'").bind(inSiigo?'exported':'approved',now(),m[1]).run();
+    await recordExport(env,user,inv,inSiigo
+      ? {status:'success', siigo_name:String(d.siigo_name||'').slice(0,60)||null, message:'Envío interrumpido; el usuario confirmó que la factura SÍ está en Siigo.'}
+      : {status:'error', message:'Envío interrumpido; el usuario confirmó que la factura NO llegó a Siigo. Queda lista para enviarse de nuevo.'});
+    if(inSiigo) await auditLog(env,user,inv,'export',{manual:true, siigo_name:d.siigo_name||null});
+    return json({ok:true, status:inSiigo?'exported':'approved'});
+  }
   m=p.match(/^\/invoices\/([^/]+)\/entry$/); if(m && request.method==='PUT'){
     const inv=await ensureInvoice(env,user,m[1]);
     if(isExportedStatus(inv.status)) return json({detail:'La factura ya fue exportada a Siigo; su contabilización no se puede modificar.'},409);
@@ -1695,7 +1715,7 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     // para que después no se pueda volver a enviar a Siigo por API (sería un duplicado).
     const body=await request.json().catch(()=>({}));
     const onlyIds=Array.isArray(body.invoice_ids)?body.invoice_ids.map(String).filter(Boolean):null;
-    let rows=(await env.DB.prepare("SELECT * FROM invoices WHERE company_id=? AND status='approved'").bind(m[1]).all()).results||[];
+    let rows=(await env.DB.prepare("SELECT id,company_id,invoice_number,cufe,issue_date,document_type,supplier_name,supplier_nit,customer_name,customer_nit,currency,subtotal,tax_amount,withholding_amount,payable_amount,status,created_at,updated_at,tax_breakdown,batch_id FROM invoices WHERE company_id=? AND status='approved'").bind(m[1]).all()).results||[];
     if(onlyIds) rows=rows.filter(r=>onlyIds.includes(r.id));
     let changed=0;
     for(const inv of rows.slice(0,200)){
@@ -1711,7 +1731,7 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
   m=p.match(/^\/companies\/([^/]+)\/export\.csv$/); if(m && request.method==='GET'){
     await ensureCompany(env,user.id,m[1]);
     const format=url.searchParams.get('format')||'general';
-    const rows=(await env.DB.prepare('SELECT i.*, l.account, l.description line_description, l.debit, l.credit, l.cost_center FROM invoices i LEFT JOIN accounting_entries e ON e.invoice_id=i.id LEFT JOIN accounting_entry_lines l ON l.entry_id=e.id WHERE i.company_id=? ORDER BY i.issue_date DESC, i.invoice_number, l.debit DESC').bind(m[1]).all()).results||[];
+    const rows=(await env.DB.prepare('SELECT i.id,i.company_id,i.invoice_number,i.cufe,i.issue_date,i.document_type,i.supplier_name,i.supplier_nit,i.customer_name,i.customer_nit,i.currency,i.subtotal,i.tax_amount,i.withholding_amount,i.payable_amount,i.status,i.created_at,i.updated_at,i.tax_breakdown,i.batch_id, l.account, l.description line_description, l.debit, l.credit, l.cost_center FROM invoices i LEFT JOIN accounting_entries e ON e.invoice_id=i.id LEFT JOIN accounting_entry_lines l ON l.entry_id=e.id WHERE i.company_id=? ORDER BY i.issue_date DESC, i.invoice_number, l.debit DESC').bind(m[1]).all()).results||[];
     const lineRows=rows.filter(r=>r.account);
     if(format==='siigo'){
       // Plantilla Base Siigo según captura del contador.

@@ -57,6 +57,7 @@ function recuperarPdfs() {
 function sincronizar() {
   const inicio = Date.now();
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'continuar') ScriptApp.deleteTrigger(t); });
+  let pdfsEnEspera = 0;
   const resumen = { started_at: new Date().toISOString(), files_seen: 0, files_pending: 0, files_done: 0, imported: 0, duplicates: 0, errors: 0, continues: false, message: '' };
   try {
     const archivos = [];
@@ -88,7 +89,9 @@ function sincronizar() {
       }
       const r = procesarArchivo_(pendientes[i]);
       resumen.files_done++; resumen.imported += r.imported; resumen.duplicates += r.duplicates; resumen.errors += r.errors;
+      pdfsEnEspera += r.pdfs || 0;
     }
+    if (pdfsEnEspera) resumen.message = (resumen.message ? resumen.message + ' ' : '') + pdfsEnEspera + ' factura(s) en PDF quedaron en espera de revisión en ContaPilot.';
     if (forzar) {
       if (resumen.continues) props.setProperty('FORZAR_POS', String(desdePos + resumen.files_done));
       else { props.deleteProperty('FORZAR_TODO'); props.deleteProperty('FORZAR_POS'); resumen.message = (resumen.message ? resumen.message + ' ' : '') + 'Recuperación de PDF terminada.'; }
@@ -102,7 +105,21 @@ function sincronizar() {
 }
 
 function procesarArchivo_(a) {
-  const r = { imported: 0, duplicates: 0, errors: 0, mensajes: [] };
+  const r = { imported: 0, duplicates: 0, errors: 0, pdfs: 0, mensajes: [] };
+  if (a.kind === 'pdf') {
+    try {
+      const pb = DriveApp.getFileById(a.id).getBlob().getBytes();
+      if (pb.length > 1400000) { r.errors++; r.mensajes.push('PDF de más de 1,4 MB'); }
+      else {
+        const res = api_('/drive-sync/pdf', { file_id: a.id, file_name: a.name, path: a.path, pdf_b64: Utilities.base64Encode(pb) });
+        if (res.status === 'queued') { r.pdfs++; r.mensajes.push('PDF en espera de revisión en ContaPilot'); }
+        else if (res.status === 'duplicate') { r.duplicates++; }
+        else { r.errors++; r.mensajes.push(res.error || 'error'); }
+      }
+    } catch (e) { r.errors++; r.mensajes.push(e.message); }
+    try { api_('/drive-sync/done', { file_id: a.id, file_name: a.name, path: a.path, updated: a.updated, imported: 0, duplicates: r.duplicates, errors: r.errors, message: r.mensajes.join(' | ') }); } catch (e) { r.errors++; }
+    return r;
+  }
   try {
     const blob = DriveApp.getFileById(a.id).getBlob();
     const bytes = blob.getBytes();
@@ -195,14 +212,18 @@ function recorrer_(carpeta, ruta, salida, nivel, ctx) {
   const enRecibidos = !SOLO_RECIBIDOS || ruta.some(function (s) { return /recibid/i.test(s); });
   if (enRecibidos) {
     const archivos = carpeta.getFiles();
+    const datos = [], pdfs = [];
     while (archivos.hasNext()) {
       const f = archivos.next();
       const n = f.getName();
-      if (/\.pdf$/i.test(n)) continue;
-      if (/\.(xml|zip)$/i.test(n) || TIPOS_OK.indexOf(f.getMimeType()) >= 0) {
-        salida.push({ id: f.getId(), name: n, updated: f.getLastUpdated().toISOString(), path: ruta });
-      }
+      const item = { id: f.getId(), name: n, updated: f.getLastUpdated().toISOString(), path: ruta };
+      if (/\.pdf$/i.test(n) || f.getMimeType() === 'application/pdf') { item.kind = 'pdf'; pdfs.push(item); }
+      else if (/\.(xml|zip)$/i.test(n) || TIPOS_OK.indexOf(f.getMimeType()) >= 0) datos.push(item);
     }
+    salida.push.apply(salida, datos);
+    // Carpetas que solo traen PDF (sin ZIP ni XML): los PDF se envían a ContaPilot para revisarlos allá.
+    // Si la carpeta tiene ZIP/XML, sus PDF se ignoran (el PDF ya viene dentro del ZIP de cada factura).
+    if (!datos.length) salida.push.apply(salida, pdfs);
   }
   const sub = carpeta.getFolders();
   while (sub.hasNext()) {

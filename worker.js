@@ -714,6 +714,19 @@ async function handleDriveSync(request, env, p){
     try{ return json(await importDriveXml(env, user, xml, String(d.file_name||''), Array.isArray(d.path)?d.path:[], d.desde, d.hasta, d.pdf_b64?{b64:d.pdf_b64,name:d.pdf_name}:null)); }
     catch(e){ return json({status:'error', error:e.message||String(e)}); }
   }
+  // Factura que en Drive solo viene en PDF: se guarda en espera para revisarla en ContaPilot antes de importarla.
+  if(p==='/drive-sync/pdf' && request.method==='POST'){
+    const fileId=String(d.file_id||''); const b64=String(d.pdf_b64||'').replace(/\s/g,'');
+    if(!fileId || !b64) return json({status:'error', error:'PDF vacío'});
+    if(!b64.startsWith('JVBER')) return json({status:'error', error:'El archivo no es un PDF válido'});
+    if(b64.length>PDF_MAX_B64) return json({status:'error', error:'El PDF supera 1,4 MB'});
+    const prev=await env.DB.prepare('SELECT status FROM drive_pdf_queue WHERE user_id=? AND file_id=?').bind(user.id,fileId).first();
+    if(prev && prev.status!=='pending') return json({status:'duplicate', note:'Este PDF ya se revisó en ContaPilot'});
+    await env.DB.prepare(`INSERT INTO drive_pdf_queue (id,user_id,file_id,file_name,folder_path,size,content_b64,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,'pending',?,?)
+      ON CONFLICT(user_id,file_id) DO UPDATE SET file_name=excluded.file_name, folder_path=excluded.folder_path, size=excluded.size, content_b64=excluded.content_b64, updated_at=excluded.updated_at`)
+      .bind(id(),user.id,fileId,String(d.file_name||'factura.pdf').slice(0,250),(Array.isArray(d.path)?d.path.join(' / '):'').slice(0,500),Math.floor(b64.length*3/4),b64,now(),now()).run();
+    return json({status:'queued'});
+  }
   if(p==='/drive-sync/done' && request.method==='POST'){
     const fileId=String(d.file_id||''); if(!fileId) return json({detail:'Falta file_id'},400);
     const imported=Number(d.imported||0), dup=Number(d.duplicates||0), errs=Number(d.errors||0);
@@ -872,6 +885,9 @@ function siigoProviderInvoice(invoiceNumber, rawXml){
     const number=raw.slice(dianPrefix.length).replace(/^[-\s]+/,'');
     if(number) return {prefix:dianPrefix, number, source:'dian'};
   }
+  // Formato "PREFIJO-CONSECUTIVO" (así lo muestra la representación gráfica de la DIAN, ej. "AFE-7577231", "9505-100354187").
+  const dash=raw.match(/^([A-Za-z0-9]+)\s*-\s*(\d+)$/);
+  if(dash) return {prefix:dash[1], number:dash[2], source:'guion'};
   const pn=invoicePrefixNumber(raw);
   if(pn.prefix) return {prefix:pn.prefix, number:pn.number, source:'letras'};
   if(/^\d+$/.test(raw)) return {prefix:dianPrefix||'SP', number:raw, source:dianPrefix?'dian':'sin_prefijo'};
@@ -1051,6 +1067,23 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     ]);
     return json({ok:true, key:raw, last4:raw.slice(-4), api_base:new URL(request.url).origin+'/api'});
   }
+  // PDF de Drive pendientes de revisión (sin el contenido; el PDF se descarga uno a uno al revisarlo).
+  if(p==='/drive-pdf-queue' && request.method==='GET'){
+    const rows=(await env.DB.prepare("SELECT id,file_name,folder_path,size,created_at FROM drive_pdf_queue WHERE user_id=? AND status='pending' ORDER BY folder_path, file_name LIMIT 1000").bind(user.id).all()).results||[];
+    return json(rows);
+  }
+  { const mm=p.match(/^\/drive-pdf-queue\/([^/]+)\/file$/); if(mm && request.method==='GET'){
+    const row=await env.DB.prepare('SELECT file_name,content_b64 FROM drive_pdf_queue WHERE id=? AND user_id=?').bind(mm[1],user.id).first();
+    if(!row) return json({detail:'PDF no encontrado'},404);
+    return new Response(b64ToBytes(row.content_b64),{headers:{'content-type':'application/pdf',...corsHeaders}});
+  }}
+  { const mm=p.match(/^\/drive-pdf-queue\/([^/]+)$/); if(mm && request.method==='POST'){
+    const d=await request.json().catch(()=>({}));
+    const status=['imported','discarded','pending'].includes(d.status)?d.status:null;
+    if(!status) return json({detail:'Estado inválido'},400);
+    await env.DB.prepare('UPDATE drive_pdf_queue SET status=?, invoice_id=?, updated_at=? WHERE id=? AND user_id=?').bind(status,d.invoice_id||null,now(),mm[1],user.id).run();
+    return json({ok:true});
+  }}
   if(p==='/drive-sync/key' && request.method==='DELETE'){
     await env.DB.prepare('UPDATE drive_sync_keys SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL').bind(now(),user.id).run();
     return json({ok:true});

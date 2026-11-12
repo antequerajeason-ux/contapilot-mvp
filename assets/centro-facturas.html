@@ -233,6 +233,9 @@
     .collapse-inner{overflow:hidden;min-height:0;padding:0 16px}
     .collapse-card.open .collapse-inner{padding-bottom:16px}
     .ch-err{color:var(--red);font-weight:700}
+    .pdf-queue-banner{display:flex;align-items:center;gap:12px;margin:0 0 14px;padding:10px 12px 10px 14px;border:1px solid #f3c6c8;background:linear-gradient(90deg,var(--red-soft),#fff);border-radius:14px;animation:cardIn .4s var(--ease) both}
+    .pdf-queue-banner .pq-ic{font-size:11px;font-weight:800;letter-spacing:.04em;padding:6px 9px;border-radius:8px;background:var(--card);color:var(--red);border:1px solid #f3c6c8}
+    .pdf-queue-banner .pq-text{flex:1;font-size:13.5px;color:var(--ink-2)}
     .import-choices{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .import-choice{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:18px;border:1px solid var(--line-strong);border-radius:14px;background:var(--card);cursor:pointer;text-align:left;font-family:inherit;color:var(--ink);transition:transform .2s var(--ease),box-shadow .2s,border-color .2s}
     .import-choice:hover{transform:translateY(-2px);border-color:var(--primary);box-shadow:var(--shadow-hover)}
@@ -406,6 +409,7 @@
       </div>
     </header>
 
+    <div id="pdfQueueBanner" class="pdf-queue-banner" style="display:none"><span class="pq-ic">PDF</span><span id="pdfQueueText" class="pq-text"></span><button class="btn btn-primary" onclick="reviewPdfQueue()">Revisar</button></div>
     <div class="batch-bar"><div id="batchTabs" class="batch-tabs"></div><button class="btn-batch-add" onclick="createBatch()" title="Nuevo centro de facturas">+ Centro</button></div>
 
     <section class="view" id="view-dashboard">
@@ -911,8 +915,37 @@ function normDate(s){
   m=String(s||'').match(/(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/);if(m)return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
   return '';
 }
+// Representación gráfica estándar que genera la DIAN (documentos descargados del portal): cada dato tiene su etiqueta.
+// Ej.: "Número de Factura: AFE-7577231", "Fecha de Emisión: 24/03/2026", "Razón Social: …", "Nit del Emisor: 860013771",
+// "Total Bruto Factura … 1.226.000,00", "IVA IVA 232.940,00", "Total factura (=) … $ 1.458.940,00".
+function extractDianRepresentation(lines){
+  const text=lines.join('\n');
+  if(!/Representaci[oó]n\s+Gr[aá]fica/i.test(text)||!/Datos\s+del\s+Emisor/i.test(text))return null;
+  // Último valor con formato de dinero (con decimales: "0,00", "1.226.000,00") de la línea; respeta los ceros y
+  // no confunde NIT, horas ni fechas que comparten la línea en la representación de la DIAN.
+  const lastMoney=re=>{const L=lines.find(l=>re.test(l));if(!L)return 0;const v=[...L.replace(re,' ').matchAll(/\d{1,3}(?:\.\d{3})*,\d{2}\b/g)].map(m=>parseMoneyCo(m[0]));return v.length?v[v.length-1]:0};
+  const iE=lines.findIndex(l=>/Datos\s+del\s+Emisor/i.test(l)), iA=lines.findIndex(l=>/Datos\s+del\s+Adquiriente/i.test(l));
+  const emisor=lines.slice(iE,iA>iE?iA:iE+12).join('\n');
+  const out={invoice_number:'',issue_date:'',supplier_name:'',supplier_nit:'',subtotal:0,tax_amount:0,payable_amount:0,cufe:''};
+  const cufe=text.replace(/\s+/g,'').match(/[0-9a-f]{96}/i);if(cufe)out.cufe=cufe[0].toLowerCase();
+  // El número puede venir partido con espacios ("9505- 100377482"): se toma hasta la siguiente etiqueta de la línea.
+  const n=text.match(/N[uú]mero\s+de\s+Factura\s*:\s*([^\n]+?)(?=\s+(?:Forma\s+de\s+pago|Fecha|Medio\s+de\s+pago)\b|\s*$)/im);if(n)out.invoice_number=n[1].replace(/\s+/g,'').toUpperCase().slice(0,40);
+  const f=text.match(/Fecha\s+de\s+Emisi[oó]n\s*:\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}|\d{4}-\d{2}-\d{2})/i);if(f)out.issue_date=normDate(f[1]);
+  const rs=emisor.match(/Raz[oó]n\s+Social\s*:\s*(.+)/i)||emisor.match(/Nombre\s+Comercial\s*:\s*(.+)/i);if(rs)out.supplier_name=rs[1].replace(/\s+(Nombre Comercial|Nit del Emisor|Pa[ií]s)\s*:.*$/i,'').trim().slice(0,120);
+  const nit=emisor.match(/Nit\s+del\s+Emisor\s*:\s*([\d.\s]+\d)/i);if(nit)out.supplier_nit=nit[1].replace(/\D/g,'');
+  // Subtotal contable = total bruto - descuento global + recargo global + impuestos no descontables (INC, bolsas, otros).
+  const bruto=lastMoney(/^Total\s+Bruto\s+Factura/i)||lastMoney(/^Subtotal/i);
+  const desc=lastMoney(/Descuento\s+Global\s*\(-\)/i), rec=lastMoney(/Recargo\s+Global\s*\(\+\)/i);
+  const inc=lastMoney(/\bINC\b/), bolsas=lastMoney(/\bBolsas\b/), otros=lastMoney(/Otros\s+impuestos/i);
+  out.tax_amount=lastMoney(/^IVA\b/i);
+  out.payable_amount=lastMoney(/Total\s+factura\s*\(=\)/i)||lastMoney(/Total\s+neto\s+factura\s*\(=\)/i);
+  out.subtotal=Math.round((bruto-desc+rec+inc+bolsas+otros)*100)/100;
+  if(!out.subtotal&&out.payable_amount)out.subtotal=Math.round((out.payable_amount-out.tax_amount)*100)/100;
+  return out;
+}
 // Extrae los datos de una factura electrónica colombiana desde el texto de su PDF.
 function extractInvoiceFromPdfText(lines,companyNit){
+  const dian=extractDianRepresentation(lines);if(dian)return dian;
   const text=lines.join('\n');const flat=text.replace(/\s+/g,'');
   const out={invoice_number:'',issue_date:'',supplier_name:'',supplier_nit:'',subtotal:0,tax_amount:0,payable_amount:0,cufe:''};
   const cufe=flat.match(/[0-9a-f]{96}/i);if(cufe)out.cufe=cufe[0].toLowerCase();
@@ -941,31 +974,59 @@ function extractInvoiceFromPdfText(lines,companyNit){
   if(!out.subtotal&&out.payable_amount)out.subtotal=Math.round((out.payable_amount-out.tax_amount)*100)/100;
   return out;
 }
-async function readPdfInvoices(){
-  const files=[...pdfInvoiceInput.files];pdfInvoiceInput.value='';if(!files.length)return;
+// items: [{file, queueId?, folder?}] — si no se pasa, se toman los archivos elegidos con "Subir PDF".
+async function readPdfInvoices(items){
+  if(!items){items=[...pdfInvoiceInput.files].map(f=>({file:f}));pdfInvoiceInput.value=''}
+  if(!items.length)return;
   if(!cid())return toast('Selecciona empresa');
   pdfRows=[];renderPdfRows();openModal('pdfImportModal');
   pdfImportStatus.innerHTML='<div class="check-box check-info">Leyendo PDF…</div>';
   try{await loadPdfJs()}catch(e){pdfImportStatus.innerHTML=`<div class="check-box check-err">${esc(e.message)}</div>`;return}
-  const company=companies.find(c=>c.id===cid())||{};
-  for(let i=0;i<files.length;i++){
-    const f=files[i];pdfImportStatus.innerHTML=`<div class="check-box check-info">Leyendo ${i+1} de ${files.length}: ${esc(f.name)}</div>`;
-    const row={file:f,name:f.name,data:{invoice_number:'',issue_date:'',supplier_name:'',supplier_nit:'',subtotal:0,tax_amount:0,payable_amount:0,cufe:''},error:'',state:'pending'};
+  const company=companies.find(c=>c.id===cid())||{};const ownNit=String(company.nit||'').replace(/\D/g,'');
+  for(let i=0;i<items.length;i++){
+    const it=items[i];let f=it.file;
+    pdfImportStatus.innerHTML=`<div class="check-box check-info">Leyendo ${i+1} de ${items.length}${it.folder?' · '+esc(it.folder):''}…</div>`;
+    const row={file:f,name:it.name||(f&&f.name)||'factura.pdf',queueId:it.queueId||null,folder:it.folder||'',data:{invoice_number:'',issue_date:'',supplier_name:'',supplier_nit:'',subtotal:0,tax_amount:0,payable_amount:0,cufe:''},error:'',foreign:false,state:'pending'};
     try{
+      if(!f&&it.queueId){const r=await fetch(base()+`/api/drive-pdf-queue/${it.queueId}/file`,{headers:{Authorization:'Bearer '+token}});if(!r.ok)throw new Error('No pude descargar el PDF');f=new File([await r.blob()],row.name,{type:'application/pdf'});row.file=f}
       const lines=await pdfToLines(await f.arrayBuffer());
       if(lines.join('').replace(/\s/g,'').length<40)row.error='PDF sin texto (escaneado): escribe los datos a mano';
-      else row.data=extractInvoiceFromPdfText(lines,company.nit);
+      else{
+        row.data=extractInvoiceFromPdfText(lines,company.nit);
+        // La factura debe mencionar el NIT de la empresa activa (receptor); si no, probablemente es de la otra empresa.
+        if(ownNit&&!lines.join(' ').replace(/\D/g,'').includes(ownNit)){row.foreign=true;row.error='No menciona el NIT de esta empresa: puede ser de otra empresa'}
+      }
     }catch(e){row.error='No pude leer el PDF: '+e.message}
     pdfRows.push(row);renderPdfRows();
   }
   pdfImportStatus.innerHTML='<div class="check-box check-warn">Revisa los datos de cada factura. Las celdas en rojo son obligatorias y no se pudieron leer.</div>';
 }
 const pdfRequired=['invoice_number','issue_date','supplier_nit','payable_amount'];
-function pdfRowMissing(r){return pdfRequired.filter(k=>k==='payable_amount'?!(Number(r.data[k])>0):k==='issue_date'?!/^\d{4}-\d{2}-\d{2}$/.test(r.data[k]):!String(r.data[k]||'').trim())}
+function pdfRowMissing(r){const m=pdfRequired.filter(k=>k==='payable_amount'?!(Number(r.data[k])>0):k==='issue_date'?!/^\d{4}-\d{2}-\d{2}$/.test(r.data[k]):!String(r.data[k]||'').trim());if(r.foreign)m.push('empresa');return m}
+// ---------- PDF de Drive pendientes de revisión ----------
+let pdfQueue=[];
+async function refreshPdfQueue(){
+  try{pdfQueue=await api('/api/drive-pdf-queue')}catch(e){pdfQueue=[]}
+  const b=document.getElementById('pdfQueueBanner');if(!b)return;
+  b.style.display=pdfQueue.length?'':'none';
+  pdfQueueText.innerHTML=`Hay <b>${pdfQueue.length}</b> factura(s) en PDF desde Drive esperando revisión.`;
+}
+async function reviewPdfQueue(){
+  if(!pdfQueue.length)await refreshPdfQueue();
+  if(!pdfQueue.length)return toast('No hay facturas en PDF pendientes.');
+  const lote=pdfQueue.slice(0,30);
+  await readPdfInvoices(lote.map(q=>({queueId:q.id,name:q.file_name,folder:q.folder_path})));
+  pdfImportSub.textContent=`Facturas en PDF que llegaron desde Drive (${lote.length} de ${pdfQueue.length}). Revisa los datos y presiona Importar. Las que sean de otra empresa revísalas desde esa empresa.`;
+}
+async function discardPdfRow(i){
+  const r=pdfRows[i];if(!r)return;
+  if(r.queueId){if(!confirm('¿Descartar este PDF? No se importará y no volverá a aparecer en pendientes.'))return;try{await api(`/api/drive-pdf-queue/${r.queueId}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'discarded'})})}catch(e){return toast(e.message)}refreshPdfQueue()}
+  pdfRows.splice(i,1);renderPdfRows();
+}
 function renderPdfRows(){
   const cell=(i,k,type)=>{const r=pdfRows[i];const miss=pdfRequired.includes(k)&&pdfRowMissing(r).includes(k);const v=r.data[k]??'';const dis=r.state==='done'?'readonly':'';return `<td><input ${dis} class="${type==='number'?'num ':''}${miss?'missing':''}" type="${type||'text'}" ${type==='number'?'step="0.01" min="0"':''} value="${esc(v)}" oninput="pdfRows[${i}].data['${k}']=this.type==='number'?Number(this.value):this.value;updatePdfRowState(${i})"></td>`};
-  const st=r=>r.state==='done'?`<span class="pill approved">${esc(r.result||'Importada')}</span>`:r.state==='error'?`<span class="pill failed" title="${esc(r.error)}">Error</span>`:pdfRowMissing(r).length?`<span class="pill received" title="Falta: ${esc(pdfRowMissing(r).join(', '))}">Incompleta</span>`:'<span class="pill accounted">Lista</span>';
-  pdfImportRows.innerHTML=pdfRows.map((r,i)=>`<tr id="pdfRow${i}"><td class="fname">${esc(r.name)}${r.error?`<span class="sub" style="color:var(--red)">${esc(r.error)}</span>`:''}</td>${cell(i,'invoice_number')}${cell(i,'issue_date','date')}${cell(i,'supplier_name')}${cell(i,'supplier_nit')}${cell(i,'subtotal','number')}${cell(i,'tax_amount','number')}${cell(i,'payable_amount','number')}${cell(i,'cufe')}<td>${st(r)}</td><td>${r.state==='done'?'':`<button class="row-del" title="Quitar" onclick="pdfRows.splice(${i},1);renderPdfRows()">×</button>`}</td></tr>`).join('')||'<tr><td colspan="11">Sin archivos</td></tr>';
+  const st=r=>r.foreign&&r.state!=='done'?'<span class="pill exported">Otra empresa</span>':r.state==='done'?`<span class="pill approved">${esc(r.result||'Importada')}</span>`:r.state==='error'?`<span class="pill failed" title="${esc(r.error)}">Error</span>`:pdfRowMissing(r).length?`<span class="pill received" title="Falta: ${esc(pdfRowMissing(r).join(', '))}">Incompleta</span>`:'<span class="pill accounted">Lista</span>';
+  pdfImportRows.innerHTML=pdfRows.map((r,i)=>`<tr id="pdfRow${i}"><td class="fname">${esc(r.name)}${r.folder?`<span class="sub">${esc(r.folder)}</span>`:""}${r.error?`<span class="sub" style="color:var(--red)">${esc(r.error)}</span>`:''}</td>${cell(i,'invoice_number')}${cell(i,'issue_date','date')}${cell(i,'supplier_name')}${cell(i,'supplier_nit')}${cell(i,'subtotal','number')}${cell(i,'tax_amount','number')}${cell(i,'payable_amount','number')}${cell(i,'cufe')}<td>${st(r)}</td><td>${r.state==='done'?'':`<button class="row-del" title="Quitar" onclick="discardPdfRow(${i})">×</button>`}</td></tr>`).join('')||'<tr><td colspan="11">Sin archivos</td></tr>';
   const ready=pdfRows.filter(r=>r.state!=='done'&&!pdfRowMissing(r).length).length;
   pdfImportCount.textContent=`${pdfRows.length} PDF · ${ready} lista(s) para importar · ${pdfRows.filter(r=>r.state==='done').length} importada(s)`;
   pdfImportBtn.disabled=!ready;pdfImportBtn.textContent=ready?`Importar ${ready} factura(s)`:'Importar facturas';
@@ -988,13 +1049,13 @@ async function importPdfInvoices(){
       const fd=new FormData();fd.append('data',JSON.stringify(r.data));fd.append('file',r.file);
       if(autoMonthOn())fd.append('auto_month','1');else if(activeBatchId)fd.append('batch_id',activeBatchId);
       const res=await api(`/api/companies/${cid()}/pdf-invoice`,{method:'POST',body:fd});
-      r.state='done';r.result=res.status==='duplicate'?'Ya existía (se guardó su PDF)':`Importada${res.batch?' · '+res.batch:''}`;
+      r.state='done';r.result=res.status==='duplicate'?'Ya existía (se guardó su PDF)':`Importada${res.batch?' · '+res.batch:''}`;if(r.queueId){try{await api(`/api/drive-pdf-queue/${r.queueId}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'imported',invoice_id:res.invoice_id})})}catch(_){}}
       if(res.status==='duplicate')dup++;else ok++;
     }catch(e){r.state='error';r.error=e.message;err++}
     renderPdfRows();
   }
   pdfImportStatus.innerHTML=`<div class="check-box ${err?'check-warn':'check-ok'}"><b>${ok}</b> factura(s) importada(s)${dup?` · ${dup} ya existían (se les guardó el PDF)`:''}${err?` · ${err} con error (pasa el mouse sobre "Error" para ver el motivo)`:''}. Ahora puedes causarlas y revisarlas como cualquier otra factura.</div>`;
-  await loadInvoices();
+  await loadInvoices();refreshPdfQueue();
 }
 function closePdfImport(){if(pdfRows.some(r=>r.state!=='done')&&pdfRows.some(r=>r.state==='done'||r.data.invoice_number)&&!confirm('Hay facturas sin importar. ¿Cerrar de todos modos?'))return;closeModal('pdfImportModal')}
 // PDF generado por ContaPilot con los datos del XML (cuando no hay PDF original del emisor).
@@ -1842,7 +1903,7 @@ async function revokeDriveKey(){if(!confirm('¿Anular la llave? El programa de D
 
 try{const v=localStorage.getItem('cp_auto_month');if(v!==null)autoMonthBox.checked=v==='1'}catch(e){}
 try{sbAvatar.textContent=(user.name||user.email||'C').trim().charAt(0).toUpperCase()}catch(e){}
-(async()=>{let v='dashboard';try{v=localStorage.getItem('cp_view')||'dashboard'}catch(e){}showView(v);await loadCompanies();showView(currentView,{force:true});refreshDriveWarn()})();
+(async()=>{let v='dashboard';try{v=localStorage.getItem('cp_view')||'dashboard'}catch(e){}showView(v);await loadCompanies();showView(currentView,{force:true});refreshDriveWarn();refreshPdfQueue()})();
 </script>
 </body>
 </html>

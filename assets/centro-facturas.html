@@ -217,6 +217,22 @@
     tbody tr{transition:background .15s}
     tbody tr:hover td{background:#f7fafd}
     .supplier{font-weight:600}
+    .collapse-card{margin-top:20px;border:1px solid var(--line);border-radius:14px;background:var(--card);overflow:hidden}
+    .collapse-head{width:100%;display:flex;align-items:center;gap:12px;padding:14px 16px;border:0;background:transparent;cursor:pointer;text-align:left;font-family:inherit;color:var(--ink);transition:background .2s}
+    .collapse-head:hover{background:#f7fafd}
+    .collapse-head .ch-ic{width:34px;height:34px;border-radius:10px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center;flex-shrink:0}
+    .collapse-head .ch-ic svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .collapse-head .ch-text{flex:1;min-width:0}
+    .collapse-head .ch-text b{display:block;font-size:14.5px}
+    .collapse-head .ch-text small{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+    .collapse-head .ch-more{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--primary-dark);flex-shrink:0}
+    .collapse-head .ch-arrow{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;transition:transform .3s var(--ease)}
+    .collapse-card.open .ch-arrow{transform:rotate(180deg)}
+    .collapse-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .35s var(--ease)}
+    .collapse-card.open .collapse-body{grid-template-rows:1fr}
+    .collapse-inner{overflow:hidden;min-height:0;padding:0 16px}
+    .collapse-card.open .collapse-inner{padding-bottom:16px}
+    .ch-err{color:var(--red);font-weight:700}
     .import-choices{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .import-choice{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:18px;border:1px solid var(--line-strong);border-radius:14px;background:var(--card);cursor:pointer;text-align:left;font-family:inherit;color:var(--ink);transition:transform .2s var(--ease),box-shadow .2s,border-color .2s}
     .import-choice:hover{transform:translateY(-2px);border-color:var(--primary);box-shadow:var(--shadow-hover)}
@@ -538,8 +554,17 @@
     </div>
   </div>
 
-  <div class="actions" style="justify-content:space-between;align-items:center;margin:20px 0 8px"><h3 style="margin:0;font-size:15px">Archivos recibidos desde Drive</h3><div class="tabs-inline" style="margin:0"><button id="driveTabAll" class="active" onclick="setDriveTab('all')">Recientes</button><button id="driveTabErr" onclick="setDriveTab('err')">Con error</button></div></div>
-  <div class="table-wrap"><table style="min-width:720px;table-layout:fixed"><thead><tr><th style="width:140px">Última revisión</th><th>Archivo y detalle</th><th style="width:110px">Resultado</th><th style="width:80px">Nuevas</th><th style="width:110px">Ya existían / omitidas</th></tr></thead><tbody id="driveFiles"><tr><td colspan="5">Sin archivos todavía</td></tr></tbody></table></div>
+  <div class="collapse-card" id="driveFilesCard">
+    <button class="collapse-head" onclick="toggleDriveFiles()" aria-expanded="false" id="driveFilesToggle">
+      <span class="ch-ic"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></span>
+      <span class="ch-text"><b>Archivos recibidos desde Drive</b><small id="driveFilesSummary">Sin archivos todavía</small></span>
+      <span class="ch-more"><span id="driveFilesLabel">Ver detalle</span><svg class="ch-arrow" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <div class="collapse-body"><div class="collapse-inner">
+      <div class="tabs-inline" style="margin:4px 0 10px"><button id="driveTabAll" class="active" onclick="setDriveTab('all')">Recientes</button><button id="driveTabErr" onclick="setDriveTab('err')">Con error</button></div>
+      <div class="table-wrap"><table style="min-width:720px;table-layout:fixed"><thead><tr><th style="width:140px">Última revisión</th><th>Archivo y detalle</th><th style="width:110px">Resultado</th><th style="width:80px">Nuevas</th><th style="width:110px">Ya existían / omitidas</th></tr></thead><tbody id="driveFiles"><tr><td colspan="5">Sin archivos todavía</td></tr></tbody></table></div>
+    </div></div>
+  </div>
 </div></div>
 <div id="historyModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Historial de importaciones</h3><p>Registro de cargas XML/ZIP realizadas para la empresa activa.</p></div><button class="close" onclick="closeModal('historyModal')">×</button></div><div class="table-wrap"><table style="min-width:780px"><thead><tr><th>Fecha</th><th>Archivos</th><th>Estado</th><th>Importadas</th><th>Errores</th><th>Detalle</th></tr></thead><tbody id="historyRows"><tr><td colspan="6">Sin historial</td></tr></tbody></table></div></div></div>
 <div id="exportModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div class="export-title"><img src="siigo-nube-logo.png" alt="Siigo Nube"><div><h3>Exportar a Siigo Nube</h3><p>Descarga las causaciones listas para revisión o carga en Siigo.</p></div></div><button class="close" onclick="closeModal('exportModal')">×</button></div><div class="field"><label>Formato</label><select id="exportFormat"><option value="siigo">Siigo Nube</option><option value="general">General contable</option><option value="invoices">Resumen facturas</option></select></div><button class="btn btn-blue btn-full btn-siigo" onclick="exportCsv()"><img src="siigo-nube-logo.png" alt="Siigo Nube">Descargar CSV para Siigo</button><hr style="border:0;border-top:1px solid var(--line);margin:16px 0"><p style="margin:0 0 10px;color:var(--muted);font-size:13px">Informe en PDF con la contabilización de cada factura: usa las facturas seleccionadas o, si no hay ninguna, las que se ven en la bandeja con el filtro actual.</p><button class="btn btn-light btn-full" onclick="closeModal('exportModal');downloadInvoicesPdf(selectedInvoiceIds.size?[...selectedInvoiceIds]:filteredInvoices().map(i=>i.id))">Descargar informe PDF</button></div></div><div id="toast" class="toast"></div>
@@ -1737,7 +1762,7 @@ async function loadRecentExports(){
 // ---------- Sincronización con Google Drive ----------
 function daysSince(s){const t=Date.parse(s||'');return Number.isFinite(t)?(Date.now()-t)/86400000:Infinity}
 async function refreshDriveWarn(){try{const s=await api('/api/drive-sync/status');const stale=s.key&&daysSince((s.runs[0]||{}).finished_at)>3;sbDriveWarn.style.display=stale?'':'none';return s}catch(e){return null}}
-async function openDriveSync(){openModal('driveModal');driveScriptBox.style.display='none';if(!driveFrom.value)driveFrom.value=new Date().getFullYear()+'-01';await loadDriveStatus()}
+async function openDriveSync(){openModal('driveModal');driveScriptBox.style.display='none';toggleDriveFiles(false);if(!driveFrom.value)driveFrom.value=new Date().getFullYear()+'-01';await loadDriveStatus()}
 async function loadDriveStatus(){
   driveStatus.innerHTML='<div class="check-box check-info">Cargando estado…</div>';
   const s=await refreshDriveWarn();
@@ -1755,8 +1780,11 @@ async function loadDriveStatus(){
   driveStatus.innerHTML=html;
   const lbl={done:['Correcto','approved'],partial:['Parcial','received'],error:['Error','failed']};
   driveLast=s;renderDriveFiles();
+  const nErr=(s.errors||[]).length,nFiles=Number((s.totals||{}).files||0);
+  driveFilesSummary.innerHTML=nFiles?`${nFiles} archivo(s) procesados · ${nErr?`<span class="ch-err">${nErr} con error</span>`:'sin errores'}`:'Sin archivos todavía';
 }
 let driveLast=null,driveTab='all';
+function toggleDriveFiles(force){const c=driveFilesCard;const open=typeof force==='boolean'?force:!c.classList.contains('open');c.classList.toggle('open',open);driveFilesToggle.setAttribute('aria-expanded',open);driveFilesLabel.textContent=open?'Ocultar detalle':'Ver detalle'}
 function setDriveTab(t){driveTab=t;driveTabAll.classList.toggle('active',t==='all');driveTabErr.classList.toggle('active',t==='err');renderDriveFiles()}
 function renderDriveFiles(){
   const s=driveLast||{};const lbl={done:['Correcto','approved'],partial:['Parcial','received'],error:['Error','failed']};

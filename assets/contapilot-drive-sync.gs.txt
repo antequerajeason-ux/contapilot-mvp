@@ -1,7 +1,7 @@
 /**
  * ContaPilot · Sincronización automática desde Google Drive
  *
- * Qué hace: una vez al día revisa las carpetas de facturas de cada empresa
+ * Qué hace: cada 2 días (ver CADA_CUANTOS_DIAS) revisa las carpetas de facturas de cada empresa
  * (ej. FACTURAS DIAN > 2026 > RECIBIDOS > 10. OCTUBRE), toma los archivos nuevos
  * (ZIP o XML de la DIAN), abre los ZIP y envía las facturas a ContaPilot.
  * ContaPilot ubica cada factura en su empresa por el NIT del receptor, la deja en el
@@ -14,15 +14,20 @@
  *   2. Guarda (icono de disquete).
  *   3. Arriba elige la función "instalar" y presiona "Ejecutar". Acepta los permisos de Google.
  * Para sincronizar en cualquier momento: elige "sincronizar" y presiona "Ejecutar".
+ * El PDF de cada factura (viene dentro del ZIP de la DIAN) también se guarda en ContaPilot.
+ * Si ya habías sincronizado antes de esta versión: ejecuta UNA vez "recuperarPdfs" para traer
+ * los PDF de las facturas que ya estaban (no las duplica ni cambia su contabilización).
  */
 
 const CARPETAS_FACTURAS = [
   'PEGA_AQUI_EL_ENLACE_DE_LA_CARPETA_DE_LA_EMPRESA_1',
   'PEGA_AQUI_EL_ENLACE_DE_LA_CARPETA_DE_LA_EMPRESA_2',
 ];
-const SINCRONIZAR_DESDE = '__DESDE__'; // año-mes (AAAA-MM): se ignoran carpetas de meses anteriores
+const SINCRONIZAR_DESDE = '__DESDE__'; // primer mes que se trae (AAAA-MM). Ej. '2026-01' = desde enero 2026
+const SINCRONIZAR_HASTA = '__HASTA__'; // último mes que se trae (AAAA-MM). Vacío '' = hasta hoy. Ej. '2026-01' = solo enero si DESDE también es '2026-01'
 const SOLO_RECIBIDOS = true;           // solo facturas de compra: carpetas "RECIBIDOS" (se ignoran "ENVIADOS")
-const HORA_DIARIA = 6;                 // hora del día (0-23) en que se revisan las carpetas
+const CADA_CUANTOS_DIAS = 2;           // cada cuántos días se revisan las carpetas
+const HORA_DIARIA = 6;                 // hora del día (0-23) en que se hace la revisión
 
 // --- No modificar desde aquí ---
 const CONTAPILOT_API = '__API__';
@@ -33,13 +38,21 @@ const TIPOS_OK = ['application/zip','application/x-zip-compressed','application/
 
 function instalar() {
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
-  ScriptApp.newTrigger('sincronizar').timeBased().everyDays(1).atHour(HORA_DIARIA).create();
+  ScriptApp.newTrigger('sincronizar').timeBased().everyDays(Math.max(1, CADA_CUANTOS_DIAS)).atHour(HORA_DIARIA).create();
   carpetasRaiz_().forEach(function (c) { Logger.log('Carpeta encontrada: ' + c.getName()); });
-  Logger.log('Instalado: se revisarán las carpetas todos los días a las ' + HORA_DIARIA + ':00. Haciendo la primera sincronización...');
+  Logger.log('Instalado: se revisarán las carpetas cada ' + CADA_CUANTOS_DIAS + ' día(s) a las ' + HORA_DIARIA + ':00. Período: desde ' + SINCRONIZAR_DESDE + ' hasta ' + (SINCRONIZAR_HASTA || 'hoy') + '. Haciendo la primera sincronización...');
   sincronizar();
 }
 
 function continuar() { sincronizar(); }
+
+// Úsala una sola vez si ya habías sincronizado antes de que ContaPilot guardara los PDF:
+// vuelve a leer todos los archivos del período para traer el PDF de las facturas que ya estaban
+// (no duplica facturas ni cambia su contabilización).
+function recuperarPdfs() {
+  PropertiesService.getScriptProperties().setProperty('FORZAR_TODO', '1');
+  sincronizar();
+}
 
 function sincronizar() {
   const inicio = Date.now();
@@ -48,11 +61,18 @@ function sincronizar() {
   try {
     const archivos = [];
     carpetasRaiz_().forEach(function (raiz) { recorrer_(raiz, [], archivos, 0, {}); });
+    // Orden cronológico (enero primero) según las carpetas de año y mes; lo que no tenga mes va al final.
+    archivos.sort(function (a, b) { return ordenRuta_(a.path) - ordenRuta_(b.path) || (a.name < b.name ? -1 : 1); });
     resumen.files_seen = archivos.length;
 
+    const props = PropertiesService.getScriptProperties();
+    const forzar = props.getProperty('FORZAR_TODO') === '1';
+    // En la recuperación se recorren todos los archivos en orden fijo; se guarda hasta cuál se llegó.
+    const desdePos = forzar ? Number(props.getProperty('FORZAR_POS') || 0) : 0;
     const pendientes = [];
     for (let i = 0; i < archivos.length; i += 250) {
       const lote = archivos.slice(i, i + 250);
+      if (forzar) { if (i === 0) pendientes.push.apply(pendientes, archivos.slice(desdePos)); continue; }
       const r = api_('/drive-sync/check', { files: lote.map(function (a) { return { id: a.id, updated: a.updated }; }) });
       const set = {}; (r.pending || []).forEach(function (id) { set[id] = true; });
       lote.forEach(function (a) { if (set[a.id]) pendientes.push(a); });
@@ -69,6 +89,10 @@ function sincronizar() {
       const r = procesarArchivo_(pendientes[i]);
       resumen.files_done++; resumen.imported += r.imported; resumen.duplicates += r.duplicates; resumen.errors += r.errors;
     }
+    if (forzar) {
+      if (resumen.continues) props.setProperty('FORZAR_POS', String(desdePos + resumen.files_done));
+      else { props.deleteProperty('FORZAR_TODO'); props.deleteProperty('FORZAR_POS'); resumen.message = (resumen.message ? resumen.message + ' ' : '') + 'Recuperación de PDF terminada.'; }
+    }
   } catch (e) {
     resumen.errors++;
     resumen.message = 'Error: ' + (e && e.message ? e.message : e);
@@ -83,8 +107,12 @@ function procesarArchivo_(a) {
     const blob = DriveApp.getFileById(a.id).getBlob();
     const bytes = blob.getBytes();
     let xmls;
-    if (bytes.length > 1 && bytes[0] === 0x50 && bytes[1] === 0x4B) xmls = xmlsDeZip_(blob, 0);          // "PK": es un ZIP
-    else {
+    if (bytes.length > 1 && bytes[0] === 0x50 && bytes[1] === 0x4B) {                                     // "PK": es un ZIP
+      const z = { xmls: [], pdfs: [] };
+      contenidoZip_(blob, 0, '', z);
+      emparejarPdfs_(z.xmls, z.pdfs);   // el PDF de cada factura viaja con su XML y queda guardado en ContaPilot
+      xmls = z.xmls;
+    } else {
       const texto = blob.getDataAsString('UTF-8').replace(/^﻿/, '');
       if (/^\s*</.test(texto)) xmls = [{ name: a.name, text: texto }];
       else xmls = null;
@@ -93,7 +121,13 @@ function procesarArchivo_(a) {
     else if (!xmls.length) { r.errors++; r.mensajes.push('El ZIP no trae XML (solo PDF u otros archivos)'); }
     (xmls || []).forEach(function (x) {
       try {
-        const res = api_('/drive-sync/upload', { file_name: x.name, path: a.path, xml: x.text, desde: SINCRONIZAR_DESDE });
+        const cuerpo = { file_name: x.name, path: a.path, xml: x.text, desde: SINCRONIZAR_DESDE, hasta: SINCRONIZAR_HASTA };
+        if (x.pdf) {
+          const pb = x.pdf.blob.getBytes();
+          if (pb.length <= 1400000) { cuerpo.pdf_b64 = Utilities.base64Encode(pb); cuerpo.pdf_name = x.pdf.name; }
+          else r.mensajes.push(x.pdf.name + ': PDF de más de 1,4 MB, no se guardó');
+        }
+        const res = api_('/drive-sync/upload', cuerpo);
         if (res.status === 'imported') r.imported++;
         else if (res.status === 'duplicate' || res.status === 'skipped') r.duplicates++;
         else { r.errors++; r.mensajes.push(x.name + ': ' + (res.error || 'error')); }
@@ -106,16 +140,29 @@ function procesarArchivo_(a) {
   return r;
 }
 
-function xmlsDeZip_(blob, nivel) {
-  const out = [];
+// Abre el ZIP (y ZIP internos) y separa los XML y los PDF, recordando de qué ZIP viene cada uno.
+function contenidoZip_(blob, nivel, grupo, z) {
   let partes = [];
   try { partes = Utilities.unzip(blob.setContentType('application/zip')); } catch (e) { throw new Error('No pude abrir el ZIP: ' + e.message); }
   partes.forEach(function (p) {
     const n = p.getName() || '';
-    if (/\.zip$/i.test(n) && nivel < 3) out.push.apply(out, xmlsDeZip_(p, nivel + 1));
-    else if (/\.xml$/i.test(n)) out.push({ name: n, text: p.getDataAsString('UTF-8').replace(/^﻿/, '') });
+    if (/\.zip$/i.test(n) && nivel < 3) contenidoZip_(p, nivel + 1, grupo + '/' + n, z);
+    else if (/\.xml$/i.test(n)) z.xmls.push({ name: n, group: grupo, text: p.getDataAsString('UTF-8').replace(/^﻿/, '') });
+    else if (/\.pdf$/i.test(n)) z.pdfs.push({ name: n, group: grupo, blob: p });
   });
-  return out;
+}
+// La DIAN entrega un ZIP por factura con su XML y su PDF: si en un mismo ZIP hay 1 XML y 1 PDF, van juntos;
+// si no, se emparejan por nombre de archivo igual.
+function emparejarPdfs_(xmls, pdfs) {
+  const base = function (n) { return String(n).split('/').pop().replace(/\.[^.]+$/, '').toLowerCase(); };
+  const usados = [];
+  xmls.forEach(function (x) {
+    const mismos = xmls.filter(function (o) { return o.group === x.group; });
+    const delGrupo = pdfs.filter(function (p) { return p.group === x.group; });
+    let pdf = (mismos.length === 1 && delGrupo.length === 1) ? delGrupo[0] : null;
+    if (!pdf) pdf = pdfs.filter(function (p) { return usados.indexOf(p) < 0 && base(p.name) === base(x.name); })[0] || null;
+    if (pdf && usados.indexOf(pdf) < 0) { usados.push(pdf); x.pdf = pdf; }
+  });
 }
 
 // Año de una carpeta ("2026") y número de mes ("10. OCTUBRE" -> 10)
@@ -130,6 +177,17 @@ function antesDeInicio_(anio, mes) {
   if (!m || !anio) return false;
   const desde = Number(m[1]) * 100 + Number(m[2]);
   return mes ? (anio * 100 + mes) < desde : anio < Number(m[1]);
+}
+function despuesDelFin_(anio, mes) {
+  const m = String(SINCRONIZAR_HASTA).match(/^(\d{4})-(\d{1,2})$/);
+  if (!m || !anio) return false;
+  const hasta = Number(m[1]) * 100 + Number(m[2]);
+  return mes ? (anio * 100 + mes) > hasta : anio > Number(m[1]);
+}
+function ordenRuta_(ruta) {
+  let anio = 0, mes = 0;
+  ruta.forEach(function (s) { anio = anioDe_(s) || anio; mes = mesDe_(s) || mes; });
+  return (anio || 9999) * 100 + (mes || 99);
 }
 
 function recorrer_(carpeta, ruta, salida, nivel, ctx) {
@@ -153,7 +211,7 @@ function recorrer_(carpeta, ruta, salida, nivel, ctx) {
     if (SOLO_RECIBIDOS && /enviad|emitid/i.test(nombre)) continue;
     const anio = anioDe_(nombre) || ctx.anio || 0;
     const mes = mesDe_(nombre);
-    if (antesDeInicio_(anio, mes)) continue;
+    if (antesDeInicio_(anio, mes) || despuesDelFin_(anio, mes)) continue;
     recorrer_(c, ruta.concat([nombre]), salida, nivel + 1, { anio: anio });
   }
 }

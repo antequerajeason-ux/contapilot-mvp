@@ -210,6 +210,7 @@
     tbody tr{transition:background .15s}
     tbody tr:hover td{background:#f7fafd}
     .supplier{font-weight:600}
+    .pdf-tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:5px;background:var(--red-soft);color:var(--red);font-size:10px;font-weight:800;letter-spacing:.03em;vertical-align:1px}
     td strong,.stat strong,.money-highlight{font-variant-numeric:tabular-nums}
     .rows-in tr{animation:rowIn .45s var(--ease) both}
     @keyframes rowIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -364,7 +365,7 @@
       <div style="display:flex;align-items:center;gap:8px"><button class="mobile-toggle" onclick="document.body.classList.add('sb-open')" aria-label="Menú"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><div><h1 id="viewTitle">Dashboard</h1><p id="viewSub">Resumen del centro de facturas activo.</p></div></div>
       <div class="head-actions">
         <div class="menu" id="companyMenu"><button class="company-btn" onclick="toggleMenu('companyMenu')"><span class="cb-ic">E</span><span id="companyBtnLabel">Empresa</span>▾</button><div class="dropdown"><div class="field"><label>Empresa activa</label><select id="companySelect" onchange="onCompanyChange()"></select></div><div class="actions"><button class="btn btn-primary" onclick="openCompanyModal()">+ Agregar</button><button class="btn btn-light" onclick="openEditCompanyModal()">Editar</button><button class="btn btn-danger-light" onclick="deleteCompany()">Eliminar</button></div><div class="sub" id="companyHint" style="margin-top:10px">Agrega una empresa para iniciar.</div></div></div>
-        <input id="fileInput" type="file" multiple accept=".xml,.zip,.html,.htm,.txt" style="display:none" onchange="upload()">
+        <input id="fileInput" type="file" multiple accept=".xml,.zip,.pdf,.html,.htm,.txt" style="display:none" onchange="upload()">
         <button class="btn btn-primary" onclick="openDian()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Importar facturas</button>
       </div>
     </header>
@@ -417,7 +418,7 @@
   <strong>Pasos para el contador</strong>
   <ol style="margin:10px 0 0;padding-left:18px;line-height:1.65;color:var(--ink-2);font-size:14px">
     <li>Entra al portal de la DIAN.</li>
-    <li>Busca <strong>Documentos recibidos</strong> y filtra el mes o los meses que quieres causar.</li>
+    <li>Busca <strong>Documentos recibidos</strong> y filtra el año completo (o los meses) que quieres causar.</li>
     <li>Descarga el archivo que entrega la DIAN: puede ser <strong>ZIP</strong> o <strong>XML</strong>.</li>
     <li>Regresa a ContaPilot y presiona <strong>Subir ZIP/XML</strong>.</li>
     <li>Cuando ContaPilot liste las facturas, selecciona una, varias o todas y presiona <strong>Causar Factura</strong>.</li>
@@ -426,6 +427,7 @@
   <div style="margin-top:12px;padding:12px;border-radius:14px;background:rgba(31,185,138,.14);border:1px solid rgba(31,185,138,.35);color:var(--green);font-weight:850;font-size:13px">ContaPilot revisa el ZIP, localiza los XML de factura, valida el NIT receptor y prepara la causación masiva.</div>
   <div class="actions" style="margin-top:14px">
     <button class="btn btn-light" onclick="openDianPortal()">Abrir portal DIAN</button>
+    <label style="display:flex;align-items:flex-start;gap:9px;width:100%;margin:2px 0 6px;font-size:13px;cursor:pointer" class="text-2"><input type="checkbox" id="autoMonthBox" class="mini-check" style="margin-top:2px" onchange="saveAutoMonth()" checked><span><b>Repartir por mes automáticamente.</b> Puedes subir todo el año (o varios meses) en un solo ZIP: cada factura queda en el centro de su mes según su fecha de emisión ("Enero 2026", "Febrero 2026"…). Si lo desmarcas, todo va al centro activo.</span></label>
     <button class="btn btn-green" onclick="closeModal('dianModal'); fileInput.click()">Subir ZIP/XML</button>
     <button class="btn btn-light" onclick="closeModal('dianModal'); openImportHistory()">Ver historial de cargas</button>
   </div>
@@ -480,7 +482,7 @@
 <datalist id="accountsDatalist"></datalist>
 <div id="rulesModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Reglas contables</h3><p>Reglas por empresa: proveedor/descripcion → cuenta.</p></div><button class="close" onclick="closeModal('rulesModal')">×</button></div><div class="grid2"><div class="field"><label>Tipo</label><select id="ruleType"><option value="supplier">Proveedor contiene</option><option value="description">Descripción contiene</option><option value="default">Default</option></select></div><div class="field"><label>Texto</label><input id="ruleValue" placeholder="CLASSIC JEANS"></div><div class="field"><label>Cuenta</label><input id="ruleAccount" placeholder="519525" list="accountsDatalist"></div><div class="field"><label>Descripción</label><input id="ruleDescription" placeholder="Vestuario"></div><div class="field"><label>Centro costo</label><input id="ruleCostCenter" placeholder="Administración"></div><div class="field"><label>Prioridad</label><input id="rulePriority" type="number" value="50"></div></div><div class="actions" style="justify-content:flex-end"><button class="btn btn-green" onclick="createRule()">Crear regla</button></div><hr style="border:0;border-top:1px solid var(--line);margin:16px 0"><div class="table-wrap"><table style="min-width:700px"><thead><tr><th>Tipo</th><th>Texto</th><th>Cuenta</th><th>Descripción</th><th>Prioridad</th></tr></thead><tbody id="rulesRows"></tbody></table></div></div></div>
 <div id="chartModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Plan de cuentas</h3><p>Importa el Excel o CSV del plan de cuentas exportado de Siigo Nube para validar las cuentas que se usan en reglas y configuración contable.</p></div><button class="close" onclick="closeModal('chartModal')">×</button></div><div style="background:var(--surface-2);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px"><input id="chartFileInput" type="file" accept=".csv,.xlsx,.xls" style="display:none" onchange="uploadChartCsv()"><div class="actions"><button class="btn btn-green" onclick="chartFileInput.click()">Subir plan de cuentas (Excel o CSV)</button></div><div id="chartImportResult" style="margin-top:10px;font-size:13px;color:var(--ink-2);font-weight:750"></div></div><div class="field"><label>Buscar cuenta</label><input id="chartSearch" oninput="renderChartAccountsList()" placeholder="Código o nombre"></div><div class="table-wrap"><table style="min-width:600px"><thead><tr><th>Código</th><th>Nombre</th><th>Clase</th></tr></thead><tbody id="chartRows"><tr><td colspan="3">Sin cuentas importadas</td></tr></tbody></table></div></div></div>
-<div id="facturaModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3 id="facturaTitle">Detalle de factura</h3><p id="facturaSubtitle">Información extraída del XML.</p></div><button class="close" onclick="closeModal('facturaModal')">×</button></div><div class="invoice-hero"><h2 id="facturaHeroNumber">Factura</h2><p id="facturaHeroInfo">Proveedor → Receptor</p></div><div id="facturaDetail" class="detail-grid"></div><h3 style="margin:12px 0 8px">Ítems de la factura</h3><div class="table-wrap"><table style="min-width:680px"><thead><tr><th>Descripción</th><th>Cantidad</th><th>Valor línea</th></tr></thead><tbody id="facturaItems"><tr><td colspan="3">Sin ítems</td></tr></tbody></table></div><div class="support-box"><div><strong>Soporte XML original</strong><p>El XML se guarda como respaldo técnico. Puedes descargarlo si necesitas auditar la factura.</p></div><button class="btn btn-light" onclick="downloadCurrentXml()">Descargar XML</button></div><pre id="facturaXml" class="xml-box"></pre></div></div>
+<div id="facturaModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3 id="facturaTitle">Detalle de factura</h3><p id="facturaSubtitle">Información extraída del XML.</p></div><button class="close" onclick="closeModal('facturaModal')">×</button></div><div class="invoice-hero"><h2 id="facturaHeroNumber">Factura</h2><p id="facturaHeroInfo">Proveedor → Receptor</p></div><div id="facturaDetail" class="detail-grid"></div><h3 style="margin:12px 0 8px">Ítems de la factura</h3><div class="table-wrap"><table style="min-width:680px"><thead><tr><th>Descripción</th><th>Cantidad</th><th>Valor línea</th></tr></thead><tbody id="facturaItems"><tr><td colspan="3">Sin ítems</td></tr></tbody></table></div><div class="support-box"><div><strong>Factura en PDF</strong><p id="facturaPdfInfo">Cargando…</p></div><div class="actions"><input type="file" id="pdfAttachInput" accept="application/pdf,.pdf" style="display:none" onchange="attachInvoicePdf()"><button class="btn btn-primary" onclick="downloadInvoicePdf()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Descargar factura (PDF)</button><button class="btn btn-light" onclick="pdfAttachInput.click()" id="pdfAttachBtn">Adjuntar PDF</button><button class="link-btn" onclick="downloadCurrentXml()" title="Archivo técnico de la DIAN, para auditoría">XML</button></div></div><pre id="facturaXml" class="xml-box"></pre></div></div>
 <div id="causacionModal" class="modal-bg"><div class="modal wide"><div class="modal-head"><div><h3 id="causacionTitle">Revisión contable</h3><p id="causacionSubtitle">Revisa, corrige y confirma la contabilización antes de exportarla a Siigo.</p></div><button class="close" onclick="closeReview()">×</button></div>
   <div id="reviewSummary" class="review-summary"></div>
   <p class="review-note">Los datos de la factura electrónica (proveedor, NIT, valores, IVA, CUFE) vienen del XML original y no se modifican. Solo se edita la contabilización.</p>
@@ -496,7 +498,7 @@
   <h3 style="margin:20px 0 6px;font-size:15px">Historial de esta factura</h3>
   <ul id="reviewAudit" class="audit-list"><li>Sin movimientos</li></ul>
 </div></div>
-<div id="driveModal" class="modal-bg"><div class="modal wide"><div class="modal-head"><div><h3>Sincronización con Google Drive</h3><p>Las facturas que el contador deja en su carpeta de Drive entran solas a ContaPilot una vez al día, ya causadas. Él solo revisa, confirma y sube a Siigo.</p></div><button class="close" onclick="closeModal('driveModal')">×</button></div>
+<div id="driveModal" class="modal-bg"><div class="modal wide"><div class="modal-head"><div><h3>Sincronización con Google Drive</h3><p>Las facturas que el contador deja en su carpeta de Drive entran solas a ContaPilot cada 2 días, ya causadas y repartidas por mes. Él solo revisa, confirma y sube a Siigo.</p></div><button class="close" onclick="closeModal('driveModal')">×</button></div>
   <div id="driveStatus"></div>
   <div class="dash-grid" style="grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);margin-bottom:0">
     <div class="soft-box" style="margin:0">
@@ -511,7 +513,8 @@
       <p class="sub" style="margin-top:10px">Solo se leen las carpetas <b>RECIBIDOS</b> (compras); las de ENVIADOS se ignoran. Cada factura se ubica en su empresa por el NIT del receptor y queda en el centro del mes (ej. carpeta 2026 › RECIBIDOS › 10. OCTUBRE → centro "Octubre 2026"). Nunca se confirma ni se sube a Siigo de forma automática.</p>
     </div>
     <div>
-      <div class="field"><label>Sincronizar facturas desde el mes</label><input id="driveFrom" type="month"><span class="sub">Las carpetas y facturas de meses anteriores se ignoran, para no volver a traer facturas que ya se contabilizaron por fuera de ContaPilot.</span></div>
+      <div class="grid2"><div class="field" style="margin-bottom:4px"><label>Desde el mes</label><input id="driveFrom" type="month"></div><div class="field" style="margin-bottom:4px"><label>Hasta el mes (opcional)</label><input id="driveTo" type="month"></div></div>
+      <span class="sub" style="margin-bottom:12px">Por defecto se trae <b>todo el año</b>: desde enero y hasta hoy. Cada factura queda en el centro de su mes según su fecha de emisión. Para traer un solo mes, pon el mismo mes en ambos campos. Los meses ya contabilizados por fuera de ContaPilot conviene dejarlos por fuera para no duplicarlos en Siigo.</span>
       <div class="actions"><button class="btn btn-primary" onclick="generateDriveKey()">Generar llave y programa</button><button class="btn btn-danger-light" id="driveRevokeBtn" onclick="revokeDriveKey()">Anular llave</button></div>
       <div id="driveScriptBox" style="display:none;margin-top:12px">
         <div class="check-box check-warn" style="margin-bottom:10px">La llave va dentro del programa y solo se muestra ahora. Si la pierdes, genera una nueva (la anterior deja de funcionar).</div>
@@ -528,7 +531,7 @@
 <script>
 let token=localStorage.getItem('cp_token')||'';let invoices=[];let companies=[];let selectedInvoiceIds=new Set();let editingCompanyId='';let lastDianDocs=[];let batches=[];let activeBatchId='';if(!token)location.href='app.html';const user=JSON.parse(localStorage.getItem('cp_user')||'{}');userLabel.textContent=user.email||'admin@contapilot.com';function base(){return localStorage.getItem('cp_api_base')||window.CONTAPILOT_API_BASE||''}function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),4500)}function log(m,o){const el=document.getElementById('log');el.textContent=m+(o?'\n'+JSON.stringify(o,null,2):'')}function sleep(ms){return new Promise(r=>setTimeout(r,ms))}function setProgress(m){const p=document.getElementById('progressBox');if(p){p.style.display=m?'inline-flex':'none';p.textContent=m||''}const w=document.getElementById('wideProgress');if(w){w.style.display=m?'block':'none';w.textContent=m||''}}function setBusy(v){document.body.style.cursor=v?'progress':'';['causeSelectedBtn','approveSelectedBtn','deleteSelectedBtn','uploadSiigoBtn','pdfSelectedBtn'].forEach(id=>{const b=document.getElementById(id);if(b)b.disabled=!!v});document.querySelectorAll('.action-select,.mini-check,#statusFilter,#search').forEach(el=>{el.disabled=!!v})}function chunks(arr,size){const out=[];for(let i=0;i<arr.length;i+=size)out.push(arr.slice(i,i+size));return out}
 function showUploadErrors(errors){const box=document.getElementById('uploadErrors'); if(!box)return; if(!errors||!errors.length){box.style.display='none';box.innerHTML='';return} box.style.display='block'; box.innerHTML='<strong>Observaciones:</strong><ul style="margin:8px 0 0;padding-left:18px">'+errors.map(e=>'<li><strong>'+String(e.file||'archivo')+':</strong> '+String(e.error||e)+'</li>').join('')+'</ul>';}
-function showUploadNotices(notices){const box=document.getElementById('uploadNotices'); if(!box)return; if(!notices||!notices.length){box.style.display='none';box.innerHTML='';return} box.style.display='block'; box.innerHTML='<strong>Resumen de lectura de ZIP:</strong><ul style="margin:8px 0 0;padding-left:18px">'+notices.map(n=>'<li>'+String(n)+'</li>').join('')+'</ul><p style="margin:8px 0 0;color:var(--muted)">Los PDF se omiten a propósito: la DIAN suele incluir el PDF junto al XML de cada factura, y solo el XML se puede importar.</p>';}function toggleLog(){document.getElementById('log').classList.toggle('show');closeMenus()}async function api(path,opts={}){const headers=opts.headers||{};headers.Authorization='Bearer '+token;const r=await fetch(base()+path,{...opts,headers});const ct=r.headers.get('content-type')||'';const data=ct.includes('json')?await r.json():await r.text();if(!r.ok){const d=typeof data==='string'?data:(data.detail||data.error||data);throw new Error(typeof d==='string'?d:JSON.stringify(d))}return data}function cid(){return companySelect.value}function openModal(id){closeMenus();document.getElementById(id).classList.add('show')}function closeModal(id){document.getElementById(id).classList.remove('show')}function closeMenus(){document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'))}function toggleFab(){}function closeFab(){}function toggleMenu(id){document.querySelectorAll('.menu').forEach(m=>{if(m.id!==id)m.classList.remove('open')});document.getElementById(id).classList.toggle('open')}document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.modal-bg.show').forEach(m=>{if(m.id==='causacionModal')closeReview();else m.classList.remove('show')});closeMenus();closeFab()}});document.addEventListener('click',e=>{if(!e.target.closest('.menu'))closeMenus();if(!e.target.closest('.fab'))closeFab()});document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('mousedown',e=>{if(e.target===bg){if(bg.id==='causacionModal')closeReview();else bg.classList.remove('show')}}));function money(v){return new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP'}).format(v||0)}function statusClass(s){return s==='exported'||s==='exporting'?'exported':s==='approved'?'approved':s==='accounted'?'accounted':'received'}function statusLabel(s){return {received:'Recibida',accounted:'Causada',approved:'Confirmada',exporting:'Enviando a Siigo',exported:'Exportada a Siigo'}[s]||s||''}function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function showUploadNotices(notices){const box=document.getElementById('uploadNotices'); if(!box)return; if(!notices||!notices.length){box.style.display='none';box.innerHTML='';return} box.style.display='block'; box.innerHTML='<strong>Resumen de lectura de ZIP:</strong><ul style="margin:8px 0 0;padding-left:18px">'+notices.map(n=>'<li>'+String(n)+'</li>').join('')+'</ul><p style="margin:8px 0 0;color:var(--muted)">La factura se lee del XML; el PDF que viene junto a cada XML se guarda como soporte para descargarlo después.</p>';}function toggleLog(){document.getElementById('log').classList.toggle('show');closeMenus()}async function api(path,opts={}){const headers=opts.headers||{};headers.Authorization='Bearer '+token;const r=await fetch(base()+path,{...opts,headers});const ct=r.headers.get('content-type')||'';const data=ct.includes('json')?await r.json():await r.text();if(!r.ok){const d=typeof data==='string'?data:(data.detail||data.error||data);throw new Error(typeof d==='string'?d:JSON.stringify(d))}return data}function cid(){return companySelect.value}function openModal(id){closeMenus();document.getElementById(id).classList.add('show')}function closeModal(id){document.getElementById(id).classList.remove('show')}function closeMenus(){document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'))}function toggleFab(){}function closeFab(){}function toggleMenu(id){document.querySelectorAll('.menu').forEach(m=>{if(m.id!==id)m.classList.remove('open')});document.getElementById(id).classList.toggle('open')}document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.modal-bg.show').forEach(m=>{if(m.id==='causacionModal')closeReview();else m.classList.remove('show')});closeMenus();closeFab()}});document.addEventListener('click',e=>{if(!e.target.closest('.menu'))closeMenus();if(!e.target.closest('.fab'))closeFab()});document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('mousedown',e=>{if(e.target===bg){if(bg.id==='causacionModal')closeReview();else bg.classList.remove('show')}}));function money(v){return new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP'}).format(v||0)}function statusClass(s){return s==='exported'||s==='exporting'?'exported':s==='approved'?'approved':s==='accounted'?'accounted':'received'}function statusLabel(s){return {received:'Recibida',accounted:'Causada',approved:'Confirmada',exporting:'Enviando a Siigo',exported:'Exportada a Siigo'}[s]||s||''}function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function u16c(bytes,pos){return bytes[pos]|(bytes[pos+1]<<8)}
 function u32c(bytes,pos){return (bytes[pos]|(bytes[pos+1]<<8)|(bytes[pos+2]<<16)|(bytes[pos+3]<<24))>>>0}
 async function inflateRawClient(bytes){
@@ -551,21 +554,43 @@ async function extractZipEntriesClient(arrayBuffer,prefix='',depth=0,stats){
     const ln=u16c(bytes,localOffset+26),le=u16c(bytes,localOffset+28);const dataStart=localOffset+30+ln+le;const compressed=bytes.slice(dataStart,dataStart+compSize);
     let contentBytes;if(method===0)contentBytes=compressed;else if(method===8)contentBytes=await inflateRawClient(compressed);else{stats.unsupported++;continue}
     if(lower.endsWith('.zip')){stats.nested_zip++;if(depth<4){const buf=contentBytes.buffer.slice(contentBytes.byteOffset,contentBytes.byteOffset+contentBytes.byteLength);const nested=await extractZipEntriesClient(buf,fullName,depth+1,stats);entries.push(...nested)}continue}
-    if(lower.endsWith('.pdf')){stats.pdf++;continue}
+    if(lower.endsWith('.pdf')){stats.pdf++;(stats.pdfList=stats.pdfList||[]).push({name:fullName,group:prefix||'',bytes:contentBytes});continue}
     if(!lower.endsWith('.xml')&&!lower.endsWith('.html')&&!lower.endsWith('.htm')&&!lower.endsWith('.txt')){stats.skipped++;continue}
-    stats.xml_like++;entries.push({name:fullName,text:decoder.decode(contentBytes)});
+    stats.xml_like++;entries.push({name:fullName,group:prefix||'',text:decoder.decode(contentBytes)});
     if(n%10===0)await sleep(0);
   }
   entries.stats=stats;return entries;
 }
-function zipClientStatsMessage(stats){stats=stats||{};return `${stats.files||0} archivo(s) revisados, ${stats.xml_like||0} XML/HTML/TXT, ${stats.nested_zip||0} ZIP interno(s), ${stats.pdf||0} PDF ignorado(s)`}
-async function uploadTextAsFile(name,text){
+function zipClientStatsMessage(stats){stats=stats||{};return `${stats.files||0} archivo(s) revisados, ${stats.xml_like||0} XML/HTML/TXT, ${stats.nested_zip||0} ZIP interno(s), ${stats.pdf||0} PDF`}
+// Empareja cada XML con el PDF de la misma factura: primero dentro del mismo ZIP (la DIAN entrega un ZIP
+// por factura con su XML y su PDF); si no, por nombre de archivo igual.
+function baseName(n){return String(n||'').split('/').pop().replace(/\.[^.]+$/,'').toLowerCase()}
+function pairPdfs(xmls,pdfs){
+  pdfs=pdfs||[];const used=new Set();const byGroup={};
+  for(const x of xmls)(byGroup[x.group]=byGroup[x.group]||{x:[],p:[]}).x.push(x);
+  for(const p of pdfs)(byGroup[p.group]=byGroup[p.group]||{x:[],p:[]}).p.push(p);
+  for(const x of xmls){
+    const g=byGroup[x.group];let pdf=null;
+    if(g.x.length===1&&g.p.length===1)pdf=g.p[0];
+    else pdf=g.p.find(p=>!used.has(p)&&baseName(p.name)===baseName(x.name))||pdfs.find(p=>!used.has(p)&&baseName(p.name)===baseName(x.name))||null;
+    if(pdf&&!used.has(pdf)){used.add(pdf);x.pdf=pdf}
+  }
+  return pdfs.filter(p=>!used.has(p));
+}
+async function uploadTextAsFile(name,text,pdf){
   const fd=new FormData();
   fd.append('file',new File([text],name,{type:'text/xml;charset=utf-8'}));
+  if(pdf)fd.append('pdf',pdf.file||new File([pdf.bytes],String(pdf.name).split('/').pop(),{type:'application/pdf'}));
   if(activeBatchId)fd.append('batch_id',activeBatchId);
+  if(autoMonthOn())fd.append('auto_month','1');
   return api(`/api/companies/${cid()}/upload`,{method:'POST',body:fd});
 }
-async function uploadRawFile(file){const fd=new FormData();fd.append('file',file);if(activeBatchId)fd.append('batch_id',activeBatchId);return api(`/api/companies/${cid()}/upload`,{method:'POST',body:fd})}
+async function uploadRawFile(file){const fd=new FormData();fd.append('file',file);if(activeBatchId)fd.append('batch_id',activeBatchId);if(autoMonthOn())fd.append('auto_month','1');return api(`/api/companies/${cid()}/upload`,{method:'POST',body:fd})}
+// Repartir por mes: cada factura va al centro de su mes de emisión. Queda guardado en este navegador.
+function autoMonthOn(){const el=document.getElementById('autoMonthBox');return el?el.checked:true}
+function saveAutoMonth(){try{localStorage.setItem('cp_auto_month',autoMonthBox.checked?'1':'0')}catch(e){}}
+function MONTH_INDEX(name){return ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'].indexOf(String(name||'').toLowerCase())+1}
+function countMonths(map,res){for(const it of (res.imported||[]))if(it.batch&&!it.existed)map[it.batch]=(map[it.batch]||0)+1}
 function logout(){localStorage.removeItem('cp_token');location.href='app.html'}
 function openCompanyModal(){editingCompanyId='';companyModalTitle.textContent='Agregar empresa';companyModalText.textContent='El NIT debe coincidir con el receptor de las facturas.';companyName.value='';companyNit.value='';companySaveButton.textContent='Crear empresa';openModal('companyModal')}
 function openEditCompanyModal(){if(!cid())return toast('Selecciona empresa');const c=companies.find(x=>x.id===cid());if(!c)return toast('No encontré la empresa activa');editingCompanyId=c.id;companyModalTitle.textContent='Editar empresa';companyModalText.textContent='Actualiza el nombre o NIT receptor de la empresa.';companyName.value=c.name||'';companyNit.value=c.nit||'';companySaveButton.textContent='Guardar cambios';openModal('companyModal')}
@@ -586,7 +611,10 @@ async function loadBatches(){
 function renderBatchTabs(){
   const box=document.getElementById('batchTabs'); if(!box)return;
   const cnt=id=>(invoices||[]).filter(i=>inBatch(i,id)).length;
-  box.innerHTML=batches.map(b=>`<button class="batch-tab ${b.id===activeBatchId?'active':''}" onclick="selectBatch('${b.id}')">${esc(b.name)}<span class="tab-count">${cnt(b.id)}</span>${b.id===activeBatchId?' <span class="edit-ic" onclick="event.stopPropagation();renameBatch(\''+b.id+'\')">✎</span>':''}</button>`).join('');
+  // Orden de las pestañas: el primer centro (General) fijo, luego los "Mes Año" en orden cronológico y al final los demás.
+  const key=b=>{const m=String(b.name||'').trim().match(/^(\S+)\s+(\d{4})$/);const mi=m?MONTH_INDEX(m[1]):0;return mi?Number(m[2])*100+mi:999999};
+  const ordered=batches.length?[batches[0],...batches.slice(1).sort((a,b)=>key(a)-key(b))]:[];
+  box.innerHTML=ordered.map(b=>`<button class="batch-tab ${b.id===activeBatchId?'active':''}" onclick="selectBatch('${b.id}')">${esc(b.name)}<span class="tab-count">${cnt(b.id)}</span>${b.id===activeBatchId?' <span class="edit-ic" onclick="event.stopPropagation();renameBatch(\''+b.id+'\')">✎</span>':''}</button>`).join('');
 }
 function selectBatch(batchId){activeBatchId=batchId;renderBatchTabs();renderInvoices();if(currentView==='dashboard')renderDashboard()}
 async function createBatch(){
@@ -610,11 +638,18 @@ async function renameBatch(batchId){
   }catch(e){toast(e.message||'No pude renombrar')}
 }
 async function upload(){
-  let totalImported=0,totalErrors=0,allErrors=[],zipNotices=[];
+  let totalImported=0,totalErrors=0,allErrors=[],zipNotices=[];const months={};let pdfSaved=0,pdfOrphans=[];
+  const pdfCount=res=>{for(const it of (res.imported||[]))if(it.pdf==='guardado')pdfSaved++};
   try{
     if(!cid())return toast('Selecciona empresa');
-    const files=[...fileInput.files];
-    if(!files.length)return;
+    const all=[...fileInput.files];
+    if(!all.length)return;
+    // PDF sueltos: se emparejan con el XML suelto del mismo nombre; los que no tengan pareja se reportan.
+    const loosePdfs=all.filter(f=>/\.pdf$/i.test(f.name)).map(f=>({name:f.name,group:'(sueltos)',file:f}));
+    const files=all.filter(f=>!/\.pdf$/i.test(f.name));
+    const looseXml=files.filter(f=>!/\.zip$/i.test(f.name)).map(f=>({name:f.name,group:'(sueltos)',f}));
+    pdfOrphans.push(...pairPdfs(looseXml,loosePdfs).map(p=>p.name));
+    const loosePdfFor=f=>{const x=looseXml.find(e=>e.f===f);return x&&x.pdf?x.pdf:null};
     setBusy(true);showUploadErrors([]);setProgress(`Preparando ${files.length} archivo(s)...`);
     for(let fIndex=0; fIndex<files.length; fIndex++){
       const f=files[fIndex];
@@ -628,6 +663,7 @@ async function upload(){
           allErrors.push({file:f.name,error:`No encontré XML procesables. ${zipClientStatsMessage(entries.stats)}. Si el ZIP trae solo PDF, descarga el XML desde DIAN.`});
           showUploadErrors(allErrors); continue;
         }
+        pdfOrphans.push(...pairPdfs(entries,entries.stats.pdfList).map(p=>p.name.split('/').pop()));
         const zipMsg=`${f.name}: ${zipClientStatsMessage(entries.stats)}`;
         zipNotices.push(zipMsg);
         log('ZIP leído',{archivo:f.name, resumen:zipClientStatsMessage(entries.stats), encontrados:entries.length});
@@ -635,8 +671,8 @@ async function upload(){
           const entry=entries[i];
           setProgress(`Importando ${i+1}/${entries.length} de ${f.name}`);
           try{
-            const res=await uploadTextAsFile(entry.name,entry.text);
-            totalImported += (res.imported||[]).length;
+            const res=await uploadTextAsFile(entry.name,entry.text,entry.pdf);
+            totalImported += (res.imported||[]).length;countMonths(months,res);pdfCount(res);
             const errs=res.errors||[]; totalErrors += errs.length; allErrors.push(...errs);
           }catch(e){totalErrors++;allErrors.push({file:entry.name,error:e.message});}
           if(i%3===0){showUploadErrors(allErrors);await loadInvoices();await sleep(30)}
@@ -644,8 +680,9 @@ async function upload(){
       }else{
         setProgress(`Importando archivo ${fIndex+1}/${files.length}: ${f.name}`);
         try{
-          const res=await uploadRawFile(f);
-          totalImported += (res.imported||[]).length;
+          const lp=loosePdfFor(f);
+          const res=lp?await uploadTextAsFile(f.name,await f.text(),lp):await uploadRawFile(f);
+          totalImported += (res.imported||[]).length;countMonths(months,res);pdfCount(res);
           const errs=res.errors||[]; totalErrors += errs.length; allErrors.push(...errs);
         }catch(e){totalErrors++;allErrors.push({file:f.name,error:e.message});}
       }
@@ -654,6 +691,10 @@ async function upload(){
     fileInput.value='';
     setProgress('Actualizando bandeja final...');
     await loadInvoices();
+    const mk=Object.keys(months).sort((a,b)=>{const p=s=>{const [mn,y]=s.split(' ');return Number(y)*100+MONTH_INDEX(mn)};return p(a)-p(b)});
+    if(pdfSaved) zipNotices.unshift(`Se guardó el PDF original de ${pdfSaved} factura(s). Desde el detalle de cada factura se descarga con "Descargar factura (PDF)".`);
+    if(pdfOrphans.length) zipNotices.push(`${pdfOrphans.length} PDF no se pudieron asociar a ninguna factura (no venían junto a su XML ni tenían el mismo nombre): ${pdfOrphans.slice(0,8).join(', ')}${pdfOrphans.length>8?'…':''}. Puedes adjuntarlos desde el detalle de la factura con "Adjuntar PDF".`);
+    if(mk.length) zipNotices.unshift(`Facturas nuevas repartidas por mes: ${mk.map(k=>`${k} (${months[k]})`).join(', ')}. Cada mes tiene su pestaña arriba de la bandeja.`);
     showUploadNotices(zipNotices);
     toast(`Carga terminada: ${totalImported} factura(s) importada(s), ${totalErrors} observación(es).`);
   }catch(e){
@@ -669,8 +710,8 @@ function filteredInvoices(){const q=(search.value||'').toLowerCase();const sf=(d
 function syncSelectedInfo(data=filteredInvoices()){const counter=document.getElementById('selectedCounter');if(counter)counter.textContent=`${selectedInvoiceIds.size} seleccionada${selectedInvoiceIds.size===1?'':'s'}`;const bar=document.getElementById('bulkBar');if(bar)bar.style.display=selectedInvoiceIds.size?'flex':'none';const box=document.getElementById('selectAllBox');if(box){box.checked=data.length>0&&data.every(i=>selectedInvoiceIds.has(i.id));box.indeterminate=data.some(i=>selectedInvoiceIds.has(i.id))&&!box.checked;}}
 function onInvoiceCheck(id,checked){if(checked)selectedInvoiceIds.add(id);else selectedInvoiceIds.delete(id);syncSelectedInfo()}
 function toggleSelectAll(checked){const data=filteredInvoices();for(const i of data){if(checked)selectedInvoiceIds.add(i.id);else selectedInvoiceIds.delete(i.id)}renderInvoices()}
-function renderInvoices(){const data=filteredInvoices();const scoped=batchInvoices();mTotal.textContent=scoped.length;mReceived.textContent=scoped.filter(i=>i.status==='received').length;mAccounted.textContent=scoped.filter(i=>i.status==='accounted').length;mApproved.textContent=scoped.filter(i=>i.status==='approved').length;if(document.getElementById('mExported'))mExported.textContent=scoped.filter(i=>i.status==='exported').length;rows.innerHTML=data.map(i=>`<tr><td class="check-cell"><input class="mini-check" type="checkbox" ${selectedInvoiceIds.has(i.id)?'checked':''} onchange="onInvoiceCheck('${i.id}',this.checked)"></td><td><strong>${i.invoice_number}</strong><span class="sub mono">${(i.cufe||'').slice(0,22)}</span></td><td>${i.issue_date||''}</td><td><span class="supplier">${i.supplier_name||''}</span><span class="sub">NIT ${i.supplier_nit||''}</span></td><td><span class="supplier">${i.customer_name||''}</span><span class="sub">NIT ${i.customer_nit||''}</span></td><td><strong>${money(i.payable_amount)}</strong></td><td><span class="pill ${statusClass(i.status)}">${statusLabel(i.status)}</span></td><td><select class="action-select" onchange="handleInvoiceAction(this,'${i.id}')"><option value="">Acción</option><option value="entry">Revisar contabilización</option><option value="invoice">Ver factura</option>${i.status==='exported'||i.status==='exporting'?'':'<option value="cause">Causar</option><option value="approve">Confirmar</option>'}<option value="pdf">Descargar PDF</option></select></td></tr>`).join('')||'<tr><td colspan="8">Sin facturas</td></tr>';syncSelectedInfo(data);updateSidebar()}
-function handleInvoiceAction(select,id){const value=select.value;select.value='';if(value==='invoice')return viewInvoice(id);if(value==='cause')return cause(id);if(value==='entry')return viewEntry(id);if(value==='approve')return approve(id);if(value==='pdf')return downloadInvoicesPdf([id])}async function cause(id){try{log('Causación',await api(`/api/invoices/${id}/generate-entry`,{method:'POST'}));await loadInvoices();toast('Factura causada. Revisa y confirma la contabilización.')}catch(e){log('Error causar',{error:e.message});toast(e.message)}}async function approve(id){try{const r=await api(`/api/invoices/${id}/approve`,{method:'POST'});log('Confirmada',r);await loadInvoices();toast((r.validation&&r.validation.warnings&&r.validation.warnings.length)?`Confirmada con ${r.validation.warnings.length} advertencia(s). Revísalas en "Revisar contabilización".`:'Contabilización confirmada.')}catch(e){log('Error confirmar',{error:e.message});toast(e.message);showUploadErrors([{file:'Confirmar',error:e.message}])}}let currentXmlDownload={name:'factura.xml',xml:''};
+function renderInvoices(){const data=filteredInvoices();const scoped=batchInvoices();mTotal.textContent=scoped.length;mReceived.textContent=scoped.filter(i=>i.status==='received').length;mAccounted.textContent=scoped.filter(i=>i.status==='accounted').length;mApproved.textContent=scoped.filter(i=>i.status==='approved').length;if(document.getElementById('mExported'))mExported.textContent=scoped.filter(i=>i.status==='exported').length;rows.innerHTML=data.map(i=>`<tr><td class="check-cell"><input class="mini-check" type="checkbox" ${selectedInvoiceIds.has(i.id)?'checked':''} onchange="onInvoiceCheck('${i.id}',this.checked)"></td><td><strong>${i.invoice_number}</strong>${i.has_pdf?' <span class="pdf-tag" title="Tiene el PDF original guardado">PDF</span>':''}<span class="sub mono">${(i.cufe||'').slice(0,22)}</span></td><td>${i.issue_date||''}</td><td><span class="supplier">${i.supplier_name||''}</span><span class="sub">NIT ${i.supplier_nit||''}</span></td><td><span class="supplier">${i.customer_name||''}</span><span class="sub">NIT ${i.customer_nit||''}</span></td><td><strong>${money(i.payable_amount)}</strong></td><td><span class="pill ${statusClass(i.status)}">${statusLabel(i.status)}</span></td><td><select class="action-select" onchange="handleInvoiceAction(this,'${i.id}')"><option value="">Acción</option><option value="entry">Revisar contabilización</option><option value="invoice">Ver factura</option>${i.status==='exported'||i.status==='exporting'?'':'<option value="cause">Causar</option><option value="approve">Confirmar</option>'}<option value="invpdf">Descargar factura (PDF)</option><option value="pdf">Informe de causación (PDF)</option></select></td></tr>`).join('')||'<tr><td colspan="8">Sin facturas</td></tr>';syncSelectedInfo(data);updateSidebar()}
+function handleInvoiceAction(select,id){const value=select.value;select.value='';if(value==='invoice')return viewInvoice(id);if(value==='cause')return cause(id);if(value==='entry')return viewEntry(id);if(value==='approve')return approve(id);if(value==='pdf')return downloadInvoicesPdf([id]);if(value==='invpdf'){currentInvoice=null;return downloadInvoicePdf(id)}}async function cause(id){try{log('Causación',await api(`/api/invoices/${id}/generate-entry`,{method:'POST'}));await loadInvoices();toast('Factura causada. Revisa y confirma la contabilización.')}catch(e){log('Error causar',{error:e.message});toast(e.message)}}async function approve(id){try{const r=await api(`/api/invoices/${id}/approve`,{method:'POST'});log('Confirmada',r);await loadInvoices();toast((r.validation&&r.validation.warnings&&r.validation.warnings.length)?`Confirmada con ${r.validation.warnings.length} advertencia(s). Revísalas en "Revisar contabilización".`:'Contabilización confirmada.')}catch(e){log('Error confirmar',{error:e.message});toast(e.message);showUploadErrors([{file:'Confirmar',error:e.message}])}}let currentXmlDownload={name:'factura.xml',xml:''};
 async function viewInvoice(id){
   try{
     const data=await api(`/api/invoices/${id}`);
@@ -679,13 +720,56 @@ async function viewInvoice(id){
     facturaSubtitle.textContent=`${inv.supplier_name||''} → ${inv.customer_name||''}`;
     facturaHeroNumber.textContent=inv.invoice_number||'Factura';
     facturaHeroInfo.textContent=`${inv.supplier_name||''} · NIT ${inv.supplier_nit||''}  →  ${inv.customer_name||''} · NIT ${inv.customer_nit||''}`;
-    const boxes=[['Fecha',inv.issue_date],['Tipo',inv.document_type],['Estado',inv.status],['Proveedor',`${inv.supplier_name||''} · NIT ${inv.supplier_nit||''}`,'span2'],['Receptor',`${inv.customer_name||''} · NIT ${inv.customer_nit||''}`],['Subtotal',money(inv.subtotal)],['IVA',money(inv.tax_amount)],['Total',money(inv.payable_amount),'money'],['CUFE',inv.cufe,'span2'],['Moneda',inv.currency||'COP']];
+    const boxes=[['Fecha',inv.issue_date],['Tipo',inv.document_type],['Estado',statusLabel(inv.status)],['Proveedor',`${inv.supplier_name||''} · NIT ${inv.supplier_nit||''}`,'span2'],['Receptor',`${inv.customer_name||''} · NIT ${inv.customer_nit||''}`],['Subtotal',money(inv.subtotal)],['IVA',money(inv.tax_amount)],['Total',money(inv.payable_amount),'money'],['CUFE',inv.cufe,'span2'],['Retención',money(inv.withholding_amount)]];
+    currentInvoice={id,data};
+    facturaPdfInfo.innerHTML=data.pdf?`PDF original guardado (<b>${esc(data.pdf.file_name||'factura.pdf')}</b>, ${Math.max(1,Math.round((data.pdf.size||0)/1024))} KB). Si necesitas cambiarlo, usa "Adjuntar PDF".`:'Esta factura no tiene el PDF original guardado. "Descargar factura (PDF)" genera uno con los datos del XML, o puedes adjuntar el PDF original.';
+    pdfAttachBtn.textContent=data.pdf?'Reemplazar PDF':'Adjuntar PDF';
     facturaDetail.innerHTML=boxes.map(b=>`<div class="detail-box ${b[2]==='span2'?'span2':''}"><span>${b[0]}</span><strong class="${b[2]==='money'?'money-highlight':''}">${b[1]||''}</strong></div>`).join('');
     facturaItems.innerHTML=(data.items||[]).map(it=>`<tr><td>${it.description||''}</td><td>${it.quantity||0}</td><td>${money(it.line_amount||0)}</td></tr>`).join('')||'<tr><td colspan="3">Sin ítems</td></tr>';
     facturaXml.textContent=inv.raw_xml||'';
     currentXmlDownload={name:(inv.invoice_number||'factura')+'.xml',xml:inv.raw_xml||''};
     openModal('facturaModal');
   }catch(e){log('Error ver factura',{error:e.message});toast('No pude cargar el detalle de factura.');}
+}
+// ---------- PDF de la factura ----------
+let currentInvoice=null;
+function saveBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}
+// Descarga el PDF original guardado; si la factura no lo tiene, genera uno a partir de los datos del XML.
+async function downloadInvoicePdf(id){
+  id=id||(currentInvoice&&currentInvoice.id);if(!id)return;
+  try{
+    const r=await fetch(base()+`/api/invoices/${id}/pdf`,{headers:{Authorization:'Bearer '+token}});
+    if(r.ok){const cd=r.headers.get('content-disposition')||'';const m=cd.match(/filename="([^"]+)"/);saveBlob(await r.blob(),m?m[1]:'factura.pdf');toast('PDF original descargado.');return}
+    if(r.status!==404){let d='';try{d=(await r.json()).detail}catch(e){}throw new Error(d||('Error '+r.status))}
+    const data=(currentInvoice&&currentInvoice.id===id)?currentInvoice.data:await api(`/api/invoices/${id}`);
+    await generateInvoicePdf(data);
+  }catch(e){toast(e.message||'No pude descargar el PDF')}
+}
+async function attachInvoicePdf(){
+  const f=pdfAttachInput.files[0];pdfAttachInput.value='';if(!f||!currentInvoice)return;
+  if(!/\.pdf$/i.test(f.name)&&f.type!=='application/pdf')return toast('Elige un archivo PDF.');
+  try{const fd=new FormData();fd.append('file',f);await api(`/api/invoices/${currentInvoice.id}/pdf`,{method:'POST',body:fd});toast('PDF guardado en la factura.');await viewInvoice(currentInvoice.id);await loadInvoices()}catch(e){toast(e.message)}
+}
+// PDF generado por ContaPilot con los datos del XML (cuando no hay PDF original del emisor).
+async function generateInvoicePdf(data){
+  await loadPdfLib();
+  const inv=data.invoice||{};const items=data.items||[];
+  const {jsPDF}=window.jspdf;const doc=new jsPDF({unit:'pt',format:'a4'});const W=doc.internal.pageSize.getWidth();
+  doc.setFillColor(12,17,25);doc.rect(0,0,W,70,'F');doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold');doc.setFontSize(16);doc.text(pdfText(`${inv.document_type||'Factura'} ${inv.invoice_number||''}`),40,32);
+  doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.text(pdfText(`Fecha de emisión: ${inv.issue_date||''}   ·   Moneda: ${inv.currency||'COP'}`),40,52);
+  doc.setTextColor(30,30,30);
+  doc.autoTable({...tableTheme,startY:88,head:[['Emisor (proveedor)','Adquiriente (receptor)']],body:[[pdfText(`${inv.supplier_name||''}\nNIT ${inv.supplier_nit||''}`),pdfText(`${inv.customer_name||''}\nNIT ${inv.customer_nit||''}`)]],styles:{...tableTheme.styles,fontSize:9.5,cellPadding:7}});
+  doc.autoTable({...tableTheme,startY:doc.lastAutoTable.finalY+14,head:[['#','Descripción','Cantidad','Valor línea']],
+    body:items.length?items.map((it,i)=>[i+1,pdfText(it.description||''),String(it.quantity||0),pdfMoney(it.line_amount)]):[['','Sin ítems','','']],
+    columnStyles:{0:{cellWidth:28},2:{halign:'right',cellWidth:70},3:{halign:'right',cellWidth:95}}});
+  doc.autoTable({...tableTheme,startY:doc.lastAutoTable.finalY+10,margin:{left:W-40-240,right:40},body:[['Subtotal',pdfMoney(inv.subtotal)],['IVA',pdfMoney(inv.tax_amount)],['Retenciones',pdfMoney(inv.withholding_amount)],['Total a pagar',pdfMoney(inv.payable_amount)]],
+    columnStyles:{0:{fontStyle:'bold'},1:{halign:'right'}},didParseCell:c=>{if(c.row.index===3){c.cell.styles.fillColor=[232,238,245];c.cell.styles.fontStyle='bold'}}});
+  let y=doc.lastAutoTable.finalY+22;doc.setFontSize(8.5);doc.setTextColor(90,90,90);
+  doc.text(pdfText('CUFE: '+(inv.cufe||'')),40,y,{maxWidth:W-80});
+  doc.text(pdfText('Documento generado por ContaPilot a partir del XML de la factura electrónica. No reemplaza la representación gráfica oficial emitida por el proveedor.'),40,y+26,{maxWidth:W-80});
+  pdfFooter(doc);doc.save(`Factura_${String(inv.invoice_number||'factura').replace(/[^\w-]+/g,'_')}.pdf`);
+  toast('No había PDF original: se generó uno con los datos del XML.');
 }
 function downloadCurrentXml(){const blob=new Blob([currentXmlDownload.xml||''],{type:'text/xml;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=currentXmlDownload.name||'factura.xml';a.click();URL.revokeObjectURL(a.href);}
 // ---------- Revisión, validación y edición de la contabilización ----------
@@ -1434,8 +1518,8 @@ async function loadRecentExports(){
 
 // ---------- Sincronización con Google Drive ----------
 function daysSince(s){const t=Date.parse(s||'');return Number.isFinite(t)?(Date.now()-t)/86400000:Infinity}
-async function refreshDriveWarn(){try{const s=await api('/api/drive-sync/status');const stale=s.key&&daysSince((s.runs[0]||{}).finished_at)>2;sbDriveWarn.style.display=stale?'':'none';return s}catch(e){return null}}
-async function openDriveSync(){openModal('driveModal');driveScriptBox.style.display='none';if(!driveFrom.value)driveFrom.value=new Date().toISOString().slice(0,7);await loadDriveStatus()}
+async function refreshDriveWarn(){try{const s=await api('/api/drive-sync/status');const stale=s.key&&daysSince((s.runs[0]||{}).finished_at)>3;sbDriveWarn.style.display=stale?'':'none';return s}catch(e){return null}}
+async function openDriveSync(){openModal('driveModal');driveScriptBox.style.display='none';if(!driveFrom.value)driveFrom.value=new Date().getFullYear()+'-01';await loadDriveStatus()}
 async function loadDriveStatus(){
   driveStatus.innerHTML='<div class="check-box check-info">Cargando estado…</div>';
   const s=await refreshDriveWarn();
@@ -1446,8 +1530,8 @@ async function loadDriveStatus(){
   if(!s.key) html+='<div class="check-box check-warn"><strong>Sin conectar.</strong> Genera la llave y el programa para instalarlo en el Drive del contador.</div>';
   else if(!run) html+=`<div class="check-box check-info"><strong>Llave activa</strong> (termina en …${esc(s.key.last4)}, creada ${esc(fmtWhen(s.key.created_at))}). Todavía no ha llegado ninguna sincronización: falta instalar el programa en Drive o esperar a la primera ejecución.</div>`;
   else{
-    const d=daysSince(run.finished_at);const tone=run.errors&&!run.imported?'check-err':d>2?'check-warn':'check-ok';
-    html+=`<div class="check-box ${tone}"><strong>${d>2?`Sin sincronizar hace ${Math.floor(d)} día(s).`:'Sincronización activa.'}</strong> Última revisión: ${esc(fmtWhen(run.finished_at))} · ${run.files_seen} archivo(s) en la carpeta · ${run.files_done} procesado(s) · <b>${run.imported}</b> factura(s) nueva(s) · ${run.duplicates} ya existían · ${run.errors} con error.${run.message?'<br>'+esc(run.message):''}${d>2?'<br>Revisa que el programa siga instalado y autorizado en la cuenta de Google del contador.':''}</div>`;
+    const d=daysSince(run.finished_at);const tone=run.errors&&!run.imported?'check-err':d>3?'check-warn':'check-ok';
+    html+=`<div class="check-box ${tone}"><strong>${d>3?`Sin sincronizar hace ${Math.floor(d)} día(s).`:'Sincronización activa.'}</strong> Última revisión: ${esc(fmtWhen(run.finished_at))} · ${run.files_seen} archivo(s) en la carpeta · ${run.files_done} procesado(s) · <b>${run.imported}</b> factura(s) nueva(s) · ${run.duplicates} ya existían · ${run.errors} con error.${run.message?'<br>'+esc(run.message):''}${d>3?'<br>Revisa que el programa siga instalado y autorizado en la cuenta de Google del contador.':''}</div>`;
   }
   if(s.key) html+=`<p class="sub" style="margin:-4px 0 14px">Total recibido desde Drive: ${Number(tot.imported||0)} factura(s) en ${Number(tot.files||0)} archivo(s)${Number(tot.errored||0)?` · ${tot.errored} archivo(s) con error se reintentan cada día`:''}.</p>`;
   driveStatus.innerHTML=html;
@@ -1457,10 +1541,11 @@ async function loadDriveStatus(){
 async function generateDriveKey(){
   if(document.getElementById('driveRevokeBtn').style.display!=='none'&&!confirm('Ya hay una llave activa. Si generas una nueva, el programa instalado con la anterior deja de funcionar hasta que pegues el nuevo. ¿Continuar?'))return;
   if(!/^\d{4}-\d{2}$/.test(driveFrom.value))return toast('Elige desde qué mes sincronizar.');
+  if(driveTo.value&&driveTo.value<driveFrom.value)return toast('El mes final no puede ser anterior al mes inicial.');
   try{
     const r=await api('/api/drive-sync/key',{method:'POST'});
     const tpl=await fetch('contapilot-drive-sync.gs.txt',{cache:'no-store'}).then(x=>{if(!x.ok)throw new Error('No pude cargar la plantilla del programa');return x.text()});
-    driveScript.value=tpl.replace('__API__',r.api_base).replace('__KEY__',r.key).replace('__DESDE__',driveFrom.value);
+    driveScript.value=tpl.replace('__API__',r.api_base).replace('__KEY__',r.key).replace('__DESDE__',driveFrom.value).replace('__HASTA__',driveTo.value||'');
     driveScriptBox.style.display='block';
     await loadDriveStatus();driveScriptBox.style.display='block';
     toast('Llave generada. Copia el programa y pégalo en Google Apps Script.');
@@ -1469,6 +1554,7 @@ async function generateDriveKey(){
 async function copyDriveScript(){try{await navigator.clipboard.writeText(driveScript.value);toast('Programa copiado.')}catch(e){driveScript.select();document.execCommand('copy');toast('Programa copiado.')}}
 async function revokeDriveKey(){if(!confirm('¿Anular la llave? El programa de Drive dejará de enviar facturas hasta que generes e instales una nueva.'))return;try{await api('/api/drive-sync/key',{method:'DELETE'});driveScriptBox.style.display='none';await loadDriveStatus();toast('Llave anulada.')}catch(e){toast(e.message)}}
 
+try{const v=localStorage.getItem('cp_auto_month');if(v!==null)autoMonthBox.checked=v==='1'}catch(e){}
 try{sbAvatar.textContent=(user.name||user.email||'C').trim().charAt(0).toUpperCase()}catch(e){}
 (async()=>{let v='dashboard';try{v=localStorage.getItem('cp_view')||'dashboard'}catch(e){}showView(v);await loadCompanies();showView(currentView,{force:true});refreshDriveWarn()})();
 </script>

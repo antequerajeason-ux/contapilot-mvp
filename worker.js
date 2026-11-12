@@ -162,7 +162,13 @@ async function parseInvoice(input){
   const issueDate=tagText(xml,'IssueDate');
   const currency=tagText(xml,'DocumentCurrencyCode') || 'COP';
   const monetary=(xml.match(/<(?:\w+:)?LegalMonetaryTotal\b[\s\S]*?<\/(?:\w+:)?LegalMonetaryTotal>/i)||[''])[0];
-  const subtotal=round2(num(tagText(monetary,'TaxExclusiveAmount') || tagText(monetary,'LineExtensionAmount')));
+  // Subtotal = valor de las líneas (LineExtensionAmount) - descuentos + cargos a nivel de factura.
+  // Antes se usaba primero TaxExclusiveAmount, pero ese campo es la BASE GRAVABLE: vale 0 cuando el proveedor
+  // no cobra IVA (y es menor que el subtotal si hay líneas exentas), lo que dejaba el gasto en $0.
+  const lineExt=num(tagText(monetary,'LineExtensionAmount'));
+  const allowances=num(tagText(monetary,'AllowanceTotalAmount'));
+  const charges=num(tagText(monetary,'ChargeTotalAmount'));
+  const subtotal=round2(lineExt>0 ? lineExt-allowances+charges : num(tagText(monetary,'TaxExclusiveAmount')));
   const payable=round2(num(tagText(monetary,'PayableAmount') || tagText(monetary,'TaxInclusiveAmount')) || subtotal);
 
   // IMPORTANTE: DIAN puede traer TaxTotal a nivel factura y también dentro de cada línea.
@@ -573,17 +579,36 @@ function priorExportMessage(prior){
   const how=prior.channel==='csv' ? ' (marcada al descargar CSV)' : prior.channel==='legacy' ? ' (antes de activar el historial)' : '';
   return `Ya fue exportada a Siigo el ${when}${how}${prior.siigo_name?` como ${prior.siigo_name}`:''}${prior.user_email?` por ${prior.user_email}`:''}. No se envía de nuevo para evitar duplicados.`;
 }
+// ---------- PDF original de la factura ----------
+const PDF_MAX_B64=1900000; // ~1,4 MB de PDF (D1 admite filas de hasta 2 MB)
+function bytesToB64(bytes){ let s=''; for(let i=0;i<bytes.length;i+=0x8000) s+=String.fromCharCode.apply(null, bytes.subarray(i,i+0x8000)); return btoa(s); }
+function b64ToBytes(b64){ const bin=atob(b64); const out=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i); return out; }
+// Guarda el PDF de una factura. overwrite=false conserva el que ya exista (p. ej. al reprocesar desde Drive).
+async function storeInvoicePdf(env, inv, fileName, b64, source, overwrite=true){
+  b64=String(b64||'').replace(/\s/g,'');
+  if(!b64) return {ok:false, error:'PDF vacío'};
+  if(!b64.startsWith('JVBER')) return {ok:false, error:'El archivo no es un PDF válido'};
+  if(b64.length>PDF_MAX_B64) return {ok:false, error:'El PDF supera 1,4 MB y no se pudo guardar'};
+  const size=Math.floor(b64.length*3/4);
+  const sql=overwrite
+    ? 'INSERT INTO invoice_pdfs (invoice_id,company_id,file_name,size,content_b64,source,created_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT(invoice_id) DO UPDATE SET file_name=excluded.file_name,size=excluded.size,content_b64=excluded.content_b64,source=excluded.source,created_at=excluded.created_at'
+    : 'INSERT OR IGNORE INTO invoice_pdfs (invoice_id,company_id,file_name,size,content_b64,source,created_at) VALUES (?,?,?,?,?,?,?)';
+  await env.DB.prepare(sql).bind(inv.id, inv.company_id, String(fileName||'factura.pdf').slice(0,200), size, b64, source||'', now()).run();
+  return {ok:true, size};
+}
+
 // ---------- Sincronización con Google Drive ----------
 const MONTHS_ES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 function normName(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); }
-// Nombre del centro de facturas, siempre "Mes Año" (ej. "Octubre 2026") para que las carpetas
-// "10. OCTUBRE" de distintos años no se mezclen. El mes sale de la carpeta más profunda que lo
-// nombre (ej. 2026 > RECIBIDOS > 10. OCTUBRE) y el año de la ruta; si no hay carpeta de mes
-// (ej. una carpeta "XML"), se usa la fecha de emisión de la factura.
+// Nombre del centro de facturas, siempre "Mes Año" (ej. "Octubre 2026").
+// Se usa la FECHA DE EMISIÓN de la factura: así se pueden subir las facturas por año (o todas juntas)
+// y cada una cae en el centro de su mes, sin importar en qué carpeta esté guardada.
+// Solo si la factura no trae fecha se intenta deducir el mes de la carpeta (ej. 2026 > RECIBIDOS > 10. OCTUBRE).
 function monthBatchName(path, issueDate){
   const segs=(Array.isArray(path)?path:[]).map(s=>String(s||'').trim()).filter(Boolean);
   const label=(y,m)=>{const n=MONTHS_ES[m-1];return n.charAt(0).toUpperCase()+n.slice(1)+' '+y;};
   const iss=String(issueDate||'').match(/^(\d{4})-(\d{2})/);
+  if(iss && Number(iss[2])>=1 && Number(iss[2])<=12) return label(Number(iss[1]),Number(iss[2]));
   let month=0, year=0;
   for(let i=segs.length-1;i>=0 && !month;i--){
     const n=normName(segs[i]).replace('setiembre','septiembre');
@@ -617,16 +642,29 @@ async function authDriveKey(env, request){
 }
 // Importa un XML que llega desde Drive: ubica la empresa por NIT receptor, no toca facturas ya existentes,
 // lo deja en el centro del mes y lo causa automáticamente (sin confirmar ni exportar).
-async function importDriveXml(env, user, xmlText, fileName, path, desde){
+async function importDriveXml(env, user, xmlText, fileName, path, desde, hasta, pdf){
+  const r=await importDriveXmlCore(env, user, xmlText, fileName, path, desde, hasta);
+  // Si el ZIP traía el PDF de la factura, se guarda junto a ella (sin reemplazar uno que ya exista).
+  if(pdf && pdf.b64 && r.invoice_id && r.company_id && (r.status==='imported'||r.status==='duplicate')){
+    try{ const s=await storeInvoicePdf(env,{id:r.invoice_id,company_id:r.company_id},pdf.name,pdf.b64,'drive',false); r.pdf=s.ok?'guardado':s.error; }catch(e){ r.pdf='error: '+e.message; }
+  }
+  delete r.company_id;
+  return r;
+}
+async function importDriveXmlCore(env, user, xmlText, fileName, path, desde, hasta){
   const parsed=await parseInvoice(xmlText);
+  const ym=String(parsed.issue_date||'').slice(0,7);
   const dm=String(desde||'').match(/^(\d{4})-(\d{1,2})$/);
-  if(dm && parsed.issue_date && String(parsed.issue_date).slice(0,7) < `${dm[1]}-${dm[2].padStart(2,'0')}`)
+  if(dm && ym && ym < `${dm[1]}-${dm[2].padStart(2,'0')}`)
     return {status:'skipped', invoice_number:parsed.invoice_number, reason:`Emitida el ${parsed.issue_date}, antes del mes de inicio de la sincronización (${desde})`};
+  const hm=String(hasta||'').match(/^(\d{4})-(\d{1,2})$/);
+  if(hm && ym && ym > `${hm[1]}-${hm[2].padStart(2,'0')}`)
+    return {status:'skipped', invoice_number:parsed.invoice_number, reason:`Emitida el ${parsed.issue_date}, después del mes final de la sincronización (${hasta})`};
   const nit=nitClean(parsed.customer_nit);
   const company=await env.DB.prepare('SELECT * FROM companies WHERE owner_user_id=? AND nit=?').bind(user.id,nit).first();
   if(!company) return {status:'error', invoice_number:parsed.invoice_number, error:`El receptor NIT ${parsed.customer_nit||'(vacío)'} no está creado como empresa en ContaPilot`};
   const exists=await env.DB.prepare('SELECT id,status FROM invoices WHERE company_id=? AND cufe=?').bind(company.id,parsed.cufe).first();
-  if(exists) return {status:'duplicate', invoice_number:parsed.invoice_number, company:company.name};
+  if(exists) return {status:'duplicate', invoice_number:parsed.invoice_number, company:company.name, invoice_id:exists.id, company_id:company.id};
   const batchName=monthBatchName(path, parsed.issue_date);
   const batchId=await batchByName(env, company.id, batchName);
   const invId=id();
@@ -636,7 +674,7 @@ async function importDriveXml(env, user, xmlText, fileName, path, desde){
   await env.DB.batch(stmts);
   let caused=true, causeError='';
   try{ await generateEntry(env, invId, {id:user.id, email:(user.email||'')+' (Drive)'}); }catch(e){ caused=false; causeError=e.message; }
-  return {status:'imported', invoice_number:parsed.invoice_number, company:company.name, batch:batchName, caused, cause_error:causeError};
+  return {status:'imported', invoice_number:parsed.invoice_number, company:company.name, batch:batchName, caused, cause_error:causeError, invoice_id:invId, company_id:company.id};
 }
 async function handleDriveSync(request, env, p){
   const user=await authDriveKey(env, request);
@@ -660,7 +698,7 @@ async function handleDriveSync(request, env, p){
     const xml=String(d.xml||'');
     if(!xml.trim()) return json({status:'error', error:'Archivo vacío'});
     if(xml.length>8*1024*1024) return json({status:'error', error:'El XML supera 8 MB'});
-    try{ return json(await importDriveXml(env, user, xml, String(d.file_name||''), Array.isArray(d.path)?d.path:[], d.desde)); }
+    try{ return json(await importDriveXml(env, user, xml, String(d.file_name||''), Array.isArray(d.path)?d.path:[], d.desde, d.hasta, d.pdf_b64?{b64:d.pdf_b64,name:d.pdf_name}:null)); }
     catch(e){ return json({status:'error', error:e.message||String(e)}); }
   }
   if(p==='/drive-sync/done' && request.method==='POST'){
@@ -1075,6 +1113,7 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     await env.DB.prepare('DELETE FROM dian_connections WHERE company_id=?').bind(m[1]).run();
     await env.DB.prepare('DELETE FROM siigo_exports WHERE company_id=?').bind(m[1]).run();
     await env.DB.prepare('DELETE FROM entry_audit_log WHERE company_id=?').bind(m[1]).run();
+    await env.DB.prepare('DELETE FROM invoice_pdfs WHERE company_id=?').bind(m[1]).run();
     await env.DB.prepare('DELETE FROM companies WHERE id=? AND owner_user_id=?').bind(m[1],user.id).run();
     return json({ok:true, deleted:m[1]});
   }
@@ -1126,7 +1165,7 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     const total=await env.DB.prepare('SELECT COUNT(*) c, SUM(active) a FROM chart_of_accounts WHERE company_id=?').bind(m[1]).first();
     return json({ok:true, imported, total_accounts:total?.c||0, active_accounts:total?.a||0});
   }
-  m=p.match(/^\/companies\/([^/]+)\/invoices$/); if(m && request.method==='GET'){ await ensureCompany(env,user.id,m[1]); return json((await env.DB.prepare('SELECT * FROM invoices WHERE company_id=? ORDER BY issue_date DESC').bind(m[1]).all()).results||[]); }
+  m=p.match(/^\/companies\/([^/]+)\/invoices$/); if(m && request.method==='GET'){ await ensureCompany(env,user.id,m[1]); return json((await env.DB.prepare('SELECT invoices.*, EXISTS(SELECT 1 FROM invoice_pdfs p WHERE p.invoice_id=invoices.id) AS has_pdf FROM invoices WHERE company_id=? ORDER BY issue_date DESC').bind(m[1]).all()).results||[]); }
   { const mm=p.match(/^\/companies\/([^/]+)\/batches$/); if(mm && request.method==='GET'){
     await ensureCompany(env,user.id,mm[1]);
     return json(await listBatches(env,mm[1]));
@@ -1151,10 +1190,15 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
   m=p.match(/^\/companies\/([^/]+)\/upload$/); if(m && request.method==='POST'){
     const company=await ensureCompany(env,user.id,m[1]);
     const fd=await request.formData();
-    const batchId=await resolveBatchId(env, m[1], fd.get('batch_id'));
+    // auto_month=1: cada factura nueva va al centro de su mes de emisión ("Octubre 2026"), creándolo si no existe.
+    // Sin esa opción, todo va al centro activo (comportamiento anterior).
+    const autoMonth=String(fd.get('auto_month')||'')==='1';
+    const batchId=autoMonth ? null : await resolveBatchId(env, m[1], fd.get('batch_id'));
     const imported=[], errors=[];
     async function processOne(name, xml){
       const parsed=await parseInvoice(xml);
+      const batchName=autoMonth ? monthBatchName([], parsed.issue_date) : null;
+      const targetBatch=autoMonth ? await batchByName(env, m[1], batchName) : batchId;
       if(nitClean(parsed.customer_nit)!==nitClean(company.nit)) throw new Error(`Factura rechazada: receptor ${parsed.customer_nit} no coincide con empresa ${company.nit}`);
       const invoiceId=id();
       const exists=await env.DB.prepare('SELECT id,status FROM invoices WHERE company_id=? AND cufe=?').bind(m[1],parsed.cufe).first();
@@ -1162,9 +1206,9 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
       const finalId=exists?.id||invoiceId;
       if(exists) await env.DB.prepare('DELETE FROM invoice_items WHERE invoice_id=?').bind(finalId).run();
       if(exists) await env.DB.prepare('UPDATE invoices SET invoice_number=?, issue_date=?, document_type=?, supplier_name=?, supplier_nit=?, customer_name=?, customer_nit=?, currency=?, subtotal=?, tax_amount=?, withholding_amount=?, payable_amount=?, status=?, raw_xml=?, updated_at=?, tax_breakdown=? WHERE id=?').bind(parsed.invoice_number,parsed.issue_date,parsed.document_type,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.currency,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,'received',parsed.invoice_xml,now(),JSON.stringify(parsed.tax_breakdown||{}),finalId).run();
-      else await env.DB.prepare('INSERT INTO invoices (id,company_id,invoice_number,cufe,issue_date,document_type,supplier_name,supplier_nit,customer_name,customer_nit,currency,subtotal,tax_amount,withholding_amount,payable_amount,status,raw_xml,created_at,updated_at,tax_breakdown,batch_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(finalId,m[1],parsed.invoice_number,parsed.cufe,parsed.issue_date,parsed.document_type,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.currency,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,'received',parsed.invoice_xml,now(),now(),JSON.stringify(parsed.tax_breakdown||{}),batchId).run();
+      else await env.DB.prepare('INSERT INTO invoices (id,company_id,invoice_number,cufe,issue_date,document_type,supplier_name,supplier_nit,customer_name,customer_nit,currency,subtotal,tax_amount,withholding_amount,payable_amount,status,raw_xml,created_at,updated_at,tax_breakdown,batch_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(finalId,m[1],parsed.invoice_number,parsed.cufe,parsed.issue_date,parsed.document_type,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.currency,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,'received',parsed.invoice_xml,now(),now(),JSON.stringify(parsed.tax_breakdown||{}),targetBatch).run();
       for(const it of parsed.items) await env.DB.prepare('INSERT INTO invoice_items VALUES (?,?,?,?,?)').bind(id(),finalId,it.description,it.quantity,it.line_amount).run();
-      imported.push({file:name, invoice_id:finalId, invoice_number:parsed.invoice_number});
+      imported.push({file:name, invoice_id:finalId, invoice_number:parsed.invoice_number, batch:batchName, existed:!!exists});
     }
     const zipNotices=[];
     for(const file of fd.getAll('file')){
@@ -1188,6 +1232,15 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
         }
       }catch(e){ errors.push({file:file.name,error:e.message}); }
     }
+    // PDF que acompaña al XML (la pantalla lo envía junto al XML de la misma factura dentro del ZIP).
+    const pdfFile=fd.get('pdf');
+    if(pdfFile && typeof pdfFile!=='string' && imported.length===1){
+      try{
+        const r=await storeInvoicePdf(env,{id:imported[0].invoice_id,company_id:m[1]},pdfFile.name,bytesToB64(new Uint8Array(await pdfFile.arrayBuffer())),'carga',true);
+        imported[0].pdf=r.ok?'guardado':r.error;
+        if(!r.ok) errors.push({file:pdfFile.name,error:r.error});
+      }catch(e){ errors.push({file:pdfFile.name,error:'No pude guardar el PDF: '+e.message}); }
+    }
     await ensureExtraSchema(env);
     const status = errors.length && imported.length ? 'partial' : errors.length ? 'error' : 'success';
     const fileNames = [...fd.getAll('file')].map(f=>f.name).join(', ');
@@ -1201,7 +1254,29 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     const validation=entry ? await validateEntry(env,inv,lines) : null;
     const exports=(await env.DB.prepare("SELECT * FROM siigo_exports WHERE company_id=? AND (invoice_id=? OR (cufe<>'' AND cufe=?)) ORDER BY created_at DESC LIMIT 50").bind(inv.company_id,inv.id,inv.cufe||'').all()).results||[];
     const audit=(await env.DB.prepare('SELECT * FROM entry_audit_log WHERE invoice_id=? ORDER BY created_at DESC LIMIT 100').bind(m[1]).all()).results||[];
-    return json({invoice:inv,items,entry,lines,validation,exports,audit});
+    const pdf=await env.DB.prepare('SELECT file_name,size,source,created_at FROM invoice_pdfs WHERE invoice_id=?').bind(m[1]).first();
+    return json({invoice:inv,items,entry,lines,validation,exports,audit,pdf:pdf||null});
+  }
+  m=p.match(/^\/invoices\/([^/]+)\/pdf$/); if(m && request.method==='GET'){
+    await ensureInvoice(env,user,m[1]);
+    const row=await env.DB.prepare('SELECT file_name,content_b64 FROM invoice_pdfs WHERE invoice_id=?').bind(m[1]).first();
+    if(!row) return json({detail:'Esta factura no tiene PDF original guardado'},404);
+    const safe=String(row.file_name||'factura.pdf').replace(/[^\w.\- ]+/g,'_');
+    return new Response(b64ToBytes(row.content_b64),{headers:{'content-type':'application/pdf','content-disposition':`attachment; filename="${safe}"`,...corsHeaders}});
+  }
+  if(m && request.method==='POST'){
+    const inv=await ensureInvoice(env,user,m[1]);
+    const fd=await request.formData();
+    const file=fd.get('file');
+    if(!file || typeof file==='string') return json({detail:'Adjunta un archivo PDF'},400);
+    const r=await storeInvoicePdf(env,inv,file.name,bytesToB64(new Uint8Array(await file.arrayBuffer())),'manual',true);
+    if(!r.ok) return json({detail:r.error},400);
+    return json({ok:true,size:r.size});
+  }
+  if(m && request.method==='DELETE'){
+    await ensureInvoice(env,user,m[1]);
+    await env.DB.prepare('DELETE FROM invoice_pdfs WHERE invoice_id=?').bind(m[1]).run();
+    return json({ok:true});
   }
   m=p.match(/^\/invoices\/([^/]+)\/generate-entry$/); if(m && request.method==='POST'){
     const inv=await ensureInvoice(env,user,m[1]);
@@ -1360,6 +1435,7 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
         await env.DB.prepare('DELETE FROM accounting_entry_lines WHERE entry_id IN (SELECT id FROM accounting_entries WHERE invoice_id=?)').bind(invoiceId).run();
         await env.DB.prepare('DELETE FROM accounting_entries WHERE invoice_id=?').bind(invoiceId).run();
         await env.DB.prepare('DELETE FROM invoice_items WHERE invoice_id=?').bind(invoiceId).run();
+        await env.DB.prepare('DELETE FROM invoice_pdfs WHERE invoice_id=?').bind(invoiceId).run();
         await env.DB.prepare('DELETE FROM invoices WHERE id=? AND company_id=?').bind(invoiceId,m[1]).run();
         count++;
       }catch(e){ errors.push({id:invoiceId, error:e.message}); }

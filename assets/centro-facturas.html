@@ -365,6 +365,7 @@
       <button class="sb-item" onclick="closeSidebar();openSettings()"><svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>Config. contable</button>
       <button class="sb-item" onclick="closeSidebar();openRules()"><svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Reglas contables</button>
       <button class="sb-item" onclick="closeSidebar();openChartModal()"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>Plan de cuentas</button>
+      <button class="sb-item" onclick="closeSidebar();openReparse()"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5M9 12l2 2 4-4"/></svg>Revisar lectura</button>
       <button class="sb-item" onclick="closeSidebar();openImportHistory()"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9M10 13h4"/></svg>Historial de cargas</button>
     </nav>
     <div class="sb-progress"><div class="top"><span>Exportadas a Siigo</span><span id="sbProgressPct">0%</span></div><div class="bar"><i id="sbProgressBar"></i></div><small id="sbProgressText">Centro activo</small></div>
@@ -434,6 +435,11 @@
   </div>
   <label class="text-2" style="display:flex;align-items:center;gap:9px;margin:16px 0 4px;font-size:13.5px;cursor:pointer"><input type="checkbox" id="autoMonthBox" class="mini-check" onchange="saveAutoMonth()" checked><b>Repartir por mes automáticamente</b></label>
   <div class="actions" style="justify-content:flex-end;margin-top:10px"><button class="btn btn-light" onclick="closeModal('dianModal'); openImportHistory()">Ver historial de cargas</button></div>
+</div></div>
+<div id="reparseModal" class="modal-bg"><div class="modal wide"><div class="modal-head"><div><h3>Revisar lectura de facturas</h3><p>Vuelve a leer el XML de las facturas ya cargadas con el lector actual y muestra las que tienen datos distintos (número, proveedor, fecha o valores). No se cambia nada hasta que presiones "Corregir".</p></div><button class="close" onclick="closeModal('reparseModal')">×</button></div>
+  <div id="reparseStatus"></div>
+  <div class="actions" style="margin-bottom:12px"><button class="btn btn-primary" id="reparseScanBtn" onclick="scanReparse()">Buscar facturas con datos mal leídos</button><button class="btn btn-green" id="reparseFixBtn" onclick="applyReparse()" style="display:none">Corregir</button></div>
+  <div class="table-wrap"><table style="min-width:900px"><thead><tr><th>Factura</th><th>Proveedor</th><th>Total</th><th>Otros cambios</th><th>Estado</th><th>Resultado</th></tr></thead><tbody id="reparseRows"><tr><td colspan="6">Presiona "Buscar" para revisar las facturas de la empresa activa.</td></tr></tbody></table></div>
 </div></div>
 <div id="pdfImportModal" class="modal-bg"><div class="modal wide"><div class="modal-head"><div><h3>Importar facturas en PDF</h3><p id="pdfImportSub">Revisa los datos leídos de cada PDF antes de importar. Puedes corregir cualquier celda.</p></div><button class="close" onclick="closePdfImport()">×</button></div>
   <div id="pdfImportStatus"></div>
@@ -531,8 +537,9 @@
       </div>
     </div>
   </div>
-  <h3 style="margin:20px 0 8px;font-size:15px">Archivos recibidos desde Drive</h3>
-  <div class="table-wrap"><table style="min-width:860px"><thead><tr><th>Última revisión</th><th>Archivo</th><th>Carpeta</th><th>Resultado</th><th>Nuevas</th><th>Ya existían / omitidas</th><th>Detalle</th></tr></thead><tbody id="driveFiles"><tr><td colspan="7">Sin archivos todavía</td></tr></tbody></table></div>
+  <div id="driveErrSummary"></div>
+  <div class="actions" style="justify-content:space-between;align-items:center;margin:20px 0 8px"><h3 style="margin:0;font-size:15px">Archivos recibidos desde Drive</h3><div class="tabs-inline" style="margin:0"><button id="driveTabAll" class="active" onclick="setDriveTab('all')">Recientes</button><button id="driveTabErr" onclick="setDriveTab('err')">Con error</button></div></div>
+  <div class="table-wrap"><table style="min-width:720px;table-layout:fixed"><thead><tr><th style="width:140px">Última revisión</th><th>Archivo y detalle</th><th style="width:110px">Resultado</th><th style="width:80px">Nuevas</th><th style="width:110px">Ya existían / omitidas</th></tr></thead><tbody id="driveFiles"><tr><td colspan="5">Sin archivos todavía</td></tr></tbody></table></div>
 </div></div>
 <div id="historyModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Historial de importaciones</h3><p>Registro de cargas XML/ZIP realizadas para la empresa activa.</p></div><button class="close" onclick="closeModal('historyModal')">×</button></div><div class="table-wrap"><table style="min-width:780px"><thead><tr><th>Fecha</th><th>Archivos</th><th>Estado</th><th>Importadas</th><th>Errores</th><th>Detalle</th></tr></thead><tbody id="historyRows"><tr><td colspan="6">Sin historial</td></tr></tbody></table></div></div></div>
 <div id="exportModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div class="export-title"><img src="siigo-nube-logo.png" alt="Siigo Nube"><div><h3>Exportar a Siigo Nube</h3><p>Descarga las causaciones listas para revisión o carga en Siigo.</p></div></div><button class="close" onclick="closeModal('exportModal')">×</button></div><div class="field"><label>Formato</label><select id="exportFormat"><option value="siigo">Siigo Nube</option><option value="general">General contable</option><option value="invoices">Resumen facturas</option></select></div><button class="btn btn-blue btn-full btn-siigo" onclick="exportCsv()"><img src="siigo-nube-logo.png" alt="Siigo Nube">Descargar CSV para Siigo</button><hr style="border:0;border-top:1px solid var(--line);margin:16px 0"><p style="margin:0 0 10px;color:var(--muted);font-size:13px">Informe en PDF con la contabilización de cada factura: usa las facturas seleccionadas o, si no hay ninguna, las que se ven en la bandeja con el filtro actual.</p><button class="btn btn-light btn-full" onclick="closeModal('exportModal');downloadInvoicesPdf(selectedInvoiceIds.size?[...selectedInvoiceIds]:filteredInvoices().map(i=>i.id))">Descargar informe PDF</button></div></div><div id="toast" class="toast"></div>
@@ -647,7 +654,8 @@ async function renameBatch(batchId){
 }
 async function upload(){
   let totalImported=0,totalErrors=0,allErrors=[],zipNotices=[];const months={};let pdfSaved=0,pdfOrphans=[];
-  const pdfCount=res=>{for(const it of (res.imported||[]))if(it.pdf==='guardado')pdfSaved++};
+  let evIgnored=0,notesIgnored=0;
+  const pdfCount=res=>{for(const it of (res.imported||[]))if(it.pdf==='guardado')pdfSaved++;for(const g of (res.ignored||[])){if(/nota/i.test(g.reason))notesIgnored++;else evIgnored++}};
   try{
     if(!cid())return toast('Selecciona empresa');
     const all=[...fileInput.files];
@@ -700,6 +708,7 @@ async function upload(){
     setProgress('Actualizando bandeja final...');
     await loadInvoices();
     const mk=Object.keys(months).sort((a,b)=>{const p=s=>{const [mn,y]=s.split(' ');return Number(y)*100+MONTH_INDEX(mn)};return p(a)-p(b)});
+    if(evIgnored||notesIgnored) zipNotices.push(`Se omitieron ${[evIgnored?`${evIgnored} evento(s) de la DIAN (acuses/aceptaciones, no son facturas)`:'',notesIgnored?`${notesIgnored} nota(s) crédito/débito (se registran manualmente)`:''].filter(Boolean).join(' y ')}.`);
     if(pdfSaved) zipNotices.unshift(`Se guardó el PDF original de ${pdfSaved} factura(s). Desde el detalle de cada factura se descarga con "Descargar factura (PDF)".`);
     if(pdfOrphans.length) zipNotices.push(`${pdfOrphans.length} PDF no se pudieron asociar a ninguna factura (no venían junto a su XML ni tenían el mismo nombre): ${pdfOrphans.slice(0,8).join(', ')}${pdfOrphans.length>8?'…':''}. Si son facturas que solo vienen en PDF, súbelas con "Subir PDF".`);
     if(mk.length) zipNotices.unshift(`Facturas nuevas repartidas por mes: ${mk.map(k=>`${k} (${months[k]})`).join(', ')}. Cada mes tiene su pestaña arriba de la bandeja.`);
@@ -751,6 +760,38 @@ async function downloadInvoicePdf(id){
     const data=(currentInvoice&&currentInvoice.id===id)?currentInvoice.data:await api(`/api/invoices/${id}`);
     await generateInvoicePdf(data);
   }catch(e){toast(e.message||'No pude descargar el PDF')}
+}
+// ---------- Revisar lectura de facturas ya cargadas ----------
+let reparseFound=[];
+function openReparse(){if(!cid())return toast('Selecciona empresa');reparseFound=[];reparseFixBtn.style.display='none';reparseStatus.innerHTML='';reparseRows.innerHTML='<tr><td colspan="6">Presiona "Buscar" para revisar las facturas de la empresa activa.</td></tr>';openModal('reparseModal')}
+function reparseCell(r,f,fmt){const c=r.changes[f];return c?`<span style="text-decoration:line-through;color:var(--muted)">${esc(fmt?fmt(c[0]):c[0]||'—')}</span><br><b>${esc(fmt?fmt(c[1]):c[1]||'—')}</b>`:''}
+function renderReparse(){
+  const inv=id=>invoices.find(i=>i.id===id)||{};
+  reparseRows.innerHTML=reparseFound.map(r=>{const i=inv(r.id);const other=Object.keys(r.changes).filter(k=>!['invoice_number','supplier_name','payable_amount'].includes(k)).map(k=>({issue_date:'fecha',supplier_nit:'NIT proveedor',customer_nit:'NIT receptor',subtotal:'subtotal',tax_amount:'IVA',withholding_amount:'retención'}[k]||k));
+    return `<tr><td>${r.changes.invoice_number?reparseCell(r,'invoice_number'):esc(i.invoice_number||'')}</td><td>${r.changes.supplier_name?reparseCell(r,'supplier_name'):esc(i.supplier_name||'')}</td><td>${r.changes.payable_amount?reparseCell(r,'payable_amount',money):money(i.payable_amount)}</td><td class="sub">${esc(other.join(', '))}</td><td><span class="pill ${statusClass(r.status)}">${statusLabel(r.status)}</span>${r.entry_edited?'<span class="sub">con correcciones manuales</span>':''}</td><td class="msg-cell">${esc(r.note||(isExp(r)?'Ya exportada: se corrige en Siigo':'Pendiente de corregir'))}</td></tr>`}).join('')||'<tr><td colspan="6">Todas las facturas se leen igual con el lector actual. No hay nada que corregir.</td></tr>';
+}
+function isExp(r){return r.status==='exported'||r.status==='exporting'}
+async function scanReparse(){
+  reparseScanBtn.disabled=true;reparseFixBtn.style.display='none';reparseFound=[];
+  try{
+    await loadInvoices();const ids=invoices.filter(i=>!/PDF/.test(i.document_type||'')).map(i=>i.id);
+    for(let k=0;k<ids.length;k+=20){reparseStatus.innerHTML=`<div class="check-box check-info">Revisando ${Math.min(k+20,ids.length)} de ${ids.length} facturas…</div>`;const res=await api(`/api/companies/${cid()}/reparse`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({invoice_ids:ids.slice(k,k+20)})});reparseFound.push(...res.results);renderReparse()}
+    const fixable=reparseFound.filter(r=>!isExp(r)).length,exp=reparseFound.length-fixable;
+    reparseStatus.innerHTML=reparseFound.length?`<div class="check-box check-warn"><b>${reparseFound.length}</b> factura(s) con datos distintos a los del XML. ${fixable?`<b>${fixable}</b> se pueden corregir aquí.`:''} ${exp?`<b>${exp}</b> ya se exportaron a Siigo: hay que corregirlas en Siigo.`:''}</div>`:'<div class="check-box check-ok">Todas las facturas están bien leídas.</div>';
+    if(fixable){reparseFixBtn.style.display='';reparseFixBtn.textContent=`Corregir ${fixable} factura(s)`}
+    renderReparse();
+  }catch(e){reparseStatus.innerHTML=`<div class="check-box check-err">${esc(e.message)}</div>`}
+  finally{reparseScanBtn.disabled=false}
+}
+async function applyReparse(){
+  const todo=reparseFound.filter(r=>!isExp(r)&&!r.applied);if(!todo.length)return;
+  if(!confirm(`Se corregirán los datos de ${todo.length} factura(s) con lo que dice su XML. Las que tengan causación sin correcciones manuales se recausan y quedan "Por confirmar" otra vez. ¿Continuar?`))return;
+  reparseFixBtn.disabled=true;
+  try{
+    for(let k=0;k<todo.length;k+=20){reparseStatus.innerHTML=`<div class="check-box check-info">Corrigiendo ${Math.min(k+20,todo.length)} de ${todo.length}…</div>`;const res=await api(`/api/companies/${cid()}/reparse`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({invoice_ids:todo.slice(k,k+20).map(r=>r.id),apply:true})});for(const x of res.results){const r=reparseFound.find(y=>y.id===x.id);if(r)Object.assign(r,x)}renderReparse()}
+    reparseStatus.innerHTML=`<div class="check-box check-ok">Listo: ${reparseFound.filter(r=>r.applied).length} factura(s) corregidas. Revísalas en "Por confirmar".</div>`;reparseFixBtn.style.display='none';await loadInvoices();
+  }catch(e){reparseStatus.innerHTML=`<div class="check-box check-err">${esc(e.message)}</div>`}
+  finally{reparseFixBtn.disabled=false}
 }
 // ---------- Importar facturas que solo vienen en PDF ----------
 let pdfJsPromise=null, pdfRows=[];
@@ -911,7 +952,7 @@ let reviewInvoiceId='',reviewData=null,reviewLines=[],reviewDirty=false,reviewRe
 function r2(n){return Math.round((Number(n)||0)*100)/100}
 function accountName(code){const a=(typeof chartAccounts!=='undefined'?chartAccounts:[]).find(x=>String(x.code)===String(code||'').trim());return a?a.name:''}
 function fmtWhen(s){const d=new Date(s);if(!s||isNaN(d))return String(s||'').replace('T',' ').slice(0,16);const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`}
-const auditLabels={generate:'Causación automática generada',regenerate:'Causación recalculada automáticamente',edit:'Contabilización corregida manualmente',approve:'Contabilización confirmada',export:'Exportada a Siigo'};
+const auditLabels={reparse:'Datos corregidos desde el XML',generate:'Causación automática generada',regenerate:'Causación recalculada automáticamente',edit:'Contabilización corregida manualmente',approve:'Contabilización confirmada',export:'Exportada a Siigo'};
 async function viewEntry(id){
   try{
     const data=await api(`/api/invoices/${id}`);
@@ -1357,7 +1398,12 @@ async function uploadSelectedToSiigo(){
     const groups=chunks(ids,1);let uploaded=0,allErrors=[],allBlocked=[];
     for(let g=0;g<groups.length;g++){
       setProgress(`Subiendo a Siigo ${g+1}/${groups.length}`);
-      const res=await api(`/api/companies/${cid()}/siigo-upload-selected`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({invoice_ids:groups[g]})});
+      let res=await api(`/api/companies/${cid()}/siigo-upload-selected`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({invoice_ids:groups[g]})});
+      // Siigo limitó las solicitudes (429): se espera y se reintenta la misma factura (hasta 2 veces).
+      for(let retry=1; retry<=2 && (res.errors||[]).some(e=>/\b429\b/.test(e.error||'')); retry++){
+        for(let s=30*retry; s>0; s--){setProgress(`Siigo pidió una pausa (demasiadas solicitudes). Reintentando en ${s} s · factura ${g+1}/${groups.length}`);await sleep(1000)}
+        res=await api(`/api/companies/${cid()}/siigo-upload-selected`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({invoice_ids:groups[g]})});
+      }
       uploaded += Number(res.count||0);allErrors.push(...(res.errors||[]));allBlocked.push(...(res.blocked||[]));
       log(`Resultado Siigo ${g+1}/${groups.length}`,res);
       await loadInvoices();await sleep(120);
@@ -1670,7 +1716,18 @@ async function loadDriveStatus(){
   if(s.key) html+=`<p class="sub" style="margin:-4px 0 14px">Total recibido desde Drive: ${Number(tot.imported||0)} factura(s) en ${Number(tot.files||0)} archivo(s)${Number(tot.errored||0)?` · ${tot.errored} archivo(s) con error se reintentan cada día`:''}.</p>`;
   driveStatus.innerHTML=html;
   const lbl={done:['Correcto','approved'],partial:['Parcial','received'],error:['Error','failed']};
-  driveFiles.innerHTML=s.files.map(f=>`<tr><td class="mono" style="white-space:nowrap">${esc(fmtWhen(f.updated_at))}</td><td>${esc(f.file_name)}</td><td class="sub" style="margin:0">${esc(f.folder_path||'')}</td><td><span class="pill ${(lbl[f.status]||[])[1]||'received'}">${esc((lbl[f.status]||[f.status])[0])}</span></td><td>${f.imported}</td><td>${f.duplicates}</td><td class="msg-cell">${esc((f.message||'').slice(0,300))}</td></tr>`).join('')||'<tr><td colspan="7">Sin archivos todavía</td></tr>';
+  driveLast=s;renderDriveFiles();
+  // Resumen de errores agrupados por causa (sin el nombre del archivo), para ver de un vistazo por qué no cargan.
+  const reasons={};for(const f of (s.errors||[]))for(const part of String(f.message||'Error sin detalle').split(' | ')){const why=part.replace(/^[^:]{20,}\.(xml|zip|pdf):\s*/i,'').replace(/[0-9a-f]{40,}/gi,'…').trim()||'Error sin detalle';reasons[why]=(reasons[why]||0)+1}
+  const top=Object.entries(reasons).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  driveErrSummary.innerHTML=top.length?`<div class="check-box check-err"><strong>${(s.errors||[]).length} archivo(s) con error. Causas más frecuentes:</strong><ul>${top.map(([w,n])=>`<li><b>${n}×</b> ${esc(w.slice(0,260))}</li>`).join('')}</ul><span style="font-size:12px">Los archivos con error se reintentan en cada sincronización.</span></div>`:'';
+}
+let driveLast=null,driveTab='all';
+function setDriveTab(t){driveTab=t;driveTabAll.classList.toggle('active',t==='all');driveTabErr.classList.toggle('active',t==='err');renderDriveFiles()}
+function renderDriveFiles(){
+  const s=driveLast||{};const lbl={done:['Correcto','approved'],partial:['Parcial','received'],error:['Error','failed']};
+  const list=driveTab==='err'?(s.errors||[]):(s.files||[]);
+  driveFiles.innerHTML=list.map(f=>`<tr><td class="mono" style="white-space:nowrap;vertical-align:top">${esc(fmtWhen(f.updated_at))}</td><td style="vertical-align:top;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(f.file_name)}">${esc(f.file_name)}</div><span class="sub">${esc(f.folder_path||'')}</span>${f.message?`<div style="margin-top:4px;font-size:12.5px;color:${f.status==='done'?'var(--ink-2)':'var(--red)'};word-break:break-word">${esc(String(f.message).slice(0,500))}</div>`:''}</td><td style="vertical-align:top"><span class="pill ${(lbl[f.status]||[])[1]||'received'}">${esc((lbl[f.status]||[f.status])[0])}</span></td><td style="vertical-align:top">${f.imported}</td><td style="vertical-align:top">${f.duplicates}</td></tr>`).join('')||`<tr><td colspan="5">${driveTab==='err'?'No hay archivos con error.':'Sin archivos todavía'}</td></tr>`;
 }
 async function generateDriveKey(){
   if(document.getElementById('driveRevokeBtn').style.display!=='none'&&!confirm('Ya hay una llave activa. Si generas una nueva, el programa instalado con la anterior deja de funcionar hasta que pegues el nuevo. ¿Continuar?'))return;

@@ -17,7 +17,14 @@ function tagText(xml, tag){ const re=new RegExp(`<(?:\\w+:)?${tag}\\b[^>]*>([\\s
 function strip(s){ return String(s||'').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,'$1').replace(/<[^>]*>/g,'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&').trim(); }
 function num(v){ const n=Number(String(v||'0').replace(/[^0-9.-]/g,'')); return Number.isFinite(n)?n:0; }
 function innerUbl(src){ for(const tag of ['Invoice','CreditNote','DebitNote']){ const re=new RegExp(`<(?:\\w+:)?${tag}\\b[\\s\\S]*?<\\/(?:\\w+:)?${tag}>`,'i'); const m=String(src||'').match(re); if(m) return m[0]; } return null; }
-function extractInvoiceXml(input){ let raw=String(input||'').trim(); if(!raw) throw new Error('Archivo vacío'); if(/^(<\?xml[\s\S]*?\?>\s*)?<(?:\w+:)?(Invoice|CreditNote|DebitNote)\b/i.test(raw)) return raw; raw=raw.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&'); const inner=innerUbl(raw); if(inner) return inner; throw new Error('No encontré Invoice/CreditNote/DebitNote dentro del archivo'); }
+function extractInvoiceXml(input){ let raw=String(input||'').replace(/^﻿/,'').trim(); if(!raw) throw new Error('Archivo vacío'); if(/^(<\?xml[\s\S]*?\?>\s*)?<(?:\w+:)?(Invoice|CreditNote|DebitNote)\b/i.test(raw)) return raw; const original=raw; raw=raw.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&'); const inner=innerUbl(raw); if(inner) return inner;
+  // Los eventos de la DIAN (acuse de recibo, aceptación, recibo del bien) llegan como ApplicationResponse: no son facturas.
+  if(/^(<\?xml[\s\S]*?\?>\s*)?(<!--[\s\S]*?-->\s*)*<(?:\w+:)?ApplicationResponse\b/i.test(original)) throw Object.assign(new Error('Evento de la DIAN (acuse/aceptación), no es una factura: se ignora'),{code:'NOT_INVOICE'});
+  throw new Error('No encontré Invoice/CreditNote/DebitNote dentro del archivo'); }
+// Datos de la factura sin las extensiones UBL (firma digital y secciones propias de cada software de facturación).
+// Algunos proveedores incluyen ahí etiquetas vacías como <AccountingCustomerParty><Party/>, que se leían en lugar
+// de las reales y dejaban el NIT del receptor y del proveedor vacíos.
+function ublBody(xml){ return String(xml||'').replace(/<(?:\w+:)?UBLExtensions\b[\s\S]*?<\/(?:\w+:)?UBLExtensions>/gi,''); }
 function removeLineBlocks(xml){ return String(xml||'').replace(/<(?:\w+:)?InvoiceLine\b[\s\S]*?<\/(?:\w+:)?InvoiceLine>/gi,'').replace(/<(?:\w+:)?CreditNoteLine\b[\s\S]*?<\/(?:\w+:)?CreditNoteLine>/gi,'').replace(/<(?:\w+:)?DebitNoteLine\b[\s\S]*?<\/(?:\w+:)?DebitNoteLine>/gi,''); }
 function sumBlocks(xml, blockTag, amountTag='TaxAmount'){
   let total=0;
@@ -154,14 +161,15 @@ function monthFromDate(d){ const m=String(d||'').match(/^(\d{4})-(\d{2})-/); ret
 
 async function parseInvoice(input){
   const xml=extractInvoiceXml(input);
+  const body=ublBody(xml); // se lee sin extensiones UBL (ver ublBody)
   const root=(xml.match(/<(?:\w+:)?(Invoice|CreditNote|DebitNote)\b/i)||[])[1] || (xml.match(/<(?:\w+:)?(Invoice|CreditNote|DebitNote)\b/i)||[])[1] || 'Invoice';
-  const supplier=party(xml,'AccountingSupplierParty');
-  const customer=party(xml,'AccountingCustomerParty');
-  const invoiceNumber=tagText(xml,'ID');
-  const cufe=tagText(xml,'UUID') || await sha256(xml);
-  const issueDate=tagText(xml,'IssueDate');
-  const currency=tagText(xml,'DocumentCurrencyCode') || 'COP';
-  const monetary=(xml.match(/<(?:\w+:)?LegalMonetaryTotal\b[\s\S]*?<\/(?:\w+:)?LegalMonetaryTotal>/i)||[''])[0];
+  const supplier=party(body,'AccountingSupplierParty');
+  const customer=party(body,'AccountingCustomerParty');
+  const invoiceNumber=tagText(body,'ID');
+  const cufe=tagText(body,'UUID') || await sha256(xml);
+  const issueDate=tagText(body,'IssueDate');
+  const currency=tagText(body,'DocumentCurrencyCode') || 'COP';
+  const monetary=(body.match(/<(?:\w+:)?LegalMonetaryTotal\b[\s\S]*?<\/(?:\w+:)?LegalMonetaryTotal>/i)||[''])[0];
   // Subtotal = valor de las líneas (LineExtensionAmount) - descuentos + cargos a nivel de factura.
   // Antes se usaba primero TaxExclusiveAmount, pero ese campo es la BASE GRAVABLE: vale 0 cuando el proveedor
   // no cobra IVA (y es menor que el subtotal si hay líneas exentas), lo que dejaba el gasto en $0.
@@ -173,7 +181,7 @@ async function parseInvoice(input){
 
   // IMPORTANTE: DIAN puede traer TaxTotal a nivel factura y también dentro de cada línea.
   // Para no duplicar IVA, quitamos InvoiceLine/CreditNoteLine/DebitNoteLine antes de sumar impuestos globales.
-  const headerXml=removeLineBlocks(xml);
+  const headerXml=removeLineBlocks(body);
   let tax=round2(sumBlocks(headerXml,'TaxTotal','TaxAmount'));
   const taxBreakdown=sumTaxByPercent(headerXml);
   let withholding=round2(sumBlocks(headerXml,'WithholdingTaxTotal','TaxAmount'));
@@ -188,7 +196,7 @@ async function parseInvoice(input){
   const qtyTag=root==='CreditNote'?'CreditedQuantity':root==='DebitNote'?'DebitedQuantity':'InvoicedQuantity';
   const items=[];
   const lineRe=new RegExp(`<(?:\\w+:)?${lineTag}\\b[\\s\\S]*?<\\/(?:\\w+:)?${lineTag}>`,'gi');
-  for(const m of xml.matchAll(lineRe)){
+  for(const m of body.matchAll(lineRe)){
     items.push({description:tagText(m[0],'Description'), quantity:num(tagText(m[0],qtyTag)), line_amount:num(tagText(m[0],'LineExtensionAmount'))});
   }
   return {invoice_xml:xml, invoice_number:invoiceNumber, cufe, issue_date:issueDate, document_type:root==='Invoice'?'Factura compra':root==='CreditNote'?'Nota crédito':'Nota débito', supplier_name:supplier.name, supplier_nit:supplier.nit, customer_name:customer.name, customer_nit:customer.nit, currency, subtotal, tax_amount:tax, tax_breakdown:taxBreakdown, withholding_amount:withholding, payable_amount:payable, items};
@@ -651,8 +659,13 @@ async function importDriveXml(env, user, xmlText, fileName, path, desde, hasta, 
   delete r.company_id;
   return r;
 }
+// Documentos que no se importan: eventos de la DIAN (no son facturas) y notas crédito/débito (el contador las registra a mano).
+function isManualNote(parsed){ return /nota\s+(cr[eé]dito|d[eé]bito)/i.test(String(parsed?.document_type||'')); }
 async function importDriveXmlCore(env, user, xmlText, fileName, path, desde, hasta){
-  const parsed=await parseInvoice(xmlText);
+  let parsed;
+  try{ parsed=await parseInvoice(xmlText); }
+  catch(e){ if(e.code==='NOT_INVOICE') return {status:'skipped', reason:e.message}; throw e; }
+  if(isManualNote(parsed)) return {status:'skipped', invoice_number:parsed.invoice_number, reason:`${parsed.document_type} ${parsed.invoice_number}: las notas se registran manualmente, no se importan`};
   const ym=String(parsed.issue_date||'').slice(0,7);
   const dm=String(desde||'').match(/^(\d{4})-(\d{1,2})$/);
   if(dm && ym && ym < `${dm[1]}-${dm[2].padStart(2,'0')}`)
@@ -762,37 +775,73 @@ async function validateEntry(env, inv, lines){
   return {ok:!errors.length, errors, warnings, totals:{debit, credit, difference:round2(debit-credit)}};
 }
 
-async function siigoAuth(env){
+// ---------- Conexión con Siigo ----------
+// Siigo bloquea con 429 ("demasiadas solicitudes") si se inicia sesión muchas veces seguidas. Antes se iniciaba
+// sesión en CADA consulta (4-6 por factura); ahora el token (dura 24 h) se guarda por credencial y se reutiliza,
+// y ante un 429 se espera y se reintenta en lugar de marcar la factura como fallida.
+const siigoMem=new Map(); // copia en memoria del token mientras el Worker siga activo
+const sleepMs=ms=>new Promise(r=>setTimeout(r,ms));
+function retryWait(resp, attempt){ const ra=Number(resp?.headers?.get('retry-after')); return Math.min(15000, (Number.isFinite(ra)&&ra>0 ? ra*1000 : [2000,5000,10000][attempt]||10000)); }
+async function siigoCacheKey(env){ return 'tok:'+await sha256(`${env.SIIGO_USERNAME}|${env.SIIGO_ACCESS_KEY}|${env.SIIGO_PARTNER_ID||'ContaPilot'}`); }
+async function siigoTokenTable(env){ await env.DB.prepare('CREATE TABLE IF NOT EXISTS siigo_tokens (cache_key TEXT PRIMARY KEY, access_token TEXT NOT NULL, expires_at TEXT NOT NULL, catalog TEXT, updated_at TEXT NOT NULL)').run(); }
+async function siigoAuth(env, {force=false}={}){
   const username=env.SIIGO_USERNAME;
   const accessKey=env.SIIGO_ACCESS_KEY;
   const partnerId=env.SIIGO_PARTNER_ID || 'ContaPilot';
   if(!username || !accessKey) throw new Error('Faltan variables seguras de Siigo: SIIGO_USERNAME y SIIGO_ACCESS_KEY');
-  const r=await fetch('https://api.siigo.com/auth',{
-    method:'POST',
-    headers:{
-      'content-type':'application/json',
-      'Partner-Id': partnerId
-    },
-    body:JSON.stringify({username, access_key:accessKey})
-  });
-  const txt=await r.text(); let data; try{data=JSON.parse(txt)}catch(_){data={raw:txt}}
+  const key=await siigoCacheKey(env);
+  const soon=new Date(Date.now()+10*60*1000).toISOString(); // se renueva 10 minutos antes de vencer
+  if(!force){
+    const mem=siigoMem.get(key);
+    if(mem && mem.expires_at>soon) return {...mem, cached:true};
+    if(env.DB){
+      try{
+        const row=await env.DB.prepare('SELECT access_token, expires_at FROM siigo_tokens WHERE cache_key=?').bind(key).first();
+        if(row && row.expires_at>soon){ const t={access_token:row.access_token, expires_at:row.expires_at, token_type:'Bearer', scope:''}; siigoMem.set(key,t); return {...t, cached:true}; }
+      }catch(_){ /* la tabla aún no existe: se crea al guardar */ }
+    }
+  }
+  let r, data={};
+  for(let attempt=0; attempt<4; attempt++){
+    r=await fetch('https://api.siigo.com/auth',{method:'POST', headers:{'content-type':'application/json','Partner-Id':partnerId}, body:JSON.stringify({username, access_key:accessKey})});
+    const txt=await r.text(); try{data=JSON.parse(txt)}catch(_){data={raw:txt}}
+    if(r.status!==429 || attempt===3) break;
+    await sleepMs(retryWait(r,attempt));
+  }
+  if(r.status===429) throw new Error('Siigo está limitando las conexiones (429: demasiadas solicitudes). Espera 1 o 2 minutos y vuelve a intentar.');
   if(!r.ok) throw new Error(data.message || data.error || data.detail || ('Siigo auth respondió '+r.status));
   if(!data.access_token) throw new Error('Siigo no devolvió access_token');
-  return {access_token:data.access_token, expires_in:data.expires_in, token_type:data.token_type||'Bearer', scope:data.scope||''};
+  const expiresAt=new Date(Date.now()+Math.max(600, Number(data.expires_in)||86400)*1000).toISOString();
+  const tok={access_token:data.access_token, expires_at:expiresAt, expires_in:data.expires_in, token_type:data.token_type||'Bearer', scope:data.scope||''};
+  siigoMem.set(key,tok);
+  if(env.DB){
+    try{ await siigoTokenTable(env); await env.DB.prepare('INSERT INTO siigo_tokens (cache_key,access_token,expires_at,updated_at) VALUES (?,?,?,?) ON CONFLICT(cache_key) DO UPDATE SET access_token=excluded.access_token, expires_at=excluded.expires_at, updated_at=excluded.updated_at').bind(key,tok.access_token,expiresAt,now()).run(); }catch(_){ }
+  }
+  return tok;
 }
 async function siigoRequest(env, path, options={}){
-  const auth=await siigoAuth(env);
   const partnerId=env.SIIGO_PARTNER_ID || 'ContaPilot';
-  const r=await fetch(`https://api.siigo.com/v1${path}`,{
-    ...options,
-    headers:{
-      'authorization': `Bearer ${auth.access_token}`,
-      'content-type':'application/json',
-      'Partner-Id': partnerId,
-      ...(options.headers||{})
-    }
-  });
-  const txt=await r.text(); let data; try{data=JSON.parse(txt)}catch(_){data={raw:txt}}
+  let auth=await siigoAuth(env), r, txt='', data;
+  for(let attempt=0; attempt<4; attempt++){
+    r=await fetch(`https://api.siigo.com/v1${path}`,{
+      ...options,
+      headers:{
+        'authorization': `Bearer ${auth.access_token}`,
+        'content-type':'application/json',
+        'Partner-Id': partnerId,
+        ...(options.headers||{})
+      }
+    });
+    txt=await r.text();
+    // Token vencido o revocado: se pide uno nuevo una sola vez.
+    if(r.status===401 && auth.cached){ auth=await siigoAuth(env,{force:true}); continue; }
+    // Demasiadas solicitudes: se espera y se reintenta (no aplica a la creación de la compra si Siigo ya la recibió;
+    // un 429 significa que Siigo la rechazó antes de procesarla).
+    if(r.status===429 && attempt<3){ await sleepMs(retryWait(r,attempt)); continue; }
+    break;
+  }
+  try{data=JSON.parse(txt)}catch(_){data={raw:txt}}
+  if(r.status===429) throw new Error(`Siigo está limitando las solicitudes (429) en ${path}. Espera 1 o 2 minutos y vuelve a intentar; la factura no se creó en Siigo.`);
   if(!r.ok){
     const cleanBody=typeof data==='object'?JSON.stringify(data):String(data||txt);
     const sentBody=options.body ? String(options.body).slice(0,2500) : '';
@@ -811,7 +860,39 @@ function invoicePrefixNumber(invoiceNumber){
   if(m) return {prefix:m[1]||'', number:m[2]};
   return {prefix:'', number:raw};
 }
+// Prefijo y consecutivo que se envían a Siigo como "factura del proveedor". Siigo exige prefijo (no acepta vacío).
+// 1) Prefijo oficial de la resolución DIAN que trae el XML (sts:InvoiceControl > AuthorizedInvoices > Prefix).
+//    Ej. SODIMAC "9513100291456" → prefijo "9513", consecutivo "100291456" (antes se mandaba prefijo vacío y Siigo lo rechazaba).
+// 2) Si no viene, las letras al inicio del número (ej. "FE2291" → "FE" + "2291").
+// 3) Si no hay prefijo de ninguna forma, "SP" (sin prefijo).
+function siigoProviderInvoice(invoiceNumber, rawXml){
+  const raw=String(invoiceNumber||'').trim();
+  const dianPrefix=tagText(rawXml||'','Prefix').replace(/\s+/g,'');
+  if(dianPrefix && raw.toUpperCase().startsWith(dianPrefix.toUpperCase()) && raw.length>dianPrefix.length){
+    const number=raw.slice(dianPrefix.length).replace(/^[-\s]+/,'');
+    if(number) return {prefix:dianPrefix, number, source:'dian'};
+  }
+  const pn=invoicePrefixNumber(raw);
+  if(pn.prefix) return {prefix:pn.prefix, number:pn.number, source:'letras'};
+  return {prefix:dianPrefix||'SP', number:raw, source:dianPrefix?'dian':'sin_prefijo'};
+}
+// Los catálogos (comprobante FC, forma de pago, impuestos) casi no cambian: se guardan 12 horas por credencial.
 async function siigoGetPurchaseConfig(env){
+  const key='cfg:'+(await siigoCacheKey(env)).slice(4);
+  const nowIso=now();
+  const mem=siigoMem.get(key);
+  if(mem && mem.expires_at>nowIso) return {...mem.cfg};
+  if(env.DB){
+    try{ const row=await env.DB.prepare('SELECT catalog, expires_at FROM siigo_tokens WHERE cache_key=?').bind(key).first();
+      if(row && row.expires_at>nowIso && row.catalog){ const cfg=JSON.parse(row.catalog); siigoMem.set(key,{cfg,expires_at:row.expires_at}); return {...cfg}; } }catch(_){ }
+  }
+  const cfg=await siigoFetchPurchaseConfig(env);
+  const expiresAt=new Date(Date.now()+12*3600*1000).toISOString();
+  siigoMem.set(key,{cfg,expires_at:expiresAt});
+  if(env.DB){ try{ await siigoTokenTable(env); await env.DB.prepare("INSERT INTO siigo_tokens (cache_key,access_token,expires_at,catalog,updated_at) VALUES (?,'-',?,?,?) ON CONFLICT(cache_key) DO UPDATE SET expires_at=excluded.expires_at, catalog=excluded.catalog, updated_at=excluded.updated_at").bind(key,expiresAt,JSON.stringify(cfg),now()).run(); }catch(_){ } }
+  return {...cfg};
+}
+async function siigoFetchPurchaseConfig(env){
   const cfg={};
   if(env.SIIGO_PURCHASE_DOCUMENT_ID) cfg.document_id=Number(env.SIIGO_PURCHASE_DOCUMENT_ID);
   if(env.SIIGO_PAYMENT_TYPE_ID) cfg.payment_type_id=Number(env.SIIGO_PAYMENT_TYPE_ID);
@@ -855,7 +936,7 @@ async function siigoFindSupplierByNit(env, nit){
   return Array.isArray(results) && results.length ? results[0] : null;
 }
 async function siigoEnsureSupplier(env, invoice){
-  const tercero=partyDetailsFromXml(invoice.raw_xml||'', 'AccountingSupplierParty');
+  const tercero=partyDetailsFromXml(ublBody(invoice.raw_xml||''), 'AccountingSupplierParty');
   const nit=nitClean(tercero.nit || invoice.supplier_nit);
   if(!nit) throw new Error('La factura no tiene NIT de proveedor para crear/usar proveedor en Siigo');
   // Buscamos primero por NIT real en Siigo; si ya existe, lo usamos tal cual.
@@ -887,7 +968,7 @@ async function siigoEnsureSupplier(env, invoice){
 async function buildSiigoPurchasePayload(env, invoice, lines){
   const cfg=await siigoGetPurchaseConfig(env);
   const supplier=await siigoEnsureSupplier(env, invoice);
-  const pn=invoicePrefixNumber(invoice.invoice_number);
+  const pn=siigoProviderInvoice(invoice.invoice_number, invoice.raw_xml);
   const items=(await env.DB.prepare('SELECT * FROM invoice_items WHERE invoice_id=?').bind(invoice.id).all()).results||[];
   // Se envía exactamente la contabilización que el contador revisó y confirmó en ContaPilot:
   // cada línea débito de gasto/costo/inventario (no IVA) es un ítem de la compra en Siigo.
@@ -932,7 +1013,7 @@ async function buildSiigoPurchasePayload(env, invoice, lines){
     document:{id:cfg.document_id},
     date:invoice.issue_date || now().slice(0,10),
     supplier:{identification:supplier.identification, branch_office:supplier.branch_office||0},
-    provider_invoice:{prefix:pn.prefix||'', number:String(pn.number||invoice.invoice_number||'').slice(0,20)},
+    provider_invoice:{prefix:String(pn.prefix).slice(0,10), number:String(pn.number||invoice.invoice_number||'').slice(0,20)},
     tax_included:false,
     observations:`Creado desde ContaPilot. Factura ${invoice.invoice_number||''}. CUFE ${(invoice.cufe||'').slice(0,64)}${mixedRatesNote}`,
     items:siigoItems,
@@ -953,8 +1034,9 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     const key=await env.DB.prepare('SELECT last4, created_at, last_used_at FROM drive_sync_keys WHERE user_id=? AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1').bind(user.id).first();
     const runs=(await env.DB.prepare('SELECT * FROM drive_sync_runs WHERE user_id=? ORDER BY finished_at DESC LIMIT 10').bind(user.id).all()).results||[];
     const files=(await env.DB.prepare('SELECT * FROM drive_files WHERE user_id=? ORDER BY updated_at DESC LIMIT 40').bind(user.id).all()).results||[];
+    const errors=(await env.DB.prepare("SELECT * FROM drive_files WHERE user_id=? AND status<>'done' ORDER BY updated_at DESC LIMIT 300").bind(user.id).all()).results||[];
     const totals=await env.DB.prepare("SELECT COUNT(*) files, SUM(imported) imported, SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) errored FROM drive_files WHERE user_id=?").bind(user.id).first();
-    return json({key:key||null, runs, files, totals});
+    return json({key:key||null, runs, files, errors, totals});
   }
   if(p==='/drive-sync/key' && request.method==='POST'){
     const raw='cpd_'+[...crypto.getRandomValues(new Uint8Array(24))].map(b=>b.toString(16).padStart(2,'0')).join('');
@@ -999,7 +1081,7 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
   }}
   { const mm=p.match(/^\/companies\/([^/]+)\/siigo-test$/); if(mm && request.method==='POST'){
     const company=await ensureCompany(env,user.id,mm[1]);
-    const authResult=await siigoAuth(siigoEnvFor(env,company));
+    const authResult=await siigoAuth(siigoEnvFor(env,company),{force:true});
     return json({ok:true, message:'Conexión con Siigo correcta', expires_in:authResult.expires_in, token_type:authResult.token_type, scope:authResult.scope});
   }}
   { const mm=p.match(/^\/companies\/([^/]+)\/siigo-catalogs$/); if(mm && request.method==='GET'){
@@ -1194,9 +1276,12 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     // Sin esa opción, todo va al centro activo (comportamiento anterior).
     const autoMonth=String(fd.get('auto_month')||'')==='1';
     const batchId=autoMonth ? null : await resolveBatchId(env, m[1], fd.get('batch_id'));
-    const imported=[], errors=[];
+    const imported=[], errors=[], ignored=[];
     async function processOne(name, xml){
-      const parsed=await parseInvoice(xml);
+      let parsed;
+      try{ parsed=await parseInvoice(xml); }
+      catch(e){ if(e.code==='NOT_INVOICE'){ ignored.push({file:name, reason:e.message}); return; } throw e; }
+      if(isManualNote(parsed)){ ignored.push({file:name, reason:`${parsed.document_type} ${parsed.invoice_number}: se registra manualmente`}); return; }
       const batchName=autoMonth ? monthBatchName([], parsed.issue_date) : null;
       const targetBatch=autoMonth ? await batchByName(env, m[1], batchName) : batchId;
       if(nitClean(parsed.customer_nit)!==nitClean(company.nit)) throw new Error(`Factura rechazada: receptor ${parsed.customer_nit} no coincide con empresa ${company.nit}`);
@@ -1245,7 +1330,49 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     const status = errors.length && imported.length ? 'partial' : errors.length ? 'error' : 'success';
     const fileNames = [...fd.getAll('file')].map(f=>f.name).join(', ');
     await env.DB.prepare('INSERT INTO import_logs VALUES (?,?,?,?,?,?,?,?)').bind(id(), m[1], fileNames, status, imported.length, errors.length, JSON.stringify({imported,errors}), now()).run();
-    return json({imported,errors,zip_notices:zipNotices});
+    return json({imported,errors,ignored,zip_notices:zipNotices});
+  }
+  // Revisar lectura: vuelve a leer el XML guardado con el lector actual y muestra (o corrige) las diferencias.
+  // Sirve para facturas cargadas antes de corregir el lector (números o totales mal leídos). Máximo 20 por llamada.
+  m=p.match(/^\/companies\/([^/]+)\/reparse$/); if(m && request.method==='POST'){
+    await ensureCompany(env,user.id,m[1]);
+    const body=await request.json().catch(()=>({}));
+    const ids=(Array.isArray(body.invoice_ids)?body.invoice_ids.map(String):[]).slice(0,20);
+    const apply=!!body.apply;
+    if(!ids.length) return json({results:[]});
+    const rows=(await env.DB.prepare(`SELECT * FROM invoices WHERE company_id=? AND id IN (${ids.map(()=>'?').join(',')})`).bind(m[1],...ids).all()).results||[];
+    const fields=['invoice_number','issue_date','supplier_name','supplier_nit','customer_nit','subtotal','tax_amount','withholding_amount','payable_amount'];
+    const results=[];
+    for(const inv of rows){
+      if(!inv.raw_xml) continue;
+      let parsed; try{ parsed=await parseInvoice(inv.raw_xml); }catch(_){ continue; }
+      const changes={};
+      for(const f of fields){
+        const a=inv[f], b=parsed[f];
+        const same=(typeof b==='number') ? Math.abs(Number(a||0)-b)<0.005 : String(a??'').trim()===String(b??'').trim();
+        if(!same) changes[f]=[a,b];
+      }
+      if(!Object.keys(changes).length) continue;
+      const entry=await env.DB.prepare('SELECT status,edited FROM accounting_entries WHERE invoice_id=?').bind(inv.id).first();
+      const r={id:inv.id, status:inv.status, changes, entry_edited:!!entry?.edited, applied:false, note:''};
+      if(apply){
+        if(isExportedStatus(inv.status)){ r.note='Ya exportada a Siigo: corrígela directamente en Siigo'; }
+        else{
+          const stmts=[env.DB.prepare('UPDATE invoices SET invoice_number=?, issue_date=?, supplier_name=?, supplier_nit=?, customer_name=?, customer_nit=?, subtotal=?, tax_amount=?, withholding_amount=?, payable_amount=?, tax_breakdown=?, updated_at=? WHERE id=?')
+            .bind(parsed.invoice_number,parsed.issue_date,parsed.supplier_name,parsed.supplier_nit,parsed.customer_name,parsed.customer_nit,parsed.subtotal,parsed.tax_amount,parsed.withholding_amount,parsed.payable_amount,JSON.stringify(parsed.tax_breakdown||{}),now(),inv.id),
+            env.DB.prepare('DELETE FROM invoice_items WHERE invoice_id=?').bind(inv.id)];
+          for(const it of parsed.items) stmts.push(env.DB.prepare('INSERT INTO invoice_items VALUES (?,?,?,?,?)').bind(id(),inv.id,it.description,it.quantity,it.line_amount));
+          await env.DB.batch(stmts);
+          await auditLog(env,user,inv,'reparse',{changes});
+          if(entry && !entry.edited){ try{ await generateEntry(env,inv.id,user); r.note='Datos corregidos y causación recalculada (revísala y confírmala de nuevo)'; }catch(e){ r.note='Datos corregidos; no se pudo recalcular la causación: '+e.message; } }
+          else if(entry && entry.edited) r.note='Datos corregidos. Tenía correcciones manuales: revisa su contabilización';
+          else r.note='Datos corregidos';
+          r.applied=true;
+        }
+      }
+      results.push(r);
+    }
+    return json({results});
   }
   // Factura que solo viene en PDF: la pantalla lee el PDF, el usuario revisa los datos y aquí se crea la factura.
   m=p.match(/^\/companies\/([^/]+)\/pdf-invoice$/); if(m && request.method==='POST'){

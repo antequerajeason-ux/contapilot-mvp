@@ -210,6 +210,18 @@
     tbody tr{transition:background .15s}
     tbody tr:hover td{background:#f7fafd}
     .supplier{font-weight:600}
+    .import-choices{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .import-choice{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:18px;border:1px solid var(--line-strong);border-radius:14px;background:var(--card);cursor:pointer;text-align:left;font-family:inherit;color:var(--ink);transition:transform .2s var(--ease),box-shadow .2s,border-color .2s}
+    .import-choice:hover{transform:translateY(-2px);border-color:var(--primary);box-shadow:var(--shadow-hover)}
+    .import-choice b{font-size:15px}
+    .import-choice small{font-size:12px;color:var(--muted)}
+    .import-choice .ic-xml,.import-choice .ic-pdf{font-size:11px;font-weight:800;letter-spacing:.04em;padding:6px 9px;border-radius:8px;margin-bottom:4px}
+    .import-choice .ic-xml{background:var(--primary-soft);color:var(--primary-dark)}
+    .import-choice .ic-pdf{background:var(--red-soft);color:var(--red)}
+    .pdf-import-table input{min-width:0}
+    .pdf-import-table input.missing{border-color:var(--red);background:var(--red-soft)}
+    .pdf-import-table td.fname{font-size:12px;color:var(--ink-2);word-break:break-all}
+    @media(max-width:640px){.import-choices{grid-template-columns:1fr}}
     .pdf-tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:5px;background:var(--red-soft);color:var(--red);font-size:10px;font-weight:800;letter-spacing:.03em;vertical-align:1px}
     td strong,.stat strong,.money-highlight{font-variant-numeric:tabular-nums}
     .rows-in tr{animation:rowIn .45s var(--ease) both}
@@ -414,24 +426,20 @@
 <div class="chart-tip" id="chartTip"></div>
 
 <div id="companyModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div><h3 id="companyModalTitle">Agregar empresa</h3><p id="companyModalText">El NIT debe coincidir con el receptor de las facturas.</p></div><button class="close" onclick="closeModal('companyModal')">×</button></div><div class="field"><label>Empresa</label><input id="companyName" value=""></div><div class="field"><label>NIT receptor</label><input id="companyNit" value=""></div><button id="companySaveButton" class="btn btn-green btn-full" onclick="saveCompany()">Guardar empresa</button></div></div>
-<div id="dianModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Importar facturas DIAN</h3><p>Flujo simple: descarga en DIAN, sube a ContaPilot y causa todas.</p></div><button class="close" onclick="closeModal('dianModal')">×</button></div><div style="background:var(--surface-2);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px">
-  <strong>Pasos para el contador</strong>
-  <ol style="margin:10px 0 0;padding-left:18px;line-height:1.65;color:var(--ink-2);font-size:14px">
-    <li>Entra al portal de la DIAN.</li>
-    <li>Busca <strong>Documentos recibidos</strong> y filtra el año completo (o los meses) que quieres causar.</li>
-    <li>Descarga el archivo que entrega la DIAN: puede ser <strong>ZIP</strong> o <strong>XML</strong>.</li>
-    <li>Regresa a ContaPilot y presiona <strong>Subir ZIP/XML</strong>.</li>
-    <li>Cuando ContaPilot liste las facturas, selecciona una, varias o todas y presiona <strong>Causar Factura</strong>.</li>
-    <li>Finalmente exporta el resultado para Siigo Nube o CSV.</li>
-  </ol>
-  <div style="margin-top:12px;padding:12px;border-radius:14px;background:rgba(31,185,138,.14);border:1px solid rgba(31,185,138,.35);color:var(--green);font-weight:850;font-size:13px">ContaPilot revisa el ZIP, localiza los XML de factura, valida el NIT receptor y prepara la causación masiva.</div>
-  <div class="actions" style="margin-top:14px">
-    <button class="btn btn-light" onclick="openDianPortal()">Abrir portal DIAN</button>
-    <label style="display:flex;align-items:flex-start;gap:9px;width:100%;margin:2px 0 6px;font-size:13px;cursor:pointer" class="text-2"><input type="checkbox" id="autoMonthBox" class="mini-check" style="margin-top:2px" onchange="saveAutoMonth()" checked><span><b>Repartir por mes automáticamente.</b> Puedes subir todo el año (o varios meses) en un solo ZIP: cada factura queda en el centro de su mes según su fecha de emisión ("Enero 2026", "Febrero 2026"…). Si lo desmarcas, todo va al centro activo.</span></label>
-    <button class="btn btn-green" onclick="closeModal('dianModal'); fileInput.click()">Subir ZIP/XML</button>
-    <button class="btn btn-light" onclick="closeModal('dianModal'); openImportHistory()">Ver historial de cargas</button>
+<div id="dianModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div><h3>Importar facturas</h3></div><button class="close" onclick="closeModal('dianModal')">×</button></div>
+  <input id="pdfInvoiceInput" type="file" multiple accept="application/pdf,.pdf" style="display:none" onchange="readPdfInvoices()">
+  <div class="import-choices">
+    <button class="import-choice" onclick="closeModal('dianModal'); fileInput.click()"><span class="ic-xml">XML</span><b>Subir ZIP/XML</b><small>Archivos de la factura electrónica</small></button>
+    <button class="import-choice" onclick="closeModal('dianModal'); pdfInvoiceInput.click()"><span class="ic-pdf">PDF</span><b>Subir PDF</b><small>Facturas que solo vienen en PDF</small></button>
   </div>
-</div></div></div>
+  <label class="text-2" style="display:flex;align-items:center;gap:9px;margin:16px 0 4px;font-size:13.5px;cursor:pointer"><input type="checkbox" id="autoMonthBox" class="mini-check" onchange="saveAutoMonth()" checked><b>Repartir por mes automáticamente</b></label>
+  <div class="actions" style="justify-content:flex-end;margin-top:10px"><button class="btn btn-light" onclick="closeModal('dianModal'); openImportHistory()">Ver historial de cargas</button></div>
+</div></div>
+<div id="pdfImportModal" class="modal-bg"><div class="modal wide"><div class="modal-head"><div><h3>Importar facturas en PDF</h3><p id="pdfImportSub">Revisa los datos leídos de cada PDF antes de importar. Puedes corregir cualquier celda.</p></div><button class="close" onclick="closePdfImport()">×</button></div>
+  <div id="pdfImportStatus"></div>
+  <div class="table-wrap"><table class="entry-table pdf-import-table" style="min-width:1180px"><thead><tr><th style="width:150px">Archivo</th><th style="width:120px">Factura N°</th><th style="width:140px">Fecha</th><th style="min-width:220px">Proveedor</th><th style="width:120px">NIT proveedor</th><th style="width:120px">Subtotal</th><th style="width:110px">IVA</th><th style="width:120px">Total</th><th style="width:150px">CUFE</th><th style="width:110px">Estado</th><th style="width:40px"></th></tr></thead><tbody id="pdfImportRows"></tbody></table></div>
+  <div class="actions" style="justify-content:space-between;align-items:center;margin-top:14px"><span class="sub" id="pdfImportCount"></span><div class="actions"><button class="btn btn-light" onclick="closePdfImport()">Cancelar</button><button class="btn btn-green" id="pdfImportBtn" onclick="importPdfInvoices()">Importar facturas</button></div></div>
+</div></div>
 <div id="dianSyncModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Sincronizar con la DIAN</h3><p>Busca automáticamente tus facturas de compra en el portal de la DIAN.</p></div><button class="close" onclick="closeModal('dianSyncModal')">×</button></div>
   <div style="background:rgba(224,167,47,.14);border:1px solid rgba(224,167,47,.35);border-radius:10px;padding:12px;margin-bottom:14px;color:var(--amber);font-size:13px;line-height:1.5"><strong>Cómo funciona:</strong> la búsqueda es automática. La DIAN exige resolver un captcha de seguridad (solo lo puede hacer una persona) antes de descargar cada documento — por eso resuelves ese captcha una sola vez en el portal de la DIAN y luego generas aquí un "conector" que descarga y sube automáticamente el resto de facturas nuevas.</div>
   <div class="field"><label>Token de acceso</label><input id="dianTokenUrl" placeholder="Pega la URL de token (catalogo-vpfe.dian.gov.co/User/AuthToken?...)"></div>
@@ -482,7 +490,7 @@
 <datalist id="accountsDatalist"></datalist>
 <div id="rulesModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Reglas contables</h3><p>Reglas por empresa: proveedor/descripcion → cuenta.</p></div><button class="close" onclick="closeModal('rulesModal')">×</button></div><div class="grid2"><div class="field"><label>Tipo</label><select id="ruleType"><option value="supplier">Proveedor contiene</option><option value="description">Descripción contiene</option><option value="default">Default</option></select></div><div class="field"><label>Texto</label><input id="ruleValue" placeholder="CLASSIC JEANS"></div><div class="field"><label>Cuenta</label><input id="ruleAccount" placeholder="519525" list="accountsDatalist"></div><div class="field"><label>Descripción</label><input id="ruleDescription" placeholder="Vestuario"></div><div class="field"><label>Centro costo</label><input id="ruleCostCenter" placeholder="Administración"></div><div class="field"><label>Prioridad</label><input id="rulePriority" type="number" value="50"></div></div><div class="actions" style="justify-content:flex-end"><button class="btn btn-green" onclick="createRule()">Crear regla</button></div><hr style="border:0;border-top:1px solid var(--line);margin:16px 0"><div class="table-wrap"><table style="min-width:700px"><thead><tr><th>Tipo</th><th>Texto</th><th>Cuenta</th><th>Descripción</th><th>Prioridad</th></tr></thead><tbody id="rulesRows"></tbody></table></div></div></div>
 <div id="chartModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3>Plan de cuentas</h3><p>Importa el Excel o CSV del plan de cuentas exportado de Siigo Nube para validar las cuentas que se usan en reglas y configuración contable.</p></div><button class="close" onclick="closeModal('chartModal')">×</button></div><div style="background:var(--surface-2);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px"><input id="chartFileInput" type="file" accept=".csv,.xlsx,.xls" style="display:none" onchange="uploadChartCsv()"><div class="actions"><button class="btn btn-green" onclick="chartFileInput.click()">Subir plan de cuentas (Excel o CSV)</button></div><div id="chartImportResult" style="margin-top:10px;font-size:13px;color:var(--ink-2);font-weight:750"></div></div><div class="field"><label>Buscar cuenta</label><input id="chartSearch" oninput="renderChartAccountsList()" placeholder="Código o nombre"></div><div class="table-wrap"><table style="min-width:600px"><thead><tr><th>Código</th><th>Nombre</th><th>Clase</th></tr></thead><tbody id="chartRows"><tr><td colspan="3">Sin cuentas importadas</td></tr></tbody></table></div></div></div>
-<div id="facturaModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3 id="facturaTitle">Detalle de factura</h3><p id="facturaSubtitle">Información extraída del XML.</p></div><button class="close" onclick="closeModal('facturaModal')">×</button></div><div class="invoice-hero"><h2 id="facturaHeroNumber">Factura</h2><p id="facturaHeroInfo">Proveedor → Receptor</p></div><div id="facturaDetail" class="detail-grid"></div><h3 style="margin:12px 0 8px">Ítems de la factura</h3><div class="table-wrap"><table style="min-width:680px"><thead><tr><th>Descripción</th><th>Cantidad</th><th>Valor línea</th></tr></thead><tbody id="facturaItems"><tr><td colspan="3">Sin ítems</td></tr></tbody></table></div><div class="support-box"><div><strong>Factura en PDF</strong><p id="facturaPdfInfo">Cargando…</p></div><div class="actions"><input type="file" id="pdfAttachInput" accept="application/pdf,.pdf" style="display:none" onchange="attachInvoicePdf()"><button class="btn btn-primary" onclick="downloadInvoicePdf()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Descargar factura (PDF)</button><button class="btn btn-light" onclick="pdfAttachInput.click()" id="pdfAttachBtn">Adjuntar PDF</button><button class="link-btn" onclick="downloadCurrentXml()" title="Archivo técnico de la DIAN, para auditoría">XML</button></div></div><pre id="facturaXml" class="xml-box"></pre></div></div>
+<div id="facturaModal" class="modal-bg"><div class="modal"><div class="modal-head"><div><h3 id="facturaTitle">Detalle de factura</h3><p id="facturaSubtitle">Información extraída del XML.</p></div><button class="close" onclick="closeModal('facturaModal')">×</button></div><div class="invoice-hero"><h2 id="facturaHeroNumber">Factura</h2><p id="facturaHeroInfo">Proveedor → Receptor</p></div><div id="facturaDetail" class="detail-grid"></div><h3 style="margin:12px 0 8px">Ítems de la factura</h3><div class="table-wrap"><table style="min-width:680px"><thead><tr><th>Descripción</th><th>Cantidad</th><th>Valor línea</th></tr></thead><tbody id="facturaItems"><tr><td colspan="3">Sin ítems</td></tr></tbody></table></div><div class="support-box"><div><strong>Factura en PDF</strong><p id="facturaPdfInfo">Cargando…</p></div><div class="actions"><button class="btn btn-primary" onclick="downloadInvoicePdf()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Descargar factura (PDF)</button></div></div><pre id="facturaXml" class="xml-box"></pre></div></div>
 <div id="causacionModal" class="modal-bg"><div class="modal wide"><div class="modal-head"><div><h3 id="causacionTitle">Revisión contable</h3><p id="causacionSubtitle">Revisa, corrige y confirma la contabilización antes de exportarla a Siigo.</p></div><button class="close" onclick="closeReview()">×</button></div>
   <div id="reviewSummary" class="review-summary"></div>
   <p class="review-note">Los datos de la factura electrónica (proveedor, NIT, valores, IVA, CUFE) vienen del XML original y no se modifican. Solo se edita la contabilización.</p>
@@ -693,7 +701,7 @@ async function upload(){
     await loadInvoices();
     const mk=Object.keys(months).sort((a,b)=>{const p=s=>{const [mn,y]=s.split(' ');return Number(y)*100+MONTH_INDEX(mn)};return p(a)-p(b)});
     if(pdfSaved) zipNotices.unshift(`Se guardó el PDF original de ${pdfSaved} factura(s). Desde el detalle de cada factura se descarga con "Descargar factura (PDF)".`);
-    if(pdfOrphans.length) zipNotices.push(`${pdfOrphans.length} PDF no se pudieron asociar a ninguna factura (no venían junto a su XML ni tenían el mismo nombre): ${pdfOrphans.slice(0,8).join(', ')}${pdfOrphans.length>8?'…':''}. Puedes adjuntarlos desde el detalle de la factura con "Adjuntar PDF".`);
+    if(pdfOrphans.length) zipNotices.push(`${pdfOrphans.length} PDF no se pudieron asociar a ninguna factura (no venían junto a su XML ni tenían el mismo nombre): ${pdfOrphans.slice(0,8).join(', ')}${pdfOrphans.length>8?'…':''}. Si son facturas que solo vienen en PDF, súbelas con "Subir PDF".`);
     if(mk.length) zipNotices.unshift(`Facturas nuevas repartidas por mes: ${mk.map(k=>`${k} (${months[k]})`).join(', ')}. Cada mes tiene su pestaña arriba de la bandeja.`);
     showUploadNotices(zipNotices);
     toast(`Carga terminada: ${totalImported} factura(s) importada(s), ${totalErrors} observación(es).`);
@@ -722,8 +730,7 @@ async function viewInvoice(id){
     facturaHeroInfo.textContent=`${inv.supplier_name||''} · NIT ${inv.supplier_nit||''}  →  ${inv.customer_name||''} · NIT ${inv.customer_nit||''}`;
     const boxes=[['Fecha',inv.issue_date],['Tipo',inv.document_type],['Estado',statusLabel(inv.status)],['Proveedor',`${inv.supplier_name||''} · NIT ${inv.supplier_nit||''}`,'span2'],['Receptor',`${inv.customer_name||''} · NIT ${inv.customer_nit||''}`],['Subtotal',money(inv.subtotal)],['IVA',money(inv.tax_amount)],['Total',money(inv.payable_amount),'money'],['CUFE',inv.cufe,'span2'],['Retención',money(inv.withholding_amount)]];
     currentInvoice={id,data};
-    facturaPdfInfo.innerHTML=data.pdf?`PDF original guardado (<b>${esc(data.pdf.file_name||'factura.pdf')}</b>, ${Math.max(1,Math.round((data.pdf.size||0)/1024))} KB). Si necesitas cambiarlo, usa "Adjuntar PDF".`:'Esta factura no tiene el PDF original guardado. "Descargar factura (PDF)" genera uno con los datos del XML, o puedes adjuntar el PDF original.';
-    pdfAttachBtn.textContent=data.pdf?'Reemplazar PDF':'Adjuntar PDF';
+    facturaPdfInfo.textContent=data.pdf?'PDF original de la factura.':'Se genera con los datos de la factura electrónica.';
     facturaDetail.innerHTML=boxes.map(b=>`<div class="detail-box ${b[2]==='span2'?'span2':''}"><span>${b[0]}</span><strong class="${b[2]==='money'?'money-highlight':''}">${b[1]||''}</strong></div>`).join('');
     facturaItems.innerHTML=(data.items||[]).map(it=>`<tr><td>${it.description||''}</td><td>${it.quantity||0}</td><td>${money(it.line_amount||0)}</td></tr>`).join('')||'<tr><td colspan="3">Sin ítems</td></tr>';
     facturaXml.textContent=inv.raw_xml||'';
@@ -745,11 +752,138 @@ async function downloadInvoicePdf(id){
     await generateInvoicePdf(data);
   }catch(e){toast(e.message||'No pude descargar el PDF')}
 }
-async function attachInvoicePdf(){
-  const f=pdfAttachInput.files[0];pdfAttachInput.value='';if(!f||!currentInvoice)return;
-  if(!/\.pdf$/i.test(f.name)&&f.type!=='application/pdf')return toast('Elige un archivo PDF.');
-  try{const fd=new FormData();fd.append('file',f);await api(`/api/invoices/${currentInvoice.id}/pdf`,{method:'POST',body:fd});toast('PDF guardado en la factura.');await viewInvoice(currentInvoice.id);await loadInvoices()}catch(e){toast(e.message)}
+// ---------- Importar facturas que solo vienen en PDF ----------
+let pdfJsPromise=null, pdfRows=[];
+function loadPdfJs(){
+  if(!pdfJsPromise)pdfJsPromise=loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js').then(()=>{window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'}).catch(e=>{pdfJsPromise=null;throw new Error('No pude cargar el lector de PDF. Revisa tu conexión a internet.')});
+  return pdfJsPromise;
 }
+// Texto del PDF reconstruido en líneas (agrupando por posición vertical), máximo 3 páginas.
+async function pdfToLines(buf){
+  const doc=await window.pdfjsLib.getDocument({data:buf}).promise;const lines=[];
+  for(let p=1;p<=Math.min(doc.numPages,3);p++){
+    const page=await doc.getPage(p);const tc=await page.getTextContent();const rows=[];
+    for(const it of tc.items){const s=String(it.str||'');if(!s.trim())continue;const y=it.transform[5],x=it.transform[4];let r=rows.find(r=>Math.abs(r.y-y)<3);if(!r){r={y,parts:[]};rows.push(r)}r.parts.push({x,s})}
+    rows.sort((a,b)=>b.y-a.y);
+    for(const r of rows)lines.push(r.parts.sort((a,b)=>a.x-b.x).map(o=>o.s).join(' ').replace(/\s+/g,' ').trim());
+  }
+  return lines.filter(Boolean);
+}
+// Valor en pesos con formato colombiano ("$ 1.234.567,89") o anglosajón ("1,234,567.89").
+function parseMoneyCo(s){
+  let t=String(s||'').replace(/[^\d.,-]/g,'');if(!t)return 0;
+  const lc=t.lastIndexOf(','),ld=t.lastIndexOf('.');
+  if(lc>=0&&ld>=0){const dec=lc>ld?',':'.';t=t.split(dec==='.'?',':'.').join('');if(dec===',')t=t.replace(',','.')}
+  else if(lc>=0){t=/,\d{1,2}$/.test(t)?t.replace(/\./g,'').replace(',','.'):t.replace(/,/g,'')}
+  else if(ld>=0){if(!/\.\d{1,2}$/.test(t)||(t.match(/\./g)||[]).length>1)t=t.replace(/\./g,'')}
+  const n=Number(t);return Number.isFinite(n)?Math.round(n*100)/100:0;
+}
+const MONEY_RE=/\$?\s*-?\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|\$?\s*-?\d+(?:[.,]\d{1,2})?/g;
+// Valores en pesos de un texto, ignorando porcentajes ("19%").
+function moneyIn(str){const out=[];for(const m of String(str||'').matchAll(MONEY_RE)){const nx=str.slice(m.index+m[0].length).trimStart();if(nx.startsWith('%'))continue;const v=parseMoneyCo(m[0]);if(v>0)out.push(v)}return out}
+function amountAfter(lines,labels){
+  // Toma el primer valor que aparece DESPUÉS de la etiqueta (en la misma línea o en la siguiente).
+  for(const re of labels){
+    for(let i=0;i<lines.length;i++){
+      const m=lines[i].match(re);if(!m)continue;
+      let nums=moneyIn(lines[i].slice(m.index+m[0].length));
+      if(!nums.length&&lines[i+1])nums=moneyIn(lines[i+1]);
+      if(nums.length)return nums[0];
+    }
+  }
+  return 0;
+}
+function normDate(s){
+  let m=String(s||'').match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);if(m)return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  m=String(s||'').match(/(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/);if(m)return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  return '';
+}
+// Extrae los datos de una factura electrónica colombiana desde el texto de su PDF.
+function extractInvoiceFromPdfText(lines,companyNit){
+  const text=lines.join('\n');const flat=text.replace(/\s+/g,'');
+  const out={invoice_number:'',issue_date:'',supplier_name:'',supplier_nit:'',subtotal:0,tax_amount:0,payable_amount:0,cufe:''};
+  const cufe=flat.match(/[0-9a-f]{96}/i);if(cufe)out.cufe=cufe[0].toLowerCase();
+  // NIT: todos los que aparecen; el del receptor es el de la empresa, el otro es el proveedor.
+  const nits=[];for(const m of text.matchAll(/(?:NIT|N\.I\.T\.?|C\.?C\.?|Nit|Identificaci[oó]n)\s*[:.#No°]*\s*([\d][\d.\s]{4,14}\d)(?:\s*-\s*\d)?/g)){const n=m[1].replace(/\D/g,'');if(n.length>=6&&!nits.includes(n))nits.push(n)}
+  const own=String(companyNit||'').replace(/\D/g,'');
+  out.supplier_nit=nits.find(n=>n!==own&&!(own&&(n.startsWith(own)||own.startsWith(n))))||'';
+  if(out.supplier_nit){
+    const idx=lines.findIndex(l=>l.replace(/\D/g,'').includes(out.supplier_nit));
+    const cand=[];if(idx>=0){cand.push(lines[idx].split(/NIT|N\.I\.T|Nit/)[0]);if(idx>0)cand.push(lines[idx-1]);if(idx>1)cand.push(lines[idx-2])}
+    const bad=/factura|electr[oó]nica|venta|n[uú]mero|fecha|p[aá]gina|cufe|resoluci[oó]n|^\s*$/i;
+    const name=cand.map(c=>String(c||'').replace(/(Raz[oó]n social|Nombre|Emisor|Vendedor|Proveedor)\s*:?/i,'').trim()).find(c=>c.length>=3&&!bad.test(c)&&/[A-Za-zÁÉÍÓÚÑ]{3}/.test(c));
+    out.supplier_name=(name||'').slice(0,120);
+  }
+  // Número de factura
+  const numRes=[/(?:Factura(?:\s+electr[oó]nica)?(?:\s+de\s+venta)?|FACTURA(?:\s+ELECTR[OÓ]NICA)?(?:\s+DE\s+VENTA)?)\s*(?:No\.?|N[°º]\.?|Nro\.?|N[uú]mero|#)?\s*:?\s*([A-Z]{0,8}[-\s]?\d{1,12})\b/,/(?:No\.?|N[°º]|Nro\.?|N[uú]mero(?:\s+de\s+factura)?)\s*:?\s*([A-Z]{1,8}[-\s]?\d{1,12})\b/];
+  for(const re of numRes){const m=text.match(re);if(m){out.invoice_number=m[1].replace(/\s+/g,'').toUpperCase();break}}
+  // Fecha de emisión (si no se encuentra la etiqueta, la primera fecha del documento)
+  const dm=text.match(/Fecha\s*(?:y\s*hora\s*)?(?:de\s*)?(?:emisi[oó]n|expedici[oó]n|factura|generaci[oó]n)?\s*:?\s*(\d{4}[-\/.]\d{1,2}[-\/.]\d{1,2}|\d{1,2}[-\/.]\d{1,2}[-\/.]\d{4})/i)||text.match(/(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4})/);
+  if(dm)out.issue_date=normDate(dm[1]);
+  // Valores
+  out.payable_amount=amountAfter(lines,[/total\s*a\s*pagar/i,/neto\s*a\s*pagar/i,/total\s*factura/i,/valor\s*total\s*(?:de\s*la\s*)?factura/i,/\btotal\b(?!\s*(?:iva|impuesto|bruto|descuento|retenci|unidades|items|[ií]tems|l[ií]neas|cantidad))/i]);
+  out.tax_amount=amountAfter(lines,[/total\s*iva/i,/valor\s*iva/i,/\biva\b(?!\s*incluido)(?:\s*\(?\s*\d{1,2}\s*%\s*\)?)?/i,/impuesto\s*sobre\s*las\s*ventas/i]);
+  out.subtotal=amountAfter(lines,[/sub\s*-?\s*total/i,/valor\s*bruto/i,/total\s*bruto/i,/valor\s*antes\s*de\s*impuestos/i]);
+  if(out.tax_amount&&out.payable_amount&&out.tax_amount>=out.payable_amount)out.tax_amount=0;
+  if(!out.subtotal&&out.payable_amount)out.subtotal=Math.round((out.payable_amount-out.tax_amount)*100)/100;
+  return out;
+}
+async function readPdfInvoices(){
+  const files=[...pdfInvoiceInput.files];pdfInvoiceInput.value='';if(!files.length)return;
+  if(!cid())return toast('Selecciona empresa');
+  pdfRows=[];renderPdfRows();openModal('pdfImportModal');
+  pdfImportStatus.innerHTML='<div class="check-box check-info">Leyendo PDF…</div>';
+  try{await loadPdfJs()}catch(e){pdfImportStatus.innerHTML=`<div class="check-box check-err">${esc(e.message)}</div>`;return}
+  const company=companies.find(c=>c.id===cid())||{};
+  for(let i=0;i<files.length;i++){
+    const f=files[i];pdfImportStatus.innerHTML=`<div class="check-box check-info">Leyendo ${i+1} de ${files.length}: ${esc(f.name)}</div>`;
+    const row={file:f,name:f.name,data:{invoice_number:'',issue_date:'',supplier_name:'',supplier_nit:'',subtotal:0,tax_amount:0,payable_amount:0,cufe:''},error:'',state:'pending'};
+    try{
+      const lines=await pdfToLines(await f.arrayBuffer());
+      if(lines.join('').replace(/\s/g,'').length<40)row.error='PDF sin texto (escaneado): escribe los datos a mano';
+      else row.data=extractInvoiceFromPdfText(lines,company.nit);
+    }catch(e){row.error='No pude leer el PDF: '+e.message}
+    pdfRows.push(row);renderPdfRows();
+  }
+  pdfImportStatus.innerHTML='<div class="check-box check-warn">Revisa los datos de cada factura. Las celdas en rojo son obligatorias y no se pudieron leer.</div>';
+}
+const pdfRequired=['invoice_number','issue_date','supplier_nit','payable_amount'];
+function pdfRowMissing(r){return pdfRequired.filter(k=>k==='payable_amount'?!(Number(r.data[k])>0):k==='issue_date'?!/^\d{4}-\d{2}-\d{2}$/.test(r.data[k]):!String(r.data[k]||'').trim())}
+function renderPdfRows(){
+  const cell=(i,k,type)=>{const r=pdfRows[i];const miss=pdfRequired.includes(k)&&pdfRowMissing(r).includes(k);const v=r.data[k]??'';const dis=r.state==='done'?'readonly':'';return `<td><input ${dis} class="${type==='number'?'num ':''}${miss?'missing':''}" type="${type||'text'}" ${type==='number'?'step="0.01" min="0"':''} value="${esc(v)}" oninput="pdfRows[${i}].data['${k}']=this.type==='number'?Number(this.value):this.value;updatePdfRowState(${i})"></td>`};
+  const st=r=>r.state==='done'?`<span class="pill approved">${esc(r.result||'Importada')}</span>`:r.state==='error'?`<span class="pill failed" title="${esc(r.error)}">Error</span>`:pdfRowMissing(r).length?`<span class="pill received" title="Falta: ${esc(pdfRowMissing(r).join(', '))}">Incompleta</span>`:'<span class="pill accounted">Lista</span>';
+  pdfImportRows.innerHTML=pdfRows.map((r,i)=>`<tr id="pdfRow${i}"><td class="fname">${esc(r.name)}${r.error?`<span class="sub" style="color:var(--red)">${esc(r.error)}</span>`:''}</td>${cell(i,'invoice_number')}${cell(i,'issue_date','date')}${cell(i,'supplier_name')}${cell(i,'supplier_nit')}${cell(i,'subtotal','number')}${cell(i,'tax_amount','number')}${cell(i,'payable_amount','number')}${cell(i,'cufe')}<td>${st(r)}</td><td>${r.state==='done'?'':`<button class="row-del" title="Quitar" onclick="pdfRows.splice(${i},1);renderPdfRows()">×</button>`}</td></tr>`).join('')||'<tr><td colspan="11">Sin archivos</td></tr>';
+  const ready=pdfRows.filter(r=>r.state!=='done'&&!pdfRowMissing(r).length).length;
+  pdfImportCount.textContent=`${pdfRows.length} PDF · ${ready} lista(s) para importar · ${pdfRows.filter(r=>r.state==='done').length} importada(s)`;
+  pdfImportBtn.disabled=!ready;pdfImportBtn.textContent=ready?`Importar ${ready} factura(s)`:'Importar facturas';
+}
+function updatePdfRowState(i){
+  const r=pdfRows[i];const tr=document.getElementById('pdfRow'+i);if(!tr)return;
+  const miss=pdfRowMissing(r);const keys=['invoice_number','issue_date','supplier_name','supplier_nit','subtotal','tax_amount','payable_amount','cufe'];
+  tr.querySelectorAll('input').forEach((inp,j)=>inp.classList.toggle('missing',miss.includes(keys[j])));
+  const ready=pdfRows.filter(r=>r.state!=='done'&&!pdfRowMissing(r).length).length;
+  pdfImportCount.textContent=`${pdfRows.length} PDF · ${ready} lista(s) para importar · ${pdfRows.filter(r=>r.state==='done').length} importada(s)`;
+  pdfImportBtn.disabled=!ready;pdfImportBtn.textContent=ready?`Importar ${ready} factura(s)`:'Importar facturas';
+  tr.children[9].innerHTML=miss.length?`<span class="pill received" title="Falta: ${esc(miss.join(', '))}">Incompleta</span>`:'<span class="pill accounted">Lista</span>';
+}
+async function importPdfInvoices(){
+  const todo=pdfRows.filter(r=>r.state!=='done'&&!pdfRowMissing(r).length);if(!todo.length)return;
+  pdfImportBtn.disabled=true;let ok=0,dup=0,err=0;
+  for(const r of todo){
+    pdfImportStatus.innerHTML=`<div class="check-box check-info">Importando ${ok+dup+err+1} de ${todo.length}…</div>`;
+    try{
+      const fd=new FormData();fd.append('data',JSON.stringify(r.data));fd.append('file',r.file);
+      if(autoMonthOn())fd.append('auto_month','1');else if(activeBatchId)fd.append('batch_id',activeBatchId);
+      const res=await api(`/api/companies/${cid()}/pdf-invoice`,{method:'POST',body:fd});
+      r.state='done';r.result=res.status==='duplicate'?'Ya existía (se guardó su PDF)':`Importada${res.batch?' · '+res.batch:''}`;
+      if(res.status==='duplicate')dup++;else ok++;
+    }catch(e){r.state='error';r.error=e.message;err++}
+    renderPdfRows();
+  }
+  pdfImportStatus.innerHTML=`<div class="check-box ${err?'check-warn':'check-ok'}"><b>${ok}</b> factura(s) importada(s)${dup?` · ${dup} ya existían (se les guardó el PDF)`:''}${err?` · ${err} con error (pasa el mouse sobre "Error" para ver el motivo)`:''}. Ahora puedes causarlas y revisarlas como cualquier otra factura.</div>`;
+  await loadInvoices();
+}
+function closePdfImport(){if(pdfRows.some(r=>r.state!=='done')&&pdfRows.some(r=>r.state==='done'||r.data.invoice_number)&&!confirm('Hay facturas sin importar. ¿Cerrar de todos modos?'))return;closeModal('pdfImportModal')}
 // PDF generado por ContaPilot con los datos del XML (cuando no hay PDF original del emisor).
 async function generateInvoicePdf(data){
   await loadPdfLib();

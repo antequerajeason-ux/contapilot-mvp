@@ -1247,6 +1247,51 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
     await env.DB.prepare('INSERT INTO import_logs VALUES (?,?,?,?,?,?,?,?)').bind(id(), m[1], fileNames, status, imported.length, errors.length, JSON.stringify({imported,errors}), now()).run();
     return json({imported,errors,zip_notices:zipNotices});
   }
+  // Factura que solo viene en PDF: la pantalla lee el PDF, el usuario revisa los datos y aquí se crea la factura.
+  m=p.match(/^\/companies\/([^/]+)\/pdf-invoice$/); if(m && request.method==='POST'){
+    const company=await ensureCompany(env,user.id,m[1]);
+    const fd=await request.formData();
+    let d={}; try{ d=JSON.parse(String(fd.get('data')||'{}')); }catch(_){ return json({detail:'Datos inválidos'},400); }
+    const pdfFile=fd.get('file');
+    const number=String(d.invoice_number||'').trim().slice(0,60);
+    const date=String(d.issue_date||'').trim();
+    const supplierNit=nitClean(d.supplier_nit);
+    const supplierName=String(d.supplier_name||'').trim().slice(0,200);
+    const total=round2(Number(d.payable_amount)||0), tax=round2(Number(d.tax_amount)||0);
+    let subtotal=round2(Number(d.subtotal)||0);
+    const missing=[]; if(!number)missing.push('número de factura'); if(!/^\d{4}-\d{2}-\d{2}$/.test(date))missing.push('fecha (AAAA-MM-DD)'); if(!supplierNit)missing.push('NIT del proveedor'); if(!(total>0))missing.push('total');
+    if(missing.length) return json({detail:'Faltan datos: '+missing.join(', ')},400);
+    if(!(subtotal>0)) subtotal=round2(total-tax);
+    const cufeRaw=String(d.cufe||'').replace(/[^0-9a-f]/gi,'').toLowerCase();
+    const cufe=cufeRaw.length>=64 ? cufeRaw : `pdf-${supplierNit}-${number.toUpperCase()}`;
+    const pdfB64=(pdfFile && typeof pdfFile!=='string') ? bytesToB64(new Uint8Array(await pdfFile.arrayBuffer())) : '';
+    // Si la factura ya existe (mismo CUFE o mismo NIT + número), no se duplica: solo se le guarda el PDF si no tenía.
+    const exists=await env.DB.prepare('SELECT id,invoice_number FROM invoices WHERE company_id=? AND (cufe=? OR (supplier_nit=? AND upper(invoice_number)=?))').bind(m[1],cufe,supplierNit,number.toUpperCase()).first();
+    if(exists){
+      let pdf='';
+      if(pdfB64){ const r=await storeInvoicePdf(env,{id:exists.id,company_id:m[1]},pdfFile.name,pdfB64,'pdf',false); pdf=r.ok?'guardado':r.error; }
+      return json({status:'duplicate', invoice_id:exists.id, invoice_number:exists.invoice_number, pdf});
+    }
+    // IVA por tarifa (se deduce del valor); retención implícita si el total es menor que subtotal + IVA (igual que con XML).
+    const breakdown={};
+    if(tax>0 && subtotal>0){ const pct=tax/subtotal*100; const near=[19,5].find(t=>Math.abs(pct-t)<=1.2); breakdown[String(near||Math.round(pct))]=tax; }
+    let withholding=round2(Number(d.withholding_amount)||0);
+    const implied=round2(subtotal+tax-total); if(!withholding && implied>0.5) withholding=implied;
+    const autoMonth=String(fd.get('auto_month')||'')==='1';
+    const batchName=autoMonth ? monthBatchName([], date) : null;
+    const batchId=autoMonth ? await batchByName(env,m[1],batchName) : await resolveBatchId(env,m[1],fd.get('batch_id'));
+    const invId=id();
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO invoices (id,company_id,invoice_number,cufe,issue_date,document_type,supplier_name,supplier_nit,customer_name,customer_nit,currency,subtotal,tax_amount,withholding_amount,payable_amount,status,raw_xml,created_at,updated_at,tax_breakdown,batch_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+        .bind(invId,m[1],number,cufe,date,'Factura compra (PDF)',supplierName||`Proveedor ${supplierNit}`,supplierNit,company.name,company.nit,'COP',subtotal,tax,withholding,total,'received',null,now(),now(),JSON.stringify(breakdown),batchId),
+      env.DB.prepare('INSERT INTO invoice_items VALUES (?,?,?,?,?)').bind(id(),invId,String(d.description||`Factura ${number} (importada desde PDF)`).slice(0,250),1,subtotal)
+    ]);
+    let pdf='';
+    if(pdfB64){ const r=await storeInvoicePdf(env,{id:invId,company_id:m[1]},pdfFile.name,pdfB64,'pdf',true); pdf=r.ok?'guardado':r.error; }
+    await ensureExtraSchema(env);
+    await env.DB.prepare('INSERT INTO import_logs VALUES (?,?,?,?,?,?,?,?)').bind(id(), m[1], pdfFile?.name||'PDF', 'success', 1, 0, JSON.stringify({imported:[{invoice_number:number, source:'pdf'}],errors:[]}), now()).run();
+    return json({status:'imported', invoice_id:invId, invoice_number:number, batch:batchName, pdf});
+  }
   m=p.match(/^\/invoices\/([^/]+)$/); if(m && request.method==='GET'){
     const inv=await ensureInvoice(env,user,m[1]);
     const items=(await env.DB.prepare('SELECT * FROM invoice_items WHERE invoice_id=?').bind(m[1]).all()).results||[];

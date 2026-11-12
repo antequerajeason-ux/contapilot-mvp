@@ -525,18 +525,7 @@
 </div></div>
 <div id="driveModal" class="modal-bg"><div class="modal wide"><div class="modal-head"><div><h3>Sincronización con Google Drive</h3><p>Las facturas que el contador deja en su carpeta de Drive entran solas a ContaPilot cada 2 días, ya causadas y repartidas por mes. Él solo revisa, confirma y sube a Siigo.</p></div><button class="close" onclick="closeModal('driveModal')">×</button></div>
   <div id="driveStatus"></div>
-  <div class="dash-grid" style="grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);margin-bottom:0">
-    <div class="soft-box" style="margin:0">
-      <strong>Instalación (una sola vez, unos 10 minutos)</strong>
-      <ol style="margin:10px 0 0;padding-left:18px;line-height:1.7;font-size:13.5px" class="text-2">
-        <li>Presiona <b>Generar llave y programa</b> y luego <b>Copiar programa</b>.</li>
-        <li>Abre <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">Google Apps Script</a> con la cuenta de Google donde están las facturas, borra lo que aparece y <b>pega</b> el programa.</li>
-        <li>En <span class="mono">CARPETAS_FACTURAS</span> pega el enlace de la carpeta <b>FACTURAS DIAN</b> de cada empresa (una por línea, entre comillas). Se abre la carpeta en Drive y se copia el enlace de la barra del navegador.</li>
-        <li>Guarda, elige la función <b>instalar</b> arriba y presiona <b>Ejecutar</b>.</li>
-        <li>Google pedirá permisos y mostrará "Google no ha verificado esta aplicación": es normal porque el programa es tuyo. Entra a <b>Configuración avanzada → Ir a…</b> y acepta.</li>
-      </ol>
-      <p class="sub" style="margin-top:10px">Solo se leen las carpetas <b>RECIBIDOS</b> (compras); las de ENVIADOS se ignoran. Cada factura se ubica en su empresa por el NIT del receptor y queda en el centro del mes (ej. carpeta 2026 › RECIBIDOS › 10. OCTUBRE → centro "Octubre 2026"). Nunca se confirma ni se sube a Siigo de forma automática.</p>
-    </div>
+  <div style="max-width:640px">
     <div>
       <div class="grid2"><div class="field" style="margin-bottom:4px"><label>Desde el mes</label><input id="driveFrom" type="month"></div><div class="field" style="margin-bottom:4px"><label>Hasta el mes (opcional)</label><input id="driveTo" type="month"></div></div>
       <span class="sub" style="margin-bottom:12px">Por defecto se trae <b>todo el año</b>: desde enero y hasta hoy. Cada factura queda en el centro de su mes según su fecha de emisión. Para traer un solo mes, pon el mismo mes en ambos campos. Los meses ya contabilizados por fuera de ContaPilot conviene dejarlos por fuera para no duplicarlos en Siigo.</span>
@@ -548,7 +537,7 @@
       </div>
     </div>
   </div>
-  <div id="driveErrSummary"></div>
+
   <div class="actions" style="justify-content:space-between;align-items:center;margin:20px 0 8px"><h3 style="margin:0;font-size:15px">Archivos recibidos desde Drive</h3><div class="tabs-inline" style="margin:0"><button id="driveTabAll" class="active" onclick="setDriveTab('all')">Recientes</button><button id="driveTabErr" onclick="setDriveTab('err')">Con error</button></div></div>
   <div class="table-wrap"><table style="min-width:720px;table-layout:fixed"><thead><tr><th style="width:140px">Última revisión</th><th>Archivo y detalle</th><th style="width:110px">Resultado</th><th style="width:80px">Nuevas</th><th style="width:110px">Ya existían / omitidas</th></tr></thead><tbody id="driveFiles"><tr><td colspan="5">Sin archivos todavía</td></tr></tbody></table></div>
 </div></div>
@@ -1762,14 +1751,10 @@ async function loadDriveStatus(){
     const d=daysSince(run.finished_at);const tone=run.errors&&!run.imported?'check-err':d>3?'check-warn':'check-ok';
     html+=`<div class="check-box ${tone}"><strong>${d>3?`Sin sincronizar hace ${Math.floor(d)} día(s).`:'Sincronización activa.'}</strong> Última revisión: ${esc(fmtWhen(run.finished_at))} · ${run.files_seen} archivo(s) en la carpeta · ${run.files_done} procesado(s) · <b>${run.imported}</b> factura(s) nueva(s) · ${run.duplicates} ya existían · ${run.errors} con error.${run.message?'<br>'+esc(run.message):''}${d>3?'<br>Revisa que el programa siga instalado y autorizado en la cuenta de Google del contador.':''}</div>`;
   }
-  if(s.key) html+=`<p class="sub" style="margin:-4px 0 14px">Total recibido desde Drive: ${Number(tot.imported||0)} factura(s) en ${Number(tot.files||0)} archivo(s)${Number(tot.errored||0)?` · ${tot.errored} archivo(s) con error se reintentan cada día`:''}.</p>`;
+  if(s.key) html+=`<p class="sub" style="margin:-4px 0 14px">Total recibido desde Drive: ${Number(tot.imported||0)} factura(s) en ${Number(tot.files||0)} archivo(s)${Number(tot.errored||0)?` · ${tot.errored} archivo(s) con error se reintentan en cada sincronización`:''}.</p>`;
   driveStatus.innerHTML=html;
   const lbl={done:['Correcto','approved'],partial:['Parcial','received'],error:['Error','failed']};
   driveLast=s;renderDriveFiles();
-  // Resumen de errores agrupados por causa (sin el nombre del archivo), para ver de un vistazo por qué no cargan.
-  const reasons={};for(const f of (s.errors||[]))for(const part of String(f.message||'Error sin detalle').split(' | ')){const why=part.replace(/^[^:]{20,}\.(xml|zip|pdf):\s*/i,'').replace(/[0-9a-f]{40,}/gi,'…').trim()||'Error sin detalle';reasons[why]=(reasons[why]||0)+1}
-  const top=Object.entries(reasons).sort((a,b)=>b[1]-a[1]).slice(0,6);
-  driveErrSummary.innerHTML=top.length?`<div class="check-box check-err"><strong>${(s.errors||[]).length} archivo(s) con error. Causas más frecuentes:</strong><ul>${top.map(([w,n])=>`<li><b>${n}×</b> ${esc(w.slice(0,260))}</li>`).join('')}</ul><span style="font-size:12px">Los archivos con error se reintentan en cada sincronización.</span></div>`:'';
 }
 let driveLast=null,driveTab='all';
 function setDriveTab(t){driveTab=t;driveTabAll.classList.toggle('active',t==='all');driveTabErr.classList.toggle('active',t==='err');renderDriveFiles()}

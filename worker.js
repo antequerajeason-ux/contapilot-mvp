@@ -756,6 +756,9 @@ async function validateEntry(env, inv, lines){
     if(!Number.isFinite(d) || !Number.isFinite(c) || d<0 || c<0) errors.push(`Línea ${n}: los valores deben ser números positivos`);
     else if(d>0 && c>0) errors.push(`Línea ${n}: tiene débito y crédito al mismo tiempo`);
     else if(!d && !c) errors.push(`Línea ${n}: no tiene valor débito ni crédito`);
+    // Siigo no recibe compras a cuentas de inventario (clase 14) como cuenta contable: exige productos.
+    // Comprobado con el historial real: el 100 % de esas compras fue rechazado por Siigo.
+    if(d>0 && /^14/.test(String(l.account||'').trim())) errors.push(`Línea ${n}: la cuenta ${String(l.account).trim()} es de inventario y Siigo no acepta compras a cuentas de inventario sin productos. Cámbiala por una cuenta de gasto o costo, o registra esta compra directamente en Siigo.`);
     if(/diferencia automática/i.test(l.description||'')) warnings.push(`Línea ${n}: ContaPilot agregó un ajuste automático de ${fmtCop(d||c)} para cuadrar el asiento. Revisa si corresponde a una retención, descuento u otro concepto.`);
   });
   if(lines.length && Math.abs(debit-credit)>0.009) errors.push(`Débitos (${fmtCop(debit)}) y créditos (${fmtCop(credit)}) no cuadran. Diferencia: ${fmtCop(debit-credit)}`);
@@ -956,6 +959,41 @@ async function siigoFindSupplierByNit(env, nit){
   const results=Array.isArray(data) ? data : (data.results||[]);
   return Array.isArray(results) && results.length ? results[0] : null;
 }
+// Traduce un error del envío a Siigo a una frase corta y entendible (qué pasó y qué hacer).
+// El detalle técnico se guarda aparte para soporte, sin mostrarlo al usuario.
+const SIIGO_TECH_SEP='\n--- Detalle técnico ---\n';
+function friendlySiigoError(e, inv){
+  const m=String(e?.message||e||'');
+  const supplier=inv?.supplier_name||'el proveedor';
+  if(e?.code==='NO_PHONE') return `No se pudo crear el proveedor ${e.supplier||supplier} en Siigo porque la factura no trae un teléfono válido. Créalo en Siigo (Terceros) con su teléfono y vuelve a subir la factura.`;
+  if(!/Siigo|siigo/.test(m)) return m.slice(0,300); // errores propios de ContaPilot: ya están en español
+  if(/\b429\b|limitando/i.test(m)) return 'Siigo pidió una pausa por demasiadas solicitudes. Espera uno o dos minutos y vuelve a intentar.';
+  if(/auth respondió|Faltan variables seguras|access_token|\b401\b/i.test(m)) return 'No se pudo iniciar sesión en Siigo. Revisa el usuario y la clave en "Conexión Siigo".';
+  if(/\/customers/.test(m) && /Phone/i.test(m)) return `No se pudo crear el proveedor ${supplier} en Siigo: su teléfono no es válido. Créalo en Siigo (Terceros) con su teléfono y vuelve a subir la factura.`;
+  if(/\/customers/.test(m)) return `No se pudo crear el proveedor ${supplier} en Siigo. Créalo directamente en Siigo (Terceros) y vuelve a subir la factura.`;
+  if(/provider_invoice/i.test(m)) return 'Siigo no aceptó el número de la factura del proveedor. Revisa el número de la factura e intenta de nuevo.';
+  if(/already exists|ya existe|duplicat/i.test(m)) return 'Siigo indica que esta factura del proveedor ya está registrada. Revísala en Siigo antes de volver a enviarla.';
+  if(/invalid_total_payments|payments/i.test(m)) return 'El total de la factura no coincide con lo que calcula Siigo (IVA o valores). Revisa los valores en "Revisar contabilización".';
+  if(/document-types|payment-types|comprobante|forma de pago/i.test(m)) return 'Falta configurar en Siigo el comprobante de compra o la forma de pago. Revisa "Conexión Siigo".';
+  if(/"code":"14\d{6}"/.test(m) && /documents_service|could not be completed/i.test(m)) return 'Siigo rechazó la compra porque usa una cuenta de inventario (14…). Cámbiala por una cuenta de gasto o costo en "Revisar contabilización", o regístrala directamente en Siigo.';
+  if(/documents_service|could not be completed/i.test(m)) return 'Siigo rechazó la compra sin indicar el motivo. Revisa que las cuentas usadas permitan movimientos en Siigo y que el proveedor esté activo.';
+  if(/\b5\d\d\b|fetch failed|network|timeout/i.test(m)) return 'Siigo no respondió correctamente. Intenta de nuevo en unos minutos.';
+  const sm=m.match(/"Message"\s*:\s*"([^"]+)"/);
+  return sm ? `Siigo rechazó la factura: ${sm[1]}` : 'Siigo rechazó la factura. Intenta de nuevo o revísala en Siigo.';
+}
+// Teléfono en el formato que Siigo acepta: celular de 10 dígitos (empieza por 3) o fijo de 7 dígitos.
+// Los fijos con el formato nuevo de 10 dígitos ("60" + indicativo + 7 dígitos, ej. 6073208242) se envían con
+// sus 7 dígitos locales; se quita el "57" del país. Si no queda un número válido, devuelve vacío.
+function siigoPhone(raw){
+  const list=String(raw||'').split(/[\/,;]| y |-(?=\s*\+?\d{7})/).map(s=>s.replace(/\D/g,''));
+  for(let d of list){
+    if(d.length===12 && d.startsWith('57')) d=d.slice(2);
+    if(d.length===10 && d.startsWith('3')) return d;
+    if(d.length===10 && d.startsWith('60')) return d.slice(3);
+    if(d.length===7 && !/^0/.test(d)) return d;
+  }
+  return '';
+}
 async function siigoEnsureSupplier(env, invoice){
   const tercero=partyDetailsFromXml(ublBody(invoice.raw_xml||''), 'AccountingSupplierParty');
   const nit=nitClean(tercero.nit || invoice.supplier_nit);
@@ -967,6 +1005,9 @@ async function siigoEnsureSupplier(env, invoice){
   const existing=await siigoFindSupplierByNit(env, nit);
   if(existing) return {identification:nit, branch_office:0, created:false, note:'Proveedor ya existía en Siigo'};
   const name=tercero.name || invoice.supplier_name || `Proveedor ${nit}`;
+  // Siigo exige un teléfono válido para crear el proveedor (si no, responde "PredicateValidator … Phone").
+  const phone=siigoPhone(tercero.phone);
+  if(!phone) throw Object.assign(new Error(`El proveedor ${name} no existe en Siigo y su factura no trae un teléfono válido, que Siigo exige para crearlo.`),{code:'NO_PHONE', supplier:name});
   const payload={
     type:'Supplier',
     person_type:'Company',
@@ -979,7 +1020,7 @@ async function siigoEnsureSupplier(env, invoice){
     vat_responsible:true,
     fiscal_responsibilities:[{code:'R-99-PN', name:'No Aplica - Otros'}],
     address:{address:tercero.address || 'Sin direccion', city: siigoDefaultCity(env)},
-    phones: tercero.phone ? [{indicative:'57', number:nitClean(tercero.phone).slice(0,10)||'3000000000'}] : [],
+    phones: [{indicative:'57', number:phone}],
     contacts: tercero.email ? [{first_name:name.slice(0,50), last_name:'', email:tercero.email}] : [],
     comments:'Creado/validado desde ContaPilot'
   };
@@ -1198,9 +1239,9 @@ async function handleApi(request, env){ const url=new URL(request.url); const p=
           try{ await env.DB.prepare(`UPDATE invoices SET status=?, updated_at=? WHERE id=? AND status='exporting'`).bind(sent?'exported':'approved', now(), invoiceId).run(); }catch(_){ }
         }
         if(inv && attempted){
-          try{ await recordExport(env, user, inv, sent ? {status:'success', message:'Creada en Siigo, pero hubo un error al registrar el resultado: '+e.message} : {status:'error', message:e.message}); }catch(_){ }
+          try{ await recordExport(env, user, inv, sent ? {status:'success', message:'Creada en Siigo, pero hubo un error al registrar el resultado: '+e.message} : {status:'error', message:friendlySiigoError(e,inv)+SIIGO_TECH_SEP+e.message}); }catch(_){ }
         }
-        errors.push({id:invoiceId, invoice_number:inv?.invoice_number||'', supplier:inv?.supplier_name||'', nit:inv?.supplier_nit||'', error:e.message});
+        errors.push({id:invoiceId, invoice_number:inv?.invoice_number||'', supplier:inv?.supplier_name||'', nit:inv?.supplier_nit||'', error:friendlySiigoError(e,inv)});
       }
     }
     return json({ok:uploaded.length>0, count:uploaded.length, uploaded, errors, blocked});

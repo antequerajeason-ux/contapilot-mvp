@@ -254,6 +254,13 @@
     .batch-tabs.more-left.more-right{-webkit-mask-image:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent);mask-image:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent)}
     .batch-tab{white-space:nowrap;flex-shrink:0}
     .btn-batch-add{flex-shrink:0;white-space:nowrap}
+    .obs-head{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+    .obs-head span{flex:1;font-weight:500;font-size:12.5px;color:#a8282e;opacity:.85}
+    .obs-head .close{width:26px;height:26px;font-size:15px;background:transparent}
+    .obs-list{margin:0;padding-left:18px;font-weight:500;line-height:1.45}
+    .obs-list li{margin:6px 0}
+    .obs-list li > div{font-weight:600}
+    .obs-list .sub{color:#a8282e;opacity:.8}
     .import-choices{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .import-choice{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:18px;border:1px solid var(--line-strong);border-radius:14px;background:var(--card);cursor:pointer;text-align:left;font-family:inherit;color:var(--ink);transition:transform .2s var(--ease),box-shadow .2s,border-color .2s}
     .import-choice:hover{transform:translateY(-2px);border-color:var(--primary);box-shadow:var(--shadow-hover)}
@@ -609,7 +616,12 @@
 <div id="exportModal" class="modal-bg"><div class="modal small"><div class="modal-head"><div class="export-title"><img src="siigo-nube-logo.png" alt="Siigo Nube"><div><h3>Exportar a Siigo Nube</h3><p>Descarga las causaciones listas para revisión o carga en Siigo.</p></div></div><button class="close" onclick="closeModal('exportModal')">×</button></div><div class="field"><label>Formato</label><select id="exportFormat"><option value="siigo">Siigo Nube</option><option value="general">General contable</option><option value="invoices">Resumen facturas</option></select></div><button class="btn btn-blue btn-full btn-siigo" onclick="exportCsv()"><img src="siigo-nube-logo.png" alt="Siigo Nube">Descargar CSV para Siigo</button><hr style="border:0;border-top:1px solid var(--line);margin:16px 0"><p style="margin:0 0 10px;color:var(--muted);font-size:13px">Informe en PDF con la contabilización de cada factura: usa las facturas seleccionadas o, si no hay ninguna, las que se ven en la bandeja con el filtro actual.</p><button class="btn btn-light btn-full" onclick="closeModal('exportModal');downloadInvoicesPdf(selectedInvoiceIds.size?[...selectedInvoiceIds]:filteredInvoices().map(i=>i.id))">Descargar informe PDF</button></div></div><div id="toast" class="toast"></div>
 <script>
 let token=localStorage.getItem('cp_token')||'';let invoices=[];let companies=[];let selectedInvoiceIds=new Set();let editingCompanyId='';let lastDianDocs=[];let batches=[];let activeBatchId='';if(!token)location.href='app.html';const user=JSON.parse(localStorage.getItem('cp_user')||'{}');userLabel.textContent=user.email||'admin@contapilot.com';function base(){return localStorage.getItem('cp_api_base')||window.CONTAPILOT_API_BASE||''}function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),4500)}function log(m,o){const el=document.getElementById('log');el.textContent=m+(o?'\n'+JSON.stringify(o,null,2):'')}function sleep(ms){return new Promise(r=>setTimeout(r,ms))}function setProgress(m){const p=document.getElementById('progressBox');if(p){p.style.display=m?'inline-flex':'none';p.textContent=m||''}const w=document.getElementById('wideProgress');if(w){w.style.display=m?'block':'none';w.textContent=m||''}}function setBusy(v){document.body.style.cursor=v?'progress':'';['causeSelectedBtn','approveSelectedBtn','deleteSelectedBtn','uploadSiigoBtn','pdfSelectedBtn'].forEach(id=>{const b=document.getElementById(id);if(b)b.disabled=!!v});document.querySelectorAll('.action-select,.mini-check,#statusFilter,#search').forEach(el=>{el.disabled=!!v})}function chunks(arr,size){const out=[];for(let i=0;i<arr.length;i+=size)out.push(arr.slice(i,i+size));return out}
-function showUploadErrors(errors){const box=document.getElementById('uploadErrors'); if(!box)return; if(!errors||!errors.length){box.style.display='none';box.innerHTML='';return} box.style.display='block'; box.innerHTML='<strong>Observaciones:</strong><ul style="margin:8px 0 0;padding-left:18px">'+errors.map(e=>'<li><strong>'+String(e.file||'archivo')+':</strong> '+String(e.error||e)+'</li>').join('')+'</ul>';}
+// Observaciones: errores iguales se agrupan (la frase una vez y la lista de facturas afectadas), sin texto técnico.
+function showUploadErrors(errors){const box=document.getElementById('uploadErrors'); if(!box)return; if(!errors||!errors.length){box.style.display='none';box.innerHTML='';return}
+  const groups=new Map();
+  for(const e of errors){const msg=siigoErrorSummary(String(e.error||e));const who=String(e.file||'').trim();if(!groups.has(msg))groups.set(msg,[]);if(who&&!groups.get(msg).includes(who))groups.get(msg).push(who)}
+  box.style.display='block';
+  box.innerHTML=`<div class="obs-head"><strong>Observaciones</strong><span>${errors.length} factura(s) o archivo(s) necesitan atención</span><button class="close" title="Ocultar" onclick="showUploadErrors([])">×</button></div><ul class="obs-list">`+[...groups].map(([msg,who])=>`<li><div>${esc(msg)}</div>${who.length?`<span class="sub">${who.length>1?who.length+' facturas: ':'Factura '}${esc(who.slice(0,6).join(', '))}${who.length>6?` y ${who.length-6} más`:''}</span>`:''}</li>`).join('')+'</ul>';}
 function showUploadNotices(notices){const box=document.getElementById('uploadNotices'); if(!box)return; if(!notices||!notices.length){box.style.display='none';box.innerHTML='';return} box.style.display='block'; box.innerHTML='<strong>Resumen de lectura de ZIP:</strong><ul style="margin:8px 0 0;padding-left:18px">'+notices.map(n=>'<li>'+String(n)+'</li>').join('')+'</ul><p style="margin:8px 0 0;color:var(--muted)">La factura se lee del XML; el PDF que viene junto a cada XML se guarda como soporte para descargarlo después.</p>';}function toggleLog(){document.getElementById('log').classList.toggle('show');closeMenus()}async function api(path,opts={}){const headers=opts.headers||{};headers.Authorization='Bearer '+token;const r=await fetch(base()+path,{...opts,headers});const ct=r.headers.get('content-type')||'';const data=ct.includes('json')?await r.json():await r.text();if(!r.ok){
   // Páginas de error de Cloudflare (HTML): se traducen a un mensaje legible en vez de mostrar el código.
   if(typeof data==='string'&&/<html|<!doctype/i.test(data)){const code=(data.match(/Error\s*(?:code\s*)?(\d{3,4})/i)||[])[1]||r.status;throw new Error(code==='1102'||/exceeded resource limits/i.test(data)?'El servidor se quedó sin capacidad procesando esta solicitud (error 1102). Intenta de nuevo; si se repite, avísale al soporte.':`El servidor respondió con un error (${code}). Intenta de nuevo en un momento.`)}
@@ -1199,11 +1211,22 @@ function auditDetailHtml(a){
 }
 // Resumen legible de una respuesta de error de Siigo: "Siigo: <mensaje> (<campo>)", sin el JSON ni el payload enviado.
 function siigoErrorSummary(msg){
-  const s=String(msg||'');
-  const m=s.match(/"Message"\s*:\s*"([^"]+)"[\s\S]*?"Params"\s*:\s*\[([^\]]*)\]/);
-  if(m){const params=m[2].replace(/"/g,'').trim();const code=(s.match(/respondió\s+(\d{3})/)||[])[1];return `Siigo${code?' ('+code+')':''}: ${m[1]}${params?` — campo ${params}`:''}`}
-  const m2=s.match(/"Message"\s*:\s*"([^"]+)"/);if(m2)return 'Siigo: '+m2[1];
-  return s.split(' | Payload enviado')[0].slice(0,220);
+  let s=String(msg||'');
+  // Mensajes nuevos: frase entendible + detalle técnico separado (solo para soporte).
+  if(s.includes('--- Detalle técnico ---'))return s.split('--- Detalle técnico ---')[0].trim();
+  // Solo se traducen textos técnicos (respuesta cruda de Siigo); las frases ya entendibles se muestran tal cual.
+  if(!/Payload enviado|"Errors"|respondió \d{3}|auth respondió|limitando las solicitudes \(429\)/.test(s))return s.slice(0,300);
+  // Registros antiguos con el texto técnico de Siigo: se traducen igual que en el servidor.
+  if(/\b429\b|limitando/i.test(s))return 'Siigo pidió una pausa por demasiadas solicitudes. Espera uno o dos minutos y vuelve a intentar.';
+  if(/auth respondió|\b401\b/i.test(s))return 'No se pudo iniciar sesión en Siigo. Revisa el usuario y la clave en "Conexión Siigo".';
+  if(/\/customers/.test(s)&&/Phone/i.test(s))return 'No se pudo crear el proveedor en Siigo: falta un teléfono válido. Créalo en Siigo (Terceros) con su teléfono y vuelve a subir la factura.';
+  if(/\/customers/.test(s))return 'No se pudo crear el proveedor en Siigo. Créalo directamente en Siigo (Terceros) y vuelve a subir la factura.';
+  if(/provider_invoice/i.test(s))return 'Siigo no aceptó el número de la factura del proveedor (ya está corregido; vuelve a enviarla).';
+  if(/"code":"14\d{6}"/.test(s)&&/documents_service|could not be completed/i.test(s))return 'Siigo rechazó la compra porque usa una cuenta de inventario (14…). Cámbiala por una cuenta de gasto o costo en "Revisar contabilización", o regístrala directamente en Siigo.';
+  if(/documents_service|could not be completed/i.test(s))return 'Siigo rechazó la compra sin indicar el motivo. Revisa que las cuentas usadas permitan movimientos en Siigo y que el proveedor esté activo.';
+  if(/invalid_total_payments/i.test(s))return 'El total de la factura no coincide con lo que calcula Siigo. Revisa los valores en "Revisar contabilización".';
+  if(/\b5\d\d\b/.test(s))return 'Siigo no respondió correctamente. Intenta de nuevo en unos minutos.';
+  return 'Siigo rechazó la factura. Intenta de nuevo o revísala en Siigo.';
 }
 function toggleCollapse(id,force){const c=document.getElementById(id);const open=typeof force==='boolean'?force:!c.classList.contains('open');c.classList.toggle('open',open);c.querySelector('.collapse-head').setAttribute('aria-expanded',open);const l=c.querySelector('.ch-label');if(l)l.textContent=open?'Ocultar detalle':'Ver detalle'}
 function renderReviewAudit(){
